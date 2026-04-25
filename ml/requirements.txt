@@ -1,0 +1,26 @@
+# HealthGate — Dépendances Python
+# Projet HealthGate | Centrale Casablanca | PLBD 4 | 2025-2026
+#
+# Installation :
+#   pip install -r requirements.txt
+#
+# Sur Raspberry Pi, ajouter aussi :
+#   pip install RPi.GPIO w1thermsensor max30102 pyserial
+
+# ── Serveur web ──────────────────────────────────────────────────
+flask>=3.0.0
+flask-socketio>=5.3.6
+eventlet>=0.35.1
+
+# ── Machine Learning ─────────────────────────────────────────────
+scikit-learn>=1.4.0
+pandas>=2.1.0
+numpy>=1.26.0
+
+# ── Vision / OCR ─────────────────────────────────────────────────
+opencv-python>=4.9.0
+pytesseract>=0.3.10
+Pillow>=10.2.0
+
+# ── Utilitaires ──────────────────────────────────────────────────
+python-dotenv>=1.0.0

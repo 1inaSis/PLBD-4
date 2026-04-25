@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>HealthGate — Interface Médecin</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F9FAFB; --surface:#FFFFFF; --border:#E5E7EB; --text:#111827; --muted:#6B7280;
+  --e1:#DC2626; --e2:#EA580C; --e3:#D97706; --e4:#059669; --e5:#2563EB;
+  --primary:#0F172A; --radius:12px; --shadow-sm:0 1px 2px 0 rgb(0 0 0 / 0.05); --shadow-md:0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased;}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:20px;z-index:20;}
+.logo{width:36px;height:36px;background:var(--primary);border-radius:10px;display:flex;align-items:center;justify-content:center;}
+.logo svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:2;}
+header h1{font-weight:700;font-size:18px;letter-spacing:-0.01em;}
+header span{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:0.04em;}
+.dot-live{width:6px;height:6px;background:var(--e4);border-radius:50%;box-shadow:0 0 0 2px rgba(5,150,105,0.2);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.med-info{margin-left:auto;display:flex;align-items:center;gap:12px;padding:4px 12px 4px 4px;border-radius:24px;border:1px solid var(--border);background:#F3F4F6;}
+.med-info::before{content:attr(data-initials);width:28px;height:28px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:600;color:#fff;font-size:12px;}
+.med-info-text{display:flex;flex-direction:column;}
+.med-info .nom{font-weight:600;font-size:13px;color:var(--text);}
+.med-info .spe{font-size:11px;color:var(--muted);font-weight:500;}
+main{flex:1;display:grid;grid-template-columns:360px 1fr;overflow:hidden;}
+
+/* Sidebar */
+.liste{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:10;}
+.liste-header{padding:20px 24px;border-bottom:1px solid var(--border);}
+.liste-header h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);display:flex;justify-content:space-between;align-items:center;}
+.liste-header .nb{background:#F3F4F6;color:var(--text);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;}
+.liste-body{flex:1;overflow-y:auto;padding:12px;}
+.patient-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;cursor:pointer;transition:all 0.15s ease;display:flex;gap:12px;margin-bottom:8px;}
+.patient-card:hover{border-color:#D1D5DB;box-shadow:var(--shadow-sm);}
+.patient-card.active{border-color:var(--e5);background:#EFF6FF;box-shadow:0 0 0 1px var(--e5);}
+.patient-card.critique{border-left:4px solid var(--e1);}
+.patient-card.active.critique{border-left-color:var(--e1);}
+.pill{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;border:2px solid;flex-shrink:0;}
+.p1{background:#FEF2F2;color:#B91C1C;border-color:var(--e1);}
+.p2{background:#FFF7ED;color:#C2410C;border-color:var(--e2);}
+.p3{background:#FEF3C7;color:#B45309;border-color:var(--e3);}
+.p4{background:#ECFDF5;color:#047857;border-color:var(--e4);}
+.p5{background:#EFF6FF;color:#1D4ED8;border-color:var(--e5);}
+.pc-info{flex:1;min-width:0;display:flex;flex-direction:column;}
+.pc-nom{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pc-sym{font-size:12px;color:var(--muted);font-weight:400;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pc-meta{font-size:11px;font-weight:500;color:#9CA3AF;margin-top:6px;}
+.pc-timer{text-align:right;flex-shrink:0;}
+.pc-timer .t{font-weight:700;font-size:16px;}
+.pc-timer .t.warn{color:var(--e2);}
+.pc-timer .t.danger{color:var(--e1);}
+.pc-timer .l{font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted);}
+.vide-liste{padding:40px 20px;text-align:center;color:var(--muted);}
+.vide-liste svg{opacity:0.4;margin-bottom:12px;width:40px;}
+.vide-liste p{font-size:13px;font-weight:500;}
+
+/* Main Detail */
+.detail{padding:32px 48px;overflow-y:auto;background:var(--bg);display:flex;flex-direction:column;gap:24px;}
+.detail-vide{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);}
+.detail-vide svg{opacity:0.2;width:48px;margin-bottom:16px;}
+.detail-vide p{font-size:14px;font-weight:500;}
+
+/* Rapport */
+.rapport-header{display:flex;gap:20px;align-items:center;background:var(--surface);padding:24px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-sm);}
+.avatar{width:64px;height:64px;border-radius:16px;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:var(--muted);border:1px solid #E5E7EB;}
+.rapport-header h2{font-size:24px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;color:var(--text);}
+.rapport-header .meta{font-size:13px;font-weight:500;color:var(--muted);display:flex;gap:12px;}
+.badge-esi-r{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid;display:inline-flex;align-items:center;text-transform:uppercase;letter-spacing:0.04em;}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-sm);}
+.section h3{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:16px;}
+.row-info{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F3F4F6;font-size:13px;}
+.row-info:last-child{border-bottom:none;padding-bottom:0;}
+.row-info .k{color:var(--muted);font-weight:500;}
+.row-info .v{font-weight:600;color:var(--text);}
+
+.constante-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.const-card{background:#F9FAFB;border-radius:10px;padding:16px;text-align:center;border:1px solid var(--border);}
+.const-card .val{font-size:24px;font-weight:700;margin-bottom:4px;}
+.const-card .lab{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;}
+.const-card.warn{background:#FFF7ED;border-color:#FDE68A;}
+.const-card.warn .val{color:#C2410C;}
+.const-card.danger{background:#FEF2F2;border-color:#FECACA;}
+.const-card.danger .val{color:#B91C1C;}
+
+.symptom-box{background:#F9FAFB;border:1px solid var(--border);border-radius:8px;padding:16px;font-size:14px;line-height:1.5;color:var(--text);}
+.nlp-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+.nlp-tag{padding:4px 10px;border-radius:16px;font-size:11px;font-weight:600;background:#F3F4F6;color:#4B5563;border:1px solid #E5E7EB;}
+
+.btn-pec{width:100%;padding:14px;margin-top:12px;background:var(--primary);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-pec:hover{background:#111827;}
+.btn-pec:disabled{opacity:0.5;}
+
+.alerte-top{background:#FEF2F2;border-left:4px solid var(--e1);border-radius:8px;padding:16px;display:flex;gap:12px;align-items:flex-start;}
+.alerte-top .dot{width:12px;height:12px;background:var(--e1);border-radius:50%;margin-top:2px;}
+.alerte-top p{font-size:14px;color:#991B1B;line-height:1.4;margin:0;}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><svg viewBox="0 0 20 20" fill="none"><rect x="7" y="1" width="6" height="18" rx="2" fill="white"/><rect x="1" y="7" width="18" height="6" rx="2" fill="white"/></svg></div>
+  <div><h1>HealthGate</h1><span><span class="dot-live"></span>Interface médecin — temps réel</span></div>
+  <div class="med-info">
+    <div class="med-info-text">
+      <div class="nom" id="med-nom">{{ medecin.nom }}</div>
+      <div class="spe" id="med-spe">{{ medecin.specialite }}</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- Liste patients -->
+  <div class="liste">
+    <div class="liste-header">
+      <h2>Mes patients</h2>
+      <div class="nb" id="nb-patients">0</div>
+    </div>
+    <div class="liste-body" id="liste-body">
+      <div class="vide-liste">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="#ccc" stroke-width="1.5"/><path d="M13 20h14M20 13v14" stroke="#ccc" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <p>Aucun patient assigné</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Détail patient -->
+  <div class="detail" id="detail">
+    <div class="detail-vide">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z"></path></svg>
+      <p>Sélectionnez un patient dans la liste</p>
+    </div>
+  </div>
+</main>
+
+<div class="notif" id="notif"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const MEDECIN_ID = '{{ medecin.id }}';
+const socket = io();
+
+// Initiales Medecin
+document.addEventListener('DOMContentLoaded', () => {
+  const nom = document.getElementById('med-nom').textContent || 'Dr';
+  const ini = nom.replace('Dr ','').substring(0,2).toUpperCase();
+  document.querySelector('.med-info').setAttribute('data-initials', ini);
+});
+
+let patientsActuels = [];
+let patientSelectionne = null;
+
+// Rejoindre la salle du médecin pour recevoir les alertes
+socket.emit('rejoindre_medecin', { medecin_id: MEDECIN_ID });
+
+// Réception mises à jour file
+socket.on('file_mise_a_jour', data => {
+  const file = data.file || [];
+
+  // Filtrer les patients du médecin
+  patientsActuels = file.filter(p => p.medecin_id === MEDECIN_ID);
+  renderListe(patientsActuels);
+});
+
+// Alerte critique
+socket.on('alerte_critique', data => {
+  afficherNotif(`🚨 ALERTE — ${data.prenom||''} ${data.nom||''} — ESI ${data.esi}`, true);
+});
+
+function renderListe(patients) {
+  const nb = document.getElementById('nb-patients');
+  nb.textContent = patients.length;
+
+  const body = document.getElementById('liste-body');
+  if (!patients.length) {
+    body.innerHTML = `<div class="vide-liste"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><p>Aucun patient</p></div>`;
+    return;
+  }
+
+  body.innerHTML = patients.map(p => {
+    const mins = p.temps_attente_min || 0;
+    const cls  = mins > 60 ? 'danger' : mins > 30 ? 'warn' : '';
+    const actif = patientSelectionne === p.patient_id ? ' active' : '';
+    const crit  = p.esi_actuel <= 2 ? ' critique' : '';
+    return `
+      <div class="patient-card${actif}${crit}" onclick="selectionnerPatient('${p.patient_id}')">
+        <div class="pill p${p.esi_actuel}">${p.esi_actuel}</div>
+        <div class="pc-info">
+          <div class="pc-nom">${p.prenom||'Patient'} ${p.nom||''}</div>
+          <div class="pc-sym">${p.symptom_text||'—'}</div>
+          <div class="pc-meta">Pos. ${p.position} · ${p.heure_arrivee||'—'}</div>
+        </div>
+        <div class="pc-timer">
+          <div class="t ${cls}">${Math.floor(mins)}'</div>
+          <div class="l">attente</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function selectionnerPatient(patientId) {
+  patientSelectionne = patientId;
+  renderListe(patientsActuels);
+
+  // Charger le rapport
+  try {
+    const r = await fetch(`/api/rapport/${patientId}`);
+    const data = await r.json();
+    if (data.statut === 'succès') afficherRapport(data.rapport, patientId);
+  } catch(e) {
+    // Trouver dans la liste locale
+    const p = patientsActuels.find(x => x.patient_id === patientId);
+    if (p) afficherRapportLocal(p);
+  }
+}
+
+function afficherRapport(r, patientId) {
+  const esi = r.esi_predit || 3;
+  const esiLabels = {1:'Critique',2:'Très urgent',3:'Urgent',4:'Semi-urgent',5:'Non urgent'};
+  const esiColors = {1:'#B91C1C',2:'#C2410C',3:'#B45309',4:'#047857',5:'#1D4ED8'};
+  const bgColors = {1:'rgba(239,68,68,0.1)',2:'rgba(249,115,22,0.1)',3:'rgba(245,158,11,0.1)',4:'rgba(16,185,129,0.1)',5:'rgba(59,130,246,0.1)'};
+  const bColors = {1:'#EF4444',2:'#F97316',3:'#F59E0B',4:'#10B981',5:'#3B82F6'};
+  const initiales = ((r.prenom||'P')[0]+(r.nom||'X')[0]).toUpperCase();
+
+  const nlpActifs = Object.entries(r.features_nlp_actives||{})
+    .filter(([k,v]) => v > 0 && k.startsWith('nlp_') && !k.includes('score') && !k.includes('urgence'))
+    .map(([k]) => k.replace('nlp_','').replace(/_/g,' '));
+
+  const c = r.constantes || {};
+  const alerteCrit = esi <= 2;
+
+  document.getElementById('detail').innerHTML = `
+    ${alerteCrit ? `<div class="alerte-top"><div class="dot"></div><p><strong>Patient prioritaire ESI ${esi}</strong> — Prise en charge immédiate recommandée.</p></div>` : ''}
+
+    <div class="rapport-header">
+      <div class="avatar">${initiales}</div>
+      <div style="flex:1">
+        <h2>${r.prenom||'—'} ${r.nom||'—'}</h2>
+        <div class="meta"><span>${r.age||'?'} ans</span> • <span>${r.sexe||'—'}</span> • <span>Arrivée ${r.heure_arrivee||'—'}</span></div>
+        <div class="badge-esi-r p${esi}" style="margin-top:12px; color:${esiColors[esi]}; border-color:${bColors[esi]}; background-color:${bgColors[esi]}">
+          ESI ${esi} — ${esiLabels[esi]||'—'} • Confiance ${r.confiance_modele||'?'}%
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Symptômes déclarés</h3>
+      <div class="symptom-box">"${r.symptom_text||'Non renseigné'}"</div>
+      ${nlpActifs.length ? `<div class="nlp-tags">${nlpActifs.map(t=>`<span class="nlp-tag">${t}</span>`).join('')}</div>` : ''}
+    </div>
+
+    <div class="section">
+      <h3>Constantes vitales</h3>
+      <div class="constante-grid">
+        <div class="const-card ${(c.temperature>39||c.temperature<36)?'warn':''}">
+          <div class="val">${c.temperature||'—'}°C</div><div class="lab">Température</div>
+        </div>
+        <div class="const-card ${(c.spo2<93)?'danger':(c.spo2<96)?'warn':''}">
+          <div class="val">${c.spo2||'—'}%</div><div class="lab">SpO2</div>
+        </div>
+        <div class="const-card ${(c.heart_rate>120||c.heart_rate<50)?'warn':''}">
+          <div class="val">${c.heart_rate||'—'}</div><div class="lab">FC (bpm)</div>
+        </div>
+        <div class="const-card ${(c.bp_systolic>160||c.bp_systolic<90)?'warn':''}">
+          <div class="val">${c.bp_systolic||'—'}</div><div class="lab">TA syst.</div>
+        </div>
+        <div class="const-card">
+          <div class="val">${c.bp_diastolic||'—'}</div><div class="lab">TA diast.</div>
+        </div>
+        <div class="const-card">
+          <div class="val">${r.temps_attente_min||'—'} min</div><div class="lab">Temps d'attente</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Informations de triage</h3>
+      <div class="row-info"><span class="k">Score de priorité</span><span class="v">${r.score_priorite||'—'}</span></div>
+      <div class="row-info"><span class="k">Position dans la file</span><span class="v">${r.position_file||'—'}</span></div>
+      <div class="row-info"><span class="k">Médecin assigné</span><span class="v">${r.medecin_assigne||'—'}</span></div>
+      <div class="row-info"><span class="k">Rapport généré le</span><span class="v">${r.horodatage_rapport||'—'}</span></div>
+    </div>
+
+    <button class="btn-pec" id="btn-pec" onclick="prendreEnCharge('${patientId}')">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Marquer comme pris en charge
+    </button>
+  `;
+}
+
+function afficherRapportLocal(p) {
+  afficherRapport({
+    nom: p.nom, prenom: p.prenom, age: p.age, sexe: '—',
+    heure_arrivee: p.heure_arrivee, esi_predit: p.esi_actuel,
+    confiance_modele: '—', symptom_text: p.symptom_text,
+    constantes: p.constantes, score_priorite: p.score_priorite,
+    temps_attente_min: p.temps_attente_min, position_file: p.position,
+    medecin_assigne: '—', horodatage_rapport: new Date().toLocaleString('fr-FR'),
+    features_nlp_actives: {},
+  }, p.patient_id);
+}
+
+async function prendreEnCharge(patientId) {
+  const btn = document.getElementById('btn-pec');
+  btn.disabled = true;
+  btn.textContent = 'Traitement…';
+
+  try {
+    await fetch('/api/prise_en_charge', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ patient_id: patientId, medecin_id: MEDECIN_ID })
+    });
+    afficherNotif('✅ Patient pris en charge avec succès', false);
+    document.getElementById('detail').innerHTML = `<div class="detail-vide"><p>Patient retiré de la file avec succès.</p></div>`;
+    patientSelectionne = null;
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Marquer comme pris en charge';
+    afficherNotif('Erreur — réessayez', false);
+  }
+}
+
+function afficherNotif(msg, alerte) {
+  const n = document.getElementById('notif');
+  n.textContent = msg;
+  n.className = 'notif show' + (alerte ? ' alerte-notif' : '');
+  setTimeout(() => n.classList.remove('show'), 4000);
+}
+
+// Charger l'état initial
+fetch('/api/file').then(r=>r.json()).then(data => {
+  const file = data.file || [];
+  patientsActuels = file.filter(p => p.medecin_id === MEDECIN_ID);
+  renderListe(patientsActuels);
+}).catch(()=>{});
+</script>
+</body>
+</html>
