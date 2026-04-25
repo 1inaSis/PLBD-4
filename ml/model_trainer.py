@@ -29,7 +29,7 @@ from nlp_extractor import enrichir_dataframe
 # ─────────────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-CHEMIN_DATA     = os.path.join(BASE_DIR, "patients_1000.csv")
+CHEMIN_DATA     = os.path.join(BASE_DIR, "data", "patients_50000.csv")
 CHEMIN_MODELE   = os.path.join(BASE_DIR, "models", "random_forest_esi.pkl")
 CHEMIN_SCALER   = os.path.join(BASE_DIR, "models", "scaler.pkl")
 CHEMIN_FEATURES = os.path.join(BASE_DIR, "models", "feature_names.pkl")

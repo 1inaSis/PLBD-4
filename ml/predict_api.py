@@ -28,6 +28,7 @@ from queue_manager import gestionnaire_file
 from nlp_extractor import extraire_features_nlp
 from scanner_cin import scanner_piece_identite
 from capteurs_raspberry import lire_toutes_constantes
+from questionnaire_adaptatif import generer_questions_adaptatif, calculer_score_adaptatif
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Initialisation Flask + SocketIO
@@ -39,6 +40,15 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 # Démarrer la mise à jour automatique de la file
 gestionnaire_file.demarrer_mise_a_jour_auto(intervalle=60)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CLIENTS WEBSOCKET CONNECTÉS (pour diffusion ciblée)
+# ─────────────────────────────────────────────────────────────────────────────
+
+clients_connectes = {
+    "borne": [],        # Kiosk patients
+    "salle_attente": [], # TV salle d'attente  
+    "medecins": {},     # Dashboards médecins (par medecin_id)
+}
 # ─────────────────────────────────────────────────────────────────────────────
 # Base de données en mémoire (simple pour prototype)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -93,6 +103,57 @@ def emettre_mise_a_jour_file():
     etat = construire_etat_global()
     socketio.emit('file_mise_a_jour', etat)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WEBSOCKET HANDLERS — Synchronisation temps réel
+# ─────────────────────────────────────────────────────────────────────────────
+
+@socketio.on('connect')
+def handle_connect():
+    """Quand un client se connecte."""
+    print(f"[WebSocket] Client connecté: {request.sid}")
+    socketio.emit('connection_response', {
+        'data': 'Connecté au serveur HealthGate',
+        'horodatage': datetime.now().isoformat(),
+    })
+    # Envoyer l'état initial de la file
+    etat = construire_etat_global()
+    socketio.emit('file_mise_a_jour', etat)
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Quand un client se déconnecte."""
+    print(f"[WebSocket] Client déconnecté: {request.sid}")
+
+
+@socketio.on('rejoindre_borne')
+def handle_rejoindre_borne(data):
+    """Quand une borne patient se connecte."""
+    patient_id = data.get('patient_id')
+    print(f"[WebSocket] Borne patient connectée: {patient_id}")
+    socketio.emit('borne_connectee', {'patient_id': patient_id})
+
+
+@socketio.on('rejoindre_salle')
+def handle_rejoindre_salle():
+    """Quand le tableau salle d'attente se connecte."""
+    print(f"[WebSocket] Salle d'attente connectée")
+    # Envoyer l'état complet immédiatement
+    etat = construire_etat_global()
+    socketio.emit('file_mise_a_jour', etat)
+
+
+@socketio.on('rejoindre_medecin')
+def handle_rejoindre_medecin(data):
+    """Quand un médecin se connecte."""
+    medecin_id = data.get('medecin_id')
+    print(f"[WebSocket] Médecin connecté: {medecin_id}")
+    socketio.join_room(f"medecin_{medecin_id}")
+    
+    # Envoyer ses patients actuels
+    etat = construire_etat_global()
+    socketio.emit('file_mise_a_jour', etat)
 
 def construire_etat_global() -> dict:
     """Construit l'état complet pour diffusion WebSocket."""
@@ -277,6 +338,132 @@ def api_constantes():
         "constantes": constantes,
     })
 
+# ─────────────────────────────────────────────────────────────────────────────
+# API — Étape 3b : RECEVOIR constantes du Raspberry Pi
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/constantes_from_pi', methods=['POST'])
+def api_constantes_from_pi():
+    """
+    Endpoint dédié pour recevoir les constantes biomédicales depuis le Pi.
+    Le Pi envoie les lectures capteurs en POST JSON.
+    
+    Exemple depuis le Pi :
+    curl -X POST http://SERVER:5000/api/constantes_from_pi \\
+      -H "Content-Type: application/json" \\
+      -d '{
+        "patient_id": "PT-ABC123",
+        "temperature": 37.2,
+        "spo2": 97.5,
+        "heart_rate": 78,
+        "bp_systolic": 120,
+        "bp_diastolic": 80,
+        "glucose": 95
+      }'
+    """
+    donnees = request.get_json()
+    if not donnees:
+        return jsonify({"statut": "erreur", "message": "Corps JSON manquant"}), 400
+    
+    patient_id = donnees.get("patient_id")
+    
+    # Stocker les constantes dans la session du patient
+    if patient_id in patients_session:
+        patients_session[patient_id]["constantes"] = {
+            "temperature":   donnees.get("temperature", 37.0),
+            "spo2":          donnees.get("spo2", 98.0),
+            "heart_rate":    donnees.get("heart_rate", 75),
+            "bp_systolic":   donnees.get("bp_systolic", 120),
+            "bp_diastolic":  donnees.get("bp_diastolic", 80),
+            "respiratory_rate": donnees.get("respiratory_rate", 16),
+            "glucose":       donnees.get("glucose", 90),
+        }
+        patients_session[patient_id]["constantes_mesure_heure"] = datetime.now().strftime("%H:%M:%S")
+        
+        # Notifier la borne que les constantes sont arrivées
+        socketio.emit('constantes_recu', {
+            "patient_id": patient_id,
+            "constantes": patients_session[patient_id]["constantes"],
+            "horodatage": datetime.now().strftime("%H:%M:%S"),
+        }, room=f"borne_{patient_id}")
+        
+        return jsonify({"statut": "succès", "message": "Constantes reçues"}), 200
+    else:
+        return jsonify({"statut": "erreur", "message": "Patient non trouvé"}), 404
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API — Étape 3c : Générer questions adaptatives
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/questions_adaptatif', methods=['POST'])
+def api_questions_adaptatif():
+    """
+    Génère des questions adaptatives basées sur symptômes + constantes.
+    Appelé APRÈS mesure des constantes, AVANT prédiction ESI final.
+    
+    Les questions affinent le diagnostic :
+    - Si fièvre → questions sur durée, évolution
+    - Si douleur thoracique → questions sur type, irradiation
+    - Si SpO2 faible → questions sur dyspnée, asthme
+    - Etc.
+    """
+    donnees = request.get_json()
+    if not donnees:
+        return jsonify({"statut": "erreur", "message": "Corps JSON manquant"}), 400
+    
+    patient_id = donnees.get("patient_id")
+    if patient_id not in patients_session:
+        return jsonify({"statut": "erreur", "message": "Patient non trouvé"}), 404
+    
+    session = patients_session[patient_id]
+    constantes = session.get("constantes", {})
+    
+    # Extraire les features NLP des symptômes
+    features_nlp = extraire_features_nlp(session.get("symptom_text", ""))
+    
+    # Générer les questions
+    questions_result = generer_questions_adaptatif(constantes, features_nlp)
+    
+    return jsonify({
+        "statut": "succès",
+        "patient_id": patient_id,
+        **questions_result,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API — Étape 3d : Soumettre réponses aux questions adaptatives
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/reponses_adaptatif', methods=['POST'])
+def api_reponses_adaptatif():
+    """
+    Reçoit les réponses aux questions adaptatives.
+    Calcule un score d'urgence supplémentaire.
+    """
+    donnees = request.get_json()
+    if not donnees:
+        return jsonify({"statut": "erreur", "message": "Corps JSON manquant"}), 400
+    
+    patient_id = donnees.get("patient_id")
+    reponses = donnees.get("reponses", {})
+    
+    if patient_id not in patients_session:
+        return jsonify({"statut": "erreur", "message": "Patient non trouvé"}), 404
+    
+    # Calculer le score adaptatif
+    score_result = calculer_score_adaptatif(reponses)
+    
+    # Sauvegarder dans la session
+    patients_session[patient_id]["reponses_adaptatif"] = reponses
+    patients_session[patient_id]["score_adaptatif"] = score_result
+    
+    return jsonify({
+        "statut": "succès",
+        "patient_id": patient_id,
+        **score_result,
+    })
 
 # ─────────────────────────────────────────────────────────────────────────────
 # API — Étape 4 : Triage complet
@@ -391,6 +578,14 @@ def api_triage():
     # Diffuser la mise à jour à tous
     emettre_mise_a_jour_file()
 
+    # Diffuser la mise à jour à TOUS les clients (borne, salle, médecins)
+    etat_complet = construire_etat_global()
+    socketio.emit('file_mise_a_jour', etat_complet)  # À tous
+    socketio.emit('nouveau_patient', etat_complet)   # Signal spécial nouveau patient
+    socketio.emit('file_synchronisee', {
+        'horodatage': datetime.now().isoformat(),
+        'nb_patients': len(gestionnaire_file.get_file_triee()),
+    })  # Confirmer la synchronisation
     return jsonify({
         "statut":         "succès",
         "patient_id":     patient_id,
