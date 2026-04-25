@@ -147,7 +147,7 @@ healthgate/
 ├── data_generator.py       ← Génération données synthétiques
 ├── requirements.txt        ← Dépendances Python
 ├── data/
-│   └── patients_1000.csv   ← Dataset d'entraînement
+│   └── patients_50000.csv  ← Dataset d'entraînement
 ├── models/
 │   ├── random_forest_esi.pkl
 │   ├── scaler.pkl

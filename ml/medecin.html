@@ -90,6 +90,11 @@ main{flex:1;display:grid;grid-template-columns:360px 1fr;overflow:hidden;}
 .symptom-box{background:#F9FAFB;border:1px solid var(--border);border-radius:8px;padding:16px;font-size:14px;line-height:1.5;color:var(--text);}
 .nlp-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
 .nlp-tag{padding:4px 10px;border-radius:16px;font-size:11px;font-weight:600;background:#F3F4F6;color:#4B5563;border:1px solid #E5E7EB;}
+.question-box{background:#F8FAFC;border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px;}
+.question-item{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #E5E7EB;font-size:13px;}
+.question-item:last-child{border-bottom:none;padding-bottom:0;}
+.question-item .q{color:var(--muted);font-weight:500;flex:1;}
+.question-item .a{font-weight:700;color:var(--text);text-align:right;max-width:50%;}
 
 .btn-pec{width:100%;padding:14px;margin-top:12px;background:var(--primary);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:8px;}
 .btn-pec:hover{background:#111827;}
@@ -253,6 +258,18 @@ function afficherRapport(r, patientId) {
     </div>
 
     <div class="section">
+      <h3>Questions ciblées</h3>
+      <div class="question-box">
+        ${Array.isArray(r.reponses_questions) && r.reponses_questions.length ? r.reponses_questions.map(item => `
+          <div class="question-item">
+            <div class="q">${item.texte}</div>
+            <div class="a">${item.reponse}</div>
+          </div>
+        `).join('') : '<div class="row-info"><span class="k">Aucune réponse enregistrée</span><span class="v">—</span></div>'}
+      </div>
+    </div>
+
+    <div class="section">
       <h3>Constantes vitales</h3>
       <div class="constante-grid">
         <div class="const-card ${(c.temperature>39||c.temperature<36)?'warn':''}">
@@ -281,6 +298,7 @@ function afficherRapport(r, patientId) {
       <div class="row-info"><span class="k">Score de priorité</span><span class="v">${r.score_priorite||'—'}</span></div>
       <div class="row-info"><span class="k">Position dans la file</span><span class="v">${r.position_file||'—'}</span></div>
       <div class="row-info"><span class="k">Médecin assigné</span><span class="v">${r.medecin_assigne||'—'}</span></div>
+      <div class="row-info"><span class="k">Diagnostic probable</span><span class="v">${r.diagnostic_probable||'—'}</span></div>
       <div class="row-info"><span class="k">Rapport généré le</span><span class="v">${r.horodatage_rapport||'—'}</span></div>
     </div>
 

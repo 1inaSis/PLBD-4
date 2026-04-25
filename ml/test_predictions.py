@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from nlp_extractor import extraire_features_nlp, normaliser_texte
 from model_trainer import predire_esi
 from queue_manager import GestionnaireFile, PatientEnFile
+from questions_moteur import generer_questions, encoder_reponses
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -111,6 +112,47 @@ class TestNLPExtractor(unittest.TestCase):
         self.assertEqual(features["nlp_chest_pain"], 1)
         self.assertEqual(features["nlp_dyspnea"], 1)
         self.assertEqual(features["nlp_fever"], 1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tests du moteur de questions
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestQuestionsMoteur(unittest.TestCase):
+    """Tests du générateur de questions ciblées."""
+
+    def test_generation_questions_ciblees(self):
+        questions = generer_questions(
+            {"temperature": 39.4, "spo2": 91, "heart_rate": 128, "bp_systolic": 170, "bp_diastolic": 100},
+            "J'ai très mal à la poitrine et du mal à respirer",
+            58,
+            1,
+        )
+        self.assertGreaterEqual(len(questions), 4)
+        self.assertLessEqual(len(questions), 6)
+        features = {q["feature_name"] for q in questions}
+        self.assertTrue(
+            bool(
+                features.intersection(
+                    {
+                        "q_douleur_irradiee_bras",
+                        "q_antecedent_infarctus",
+                        "q_duree_dyspnee",
+                        "q_dyspnee_aggrave_effort",
+                    }
+                )
+            ),
+            "Les questions devraient être ciblées sur les symptômes principaux",
+        )
+
+    def test_encodage_reponses(self):
+        questions = [
+            {"id": "q1", "texte": "Avez-vous de l'asthme ?", "type": "oui_non", "feature_name": "q_antecedent_asthme"},
+            {"id": "q2", "texte": "Depuis combien de temps ?", "type": "choix", "choix": ["Moins de 24h", "1 à 3 jours", "Plus de 3 jours"], "feature_name": "q_duree_fievre"},
+        ]
+        features = encoder_reponses(questions, {"q1": "Oui", "q2": "1 à 3 jours"})
+        self.assertEqual(features["q_antecedent_asthme"], 1)
+        self.assertEqual(features["q_duree_fievre"], 1)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

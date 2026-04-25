@@ -65,6 +65,18 @@ textarea:focus,input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba
 .metric{background:var(--bg);border-radius:12px;padding:16px 12px;text-align:center;border:1px solid var(--border)}
 .metric .v{font-size:22px;font-weight:700;color:var(--text)}
 .metric .l{font-size:12px;font-weight:600;color:var(--text-muted);margin-top:6px;text-transform:uppercase;letter-spacing:0.02em}
+.question-list{display:flex;flex-direction:column;gap:14px;margin-top:10px;text-align:left}
+.question-card{border:1px solid var(--border);border-radius:16px;padding:16px;background:var(--bg)}
+.question-card h3{font-size:16px;font-weight:700;margin-bottom:10px;line-height:1.45;color:var(--text)}
+.question-actions{display:flex;flex-wrap:wrap;gap:10px}
+.q-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);padding:10px 14px;border-radius:999px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s ease}
+.q-btn:hover{border-color:var(--primary);color:var(--primary)}
+.q-btn.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.question-footer{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-top:20px;flex-wrap:wrap}
+.question-status{font-size:13px;color:var(--text-muted);font-weight:500}
+.mini-loading{display:none;text-align:center;padding:18px 0 4px}
+.mini-loading.on{display:block}
+.mini-loading .spinner{width:36px;height:36px;margin-bottom:12px}
 .alerte-r{background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:16px;display:flex;align-items:flex-start;gap:12px;margin-top:24px;text-align:left}
 .alerte-r .dot{width:12px;height:12px;background:var(--danger);border-radius:50%;flex-shrink:0;margin-top:4px;box-shadow:0 0 0 4px rgba(229,62,62,0.2)}
 .alerte-r p{font-size:14px;color:#991B1B;line-height:1.5;font-weight:500}
@@ -100,7 +112,11 @@ hr{border:none;border-top:2px dashed var(--border);margin:24px 0}
     <div class="sep"></div>
     <div class="step" id="s3"><div class="step-n">3</div><span>Constantes</span></div>
     <div class="sep"></div>
-    <div class="step" id="s4"><div class="step-n">4</div><span>Résultat</span></div>
+    <div class="step" id="s4"><div class="step-n">4</div><span>Questions</span></div>
+    <div class="sep"></div>
+    <div class="step" id="s5"><div class="step-n">5</div><span>Résultat</span></div>
+    <div class="sep"></div>
+    <div class="step" id="s6"><div class="step-n">6</div><span>Ticket</span></div>
   </div>
 
   <!-- ÉCRAN 1 : Scan CIN -->
@@ -164,13 +180,19 @@ hr{border:none;border-top:2px dashed var(--border);margin:24px 0}
     </div>
   </div>
 
-  <!-- ÉCRAN 4 : Analyse -->
+  <!-- ÉCRAN 4 : Questions ciblées -->
   <div class="ecran" id="e4">
     <div class="card">
-      <div class="loading">
+      <h2>Questions ciblées</h2>
+      <p class="sub">Répondez simplement. Ces réponses aident à affiner votre triage.</p>
+      <div class="mini-loading" id="questionsLoading">
         <div class="spinner"></div>
-        <p style="font-size:16px;font-weight:500" id="msg-ana">Analyse en cours…</p>
-        <p style="font-size:13px;color:var(--gris);margin-top:6px">Le modèle évalue votre niveau de priorité</p>
+        <p style="font-size:14px;font-weight:500">Préparation des questions…</p>
+      </div>
+      <div id="questionsContainer" class="question-list"></div>
+      <div class="question-footer">
+        <div class="question-status" id="questionsStatus">Chargement des questions ciblées…</div>
+        <button class="btn btn-p" id="btnQuestions" onclick="validerQuestions()" style="width:auto;min-width:240px;display:none">Continuer vers le triage</button>
       </div>
     </div>
   </div>
@@ -218,18 +240,120 @@ hr{border:none;border-top:2px dashed var(--border);margin:24px 0}
 const socket = io();
 let sessionId = null, imageFichier = null;
 let donneesResultat = {};
+let questionsCourantes = [];
+let reponsesQuestions = {};
 
 // ── Navigation ────────────────────────────────────────────────────
 function goEcran(n) {
   document.querySelectorAll('.ecran').forEach(e => e.classList.remove('on'));
   document.getElementById('e' + n).classList.add('on');
-  [1,2,3,4].forEach(i => {
+  [1,2,3,4,5,6].forEach(i => {
     const s = document.getElementById('s' + i);
     s.classList.remove('active','done');
-    const map = {1:1,2:2,3:3,4:5}; // étape visible → écran correspondant
-    if (i < [1,2,3,4].indexOf(n<=4?n:4)+1) s.classList.add('done');
-    else if (i === Math.min(n,4)) s.classList.add('active');
+    if (i < n) s.classList.add('done');
+    else if (i === n) s.classList.add('active');
   });
+}
+
+function ouvrirQuestionsLoading(message) {
+  document.getElementById('questionsLoading').classList.add('on');
+  document.getElementById('questionsStatus').textContent = message || 'Préparation des questions ciblées…';
+  document.getElementById('btnQuestions').style.display = 'none';
+}
+
+function renderQuestions(questions) {
+  questionsCourantes = Array.isArray(questions) ? questions : [];
+  reponsesQuestions = {};
+
+  const loading = document.getElementById('questionsLoading');
+  const status = document.getElementById('questionsStatus');
+  const container = document.getElementById('questionsContainer');
+  const btn = document.getElementById('btnQuestions');
+
+  loading.classList.remove('on');
+
+  if (!questionsCourantes.length) {
+    container.innerHTML = '<div class="question-card"><h3>Aucune question ciblée pour ce patient.</h3></div>';
+    status.textContent = 'Aucune question ciblée détectée.';
+    btn.style.display = 'none';
+    return;
+  }
+
+  container.innerHTML = questionsCourantes.map((q, index) => {
+    const choix = q.choix && q.choix.length ? q.choix : (q.type === 'oui_non' ? ['Oui', 'Non'] : []);
+    const optionsHtml = choix.map(option => `
+      <button type="button" class="q-btn" onclick='choisirReponse(${JSON.stringify(q.id)}, ${JSON.stringify(option)}, this)'>${option}</button>
+    `).join('');
+
+    return `
+      <div class="question-card" id="q-${q.id}">
+        <h3>${index + 1}. ${q.texte}</h3>
+        <div class="question-actions">${optionsHtml}</div>
+      </div>
+    `;
+  }).join('');
+
+  status.textContent = `${questionsCourantes.length} questions à compléter`;
+  btn.style.display = 'inline-flex';
+  btn.disabled = false;
+}
+
+function choisirReponse(questionId, valeur, bouton) {
+  reponsesQuestions[questionId] = valeur;
+
+  const card = document.getElementById('q-' + questionId);
+  if (card) {
+    card.querySelectorAll('.q-btn').forEach(btn => btn.classList.remove('active'));
+  }
+  bouton.classList.add('active');
+
+  const status = document.getElementById('questionsStatus');
+  const repondues = questionsCourantes.filter(q => reponsesQuestions[q.id] !== undefined).length;
+  status.textContent = `${repondues}/${questionsCourantes.length} questions complétées`;
+}
+
+async function chargerQuestions(constantes) {
+  goEcran(4);
+  ouvrirQuestionsLoading('Génération des questions ciblées…');
+
+  try {
+    const r = await fetch('/api/questions', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ session_id: sessionId, constantes })
+    });
+    const data = await r.json();
+    if (data.statut !== 'succès') throw new Error(data.message || 'Erreur questions');
+    renderQuestions(data.questions_proposees || []);
+  } catch (e) {
+    renderQuestions([
+      {id:'q_duree_symptomes', texte:'Depuis quand vos symptômes ont-ils commencé ?', type:'choix', choix:['Moins de 24h','1 à 3 jours','Plus de 3 jours'], feature_name:'q_duree_symptomes'},
+      {id:'q_antecedent_symptome', texte:'Avez-vous déjà eu ce problème auparavant ?', type:'oui_non', feature_name:'q_antecedent_symptome'},
+      {id:'q_prise_medicament', texte:'Avez-vous pris un médicament avant de venir ?', type:'oui_non', feature_name:'q_prise_medicament'}
+    ]);
+  }
+}
+
+async function validerQuestions() {
+  const btn = document.getElementById('btnQuestions');
+  const status = document.getElementById('questionsStatus');
+  if (!questionsCourantes.length) {
+    await lancerTriage(window._constantes || {}, {});
+    return;
+  }
+
+  const questionsSansReponse = questionsCourantes.filter(q => reponsesQuestions[q.id] === undefined);
+  if (questionsSansReponse.length) {
+    status.textContent = 'Veuillez répondre à toutes les questions avant de continuer.';
+    alert('Veuillez répondre à toutes les questions.');
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = 'Analyse des réponses et triage en cours…';
+  document.getElementById('questionsLoading').classList.add('on');
+
+  await lancerTriage(window._constantes || {}, reponsesQuestions);
 }
 
 // ── Étape 1 : Scan ───────────────────────────────────────────────
@@ -270,6 +394,7 @@ async function scanner() {
     document.getElementById('scan-age').textContent = `${data.age} ans`;
     document.getElementById('scan-sexe').textContent = data.sexe === 1 ? 'Homme' : 'Femme';
     document.getElementById('infoScan').style.display = 'block';
+    socket.emit('rejoindre_borne', { patient_id: sessionId });
 
     setTimeout(() => goEcran(2), 1200);
   } catch(e) {
@@ -280,6 +405,7 @@ async function scanner() {
 
 function passerSansCard() {
   sessionId = 'MANUEL-' + Date.now().toString().slice(-6);
+  socket.emit('rejoindre_borne', { patient_id: sessionId });
   goEcran(2);
 }
 
@@ -331,7 +457,7 @@ async function mesurerConstantes() {
 
     // Stocker pour le triage
     window._constantes = c;
-    setTimeout(() => lancerTriage(c), 1200);
+    setTimeout(() => chargerQuestions(c), 1200);
   } catch(e) {
     clearInterval(iv);
     // Simulation si pas de serveur ou erreur (sur un PC sans capteurs)
@@ -346,34 +472,29 @@ async function mesurerConstantes() {
     document.getElementById('v-spo2').textContent = c.spo2 + '%';
     document.getElementById('v-ta').textContent   = c.bp_systolic + '/' + c.bp_diastolic;
     window._constantes = c;
-    setTimeout(() => lancerTriage(c), 1200);
+    setTimeout(() => chargerQuestions(c), 1200);
   }
 }
 
-// ── Étape 4 : Triage ────────────────────────────────────────────
-async function lancerTriage(constantes) {
-  goEcran(4);
-  const msgs = ['Analyse NLP…','Évaluation des constantes…','Prédiction Random Forest…','Attribution médecin…'];
-  let i = 0;
-  // Initialize with the first message explicitly
-  document.getElementById('msg-ana').textContent = msgs[0];
-  i=1;
-  const iv = setInterval(() => {
-    if (i < msgs.length) document.getElementById('msg-ana').textContent = msgs[i++];
-  }, 500);
+// ── Étape 5 : Triage ────────────────────────────────────────────
+async function lancerTriage(constantes, questionResponses = {}) {
+  goEcran(5);
 
   try {
     const r = await fetch('/api/triage', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ session_id: sessionId, constantes })
+      body: JSON.stringify({
+        session_id: sessionId,
+        constantes,
+        questions: questionsCourantes,
+        question_reponses: questionResponses,
+      })
     });
     const data = await r.json();
-    clearInterval(iv);
     donneesResultat = data;
     afficherResultat(data);
   } catch(e) {
-    clearInterval(iv);
     // Simulation locale si echec api
     const esi = Math.floor(Math.random()*4)+2;
     afficherResultat({
@@ -383,6 +504,7 @@ async function lancerTriage(constantes) {
       position_file: Math.floor(Math.random()*6)+1,
       attente_estimee: ['','< 1 min','< 15 min','~30 min','~1h','~2h'][esi],
       medecin_assigne: 'Dr. El Amrani',
+      diagnostic_probable: 'Évaluation clinique complémentaire',
       patient_id: 'PT-SIM-001',
     });
   }
@@ -403,7 +525,7 @@ function afficherResultat(data) {
   badge.textContent = esi;
   badge.className = 'badge-esi e' + esi;
   document.getElementById('res-titre').textContent = info.t;
-  document.getElementById('res-desc').textContent  = info.d;
+  document.getElementById('res-desc').textContent  = info.d + (data.diagnostic_probable ? ` Diagnostic probable : ${data.diagnostic_probable}.` : '');
   document.getElementById('alerte-zone').innerHTML = info.alerte
     ? `<div class="alerte-r"><div class="dot"></div><p><strong>Urgence absolue</strong> — Présentez-vous immédiatement au guichet.</p></div>` : '';
   document.getElementById('r-pos').textContent  = data.position_file || '—';
@@ -424,14 +546,28 @@ function afficherResultat(data) {
   goEcran(5);
 }
 
+socket.on('question_suivante', data => {
+  if (!data) return;
+  if (data.questions && Array.isArray(data.questions)) {
+    renderQuestions(data.questions);
+  }
+});
+
 function recommencer() {
   sessionId = null; imageFichier = null;
+  questionsCourantes = [];
+  reponsesQuestions = {};
+  donneesResultat = {};
   document.getElementById('symptom_text').value = '';
   document.getElementById('preview').style.display = 'none';
   document.getElementById('infoScan').style.display = 'none';
   document.getElementById('fileInput').value = '';
   document.getElementById('btnScan').disabled = false;
   document.getElementById('btnScan').innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 5V3a1 1 0 011-1h2M14 5V3a1 1 0 00-1-1h-2M2 11v2a1 1 0 001 1h2M14 11v2a1 1 0 01-1 1h-2M5 8h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg> Scanner la pièce d'identité`;
+  document.getElementById('questionsContainer').innerHTML = '';
+  document.getElementById('questionsStatus').textContent = 'Chargement des questions ciblées…';
+  document.getElementById('btnQuestions').style.display = 'none';
+  document.getElementById('questionsLoading').classList.remove('on');
   goEcran(1);
 }
 </script>

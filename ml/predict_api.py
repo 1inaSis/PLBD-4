@@ -22,13 +22,13 @@ import uuid
 import json
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room
 from model_trainer import predire_esi
 from queue_manager import gestionnaire_file
 from nlp_extractor import extraire_features_nlp
 from scanner_cin import scanner_piece_identite
 from capteurs_raspberry import lire_toutes_constantes
-from questionnaire_adaptatif import generer_questions_adaptatif, calculer_score_adaptatif
+from questions_moteur import generer_questions, encoder_reponses
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Initialisation Flask + SocketIO
@@ -104,6 +104,44 @@ def emettre_mise_a_jour_file():
     socketio.emit('file_mise_a_jour', etat)
 
 
+def _formater_reponses_questions(questions: list, reponses: dict) -> list:
+    """Transforme les réponses brutes en résumé lisible pour les médecins."""
+    reponses = reponses or {}
+    resume = []
+
+    for question in questions or []:
+        question_id = question.get("id")
+        feature_name = question.get("feature_name", question_id)
+        valeur = reponses.get(question_id)
+        if valeur is None:
+            valeur = reponses.get(feature_name)
+
+        if question.get("type") == "oui_non":
+            if isinstance(valeur, str):
+                valeur_affichee = "Oui" if valeur.strip().lower() in ["oui", "yes", "1", "true"] else "Non"
+            else:
+                valeur_affichee = "Oui" if int(valeur or 0) == 1 else "Non"
+        elif question.get("type") == "choix":
+            choix = question.get("choix") or []
+            if isinstance(valeur, int) and 0 <= valeur < len(choix):
+                valeur_affichee = choix[valeur]
+            elif isinstance(valeur, str) and valeur in choix:
+                valeur_affichee = valeur
+            else:
+                valeur_affichee = str(valeur) if valeur is not None else "Non renseigné"
+        else:
+            valeur_affichee = str(valeur) if valeur is not None else "Non renseigné"
+
+        resume.append({
+            "id": question_id,
+            "texte": question.get("texte", question_id),
+            "reponse": valeur_affichee,
+            "feature_name": feature_name,
+        })
+
+    return resume
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # WEBSOCKET HANDLERS — Synchronisation temps réel
 # ─────────────────────────────────────────────────────────────────────────────
@@ -132,6 +170,8 @@ def handle_rejoindre_borne(data):
     """Quand une borne patient se connecte."""
     patient_id = data.get('patient_id')
     print(f"[WebSocket] Borne patient connectée: {patient_id}")
+    if patient_id:
+        join_room(f"borne_{patient_id}")
     socketio.emit('borne_connectee', {'patient_id': patient_id})
 
 
@@ -149,7 +189,8 @@ def handle_rejoindre_medecin(data):
     """Quand un médecin se connecte."""
     medecin_id = data.get('medecin_id')
     print(f"[WebSocket] Médecin connecté: {medecin_id}")
-    socketio.join_room(f"medecin_{medecin_id}")
+    if medecin_id:
+        join_room(f"medecin_{medecin_id}")
     
     # Envoyer ses patients actuels
     etat = construire_etat_global()
@@ -193,10 +234,13 @@ def construire_etat_global() -> dict:
 
 def construire_rapport_patient(patient_id: str) -> dict:
     """Génère le rapport médical d'un patient."""
-    session     = patients_session.get(patient_id, {})
-    en_file     = gestionnaire_file.file.get(patient_id)
+    session      = patients_session.get(patient_id, {})
+    en_file      = gestionnaire_file.file.get(patient_id)
     constantes  = session.get("constantes", {})
     features_nlp = extraire_features_nlp(session.get("symptom_text", ""))
+    questions_posees = session.get("questions", [])
+    reponses_questions = session.get("question_reponses", {})
+    resume_questions = _formater_reponses_questions(questions_posees, reponses_questions)
 
     rapport = {
         "patient_id":      patient_id,
@@ -210,9 +254,13 @@ def construire_rapport_patient(patient_id: str) -> dict:
         "esi_predit":      session.get("esi_predit", "?"),
         "niveau_urgence":  session.get("niveau_urgence", "?"),
         "confiance_modele": session.get("confiance", "?"),
+        "diagnostic_probable": session.get("diagnostic_probable", "Évaluation clinique complémentaire"),
+        "diagnostic_encode": session.get("diagnostic_encode", 0),
         "features_nlp_actives": {
             k: v for k, v in features_nlp.items() if v > 0
         },
+        "questions_ciblees": questions_posees,
+        "reponses_questions": resume_questions,
         "score_priorite":  round(en_file.score, 1) if en_file else "?",
         "temps_attente_min": round(en_file.temps_attente_minutes(), 1) if en_file else "?",
         "medecin_assigne": MEDECINS.get(session.get("medecin_id", ""), {}).get("nom", "?"),
@@ -301,7 +349,21 @@ def api_symptomes():
     session_id   = donnees.get("session_id")
     symptom_text = donnees.get("symptom_text", "").strip()
 
-    if not session_id or session_id not in patients_session:
+    if not session_id:
+        return jsonify({"statut": "erreur", "message": "Session invalide"}), 400
+
+    if session_id not in patients_session and session_id.startswith("MANUEL-"):
+        patients_session[session_id] = {
+            "session_id": session_id,
+            "nom": "Inconnu",
+            "prenom": "Inconnu",
+            "age": 30,
+            "sex": -1,
+            "heure_arrivee": datetime.now().strftime("%H:%M"),
+            "etape": "scan_ok",
+        }
+
+    if session_id not in patients_session:
         return jsonify({"statut": "erreur", "message": "Session invalide"}), 400
 
     if not symptom_text:
@@ -393,77 +455,56 @@ def api_constantes_from_pi():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# API — Étape 3c : Générer questions adaptatives
+# API — Étape 4 : Questions ciblées
 # ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/questions', methods=['POST'])
+def api_questions():
+    """Génère les questions ciblées à partir des constantes et des symptômes."""
+    donnees = request.get_json() or {}
+
+    patient_id = donnees.get("patient_id") or donnees.get("session_id")
+    if not patient_id or patient_id not in patients_session:
+        return jsonify({"statut": "erreur", "message": "Patient non trouvé"}), 404
+
+    session = patients_session[patient_id]
+    constantes = donnees.get("constantes") or session.get("constantes", {})
+    if constantes:
+        session["constantes"] = constantes
+
+    age = int(session.get("age", 0) or 0)
+    sex = int(session.get("sex", 0) or 0)
+    symptom_text = session.get("symptom_text", "")
+
+    questions = generer_questions(constantes, symptom_text, age, sex)
+    session["questions"] = questions
+    session["etape"] = "questions_ok"
+
+    # Préparer un aperçu temps réel pour la borne
+    socketio.emit(
+        'question_suivante',
+        {
+            "patient_id": patient_id,
+            "questions": questions,
+            "question_courante": questions[0] if questions else None,
+            "nb_questions": len(questions),
+            "horodatage": datetime.now().strftime("%H:%M:%S"),
+        },
+        room=f"borne_{patient_id}",
+    )
+
+    return jsonify({
+        "statut": "succès",
+        "patient_id": patient_id,
+        "questions_proposees": questions,
+        "nb_questions": len(questions),
+    })
+
 
 @app.route('/api/questions_adaptatif', methods=['POST'])
 def api_questions_adaptatif():
-    """
-    Génère des questions adaptatives basées sur symptômes + constantes.
-    Appelé APRÈS mesure des constantes, AVANT prédiction ESI final.
-    
-    Les questions affinent le diagnostic :
-    - Si fièvre → questions sur durée, évolution
-    - Si douleur thoracique → questions sur type, irradiation
-    - Si SpO2 faible → questions sur dyspnée, asthme
-    - Etc.
-    """
-    donnees = request.get_json()
-    if not donnees:
-        return jsonify({"statut": "erreur", "message": "Corps JSON manquant"}), 400
-    
-    patient_id = donnees.get("patient_id")
-    if patient_id not in patients_session:
-        return jsonify({"statut": "erreur", "message": "Patient non trouvé"}), 404
-    
-    session = patients_session[patient_id]
-    constantes = session.get("constantes", {})
-    
-    # Extraire les features NLP des symptômes
-    features_nlp = extraire_features_nlp(session.get("symptom_text", ""))
-    
-    # Générer les questions
-    questions_result = generer_questions_adaptatif(constantes, features_nlp)
-    
-    return jsonify({
-        "statut": "succès",
-        "patient_id": patient_id,
-        **questions_result,
-    })
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# API — Étape 3d : Soumettre réponses aux questions adaptatives
-# ─────────────────────────────────────────────────────────────────────────────
-
-@app.route('/api/reponses_adaptatif', methods=['POST'])
-def api_reponses_adaptatif():
-    """
-    Reçoit les réponses aux questions adaptatives.
-    Calcule un score d'urgence supplémentaire.
-    """
-    donnees = request.get_json()
-    if not donnees:
-        return jsonify({"statut": "erreur", "message": "Corps JSON manquant"}), 400
-    
-    patient_id = donnees.get("patient_id")
-    reponses = donnees.get("reponses", {})
-    
-    if patient_id not in patients_session:
-        return jsonify({"statut": "erreur", "message": "Patient non trouvé"}), 404
-    
-    # Calculer le score adaptatif
-    score_result = calculer_score_adaptatif(reponses)
-    
-    # Sauvegarder dans la session
-    patients_session[patient_id]["reponses_adaptatif"] = reponses
-    patients_session[patient_id]["score_adaptatif"] = score_result
-    
-    return jsonify({
-        "statut": "succès",
-        "patient_id": patient_id,
-        **score_result,
-    })
+    """Alias rétrocompatible vers /api/questions."""
+    return api_questions()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # API — Étape 4 : Triage complet
@@ -493,6 +534,18 @@ def api_triage():
     # Récupérer les constantes (envoyées par le Pi ou relire les capteurs)
     constantes_brutes = donnees.get("constantes") or lire_toutes_constantes()
 
+    questions_posees = session.get("questions") or donnees.get("questions") or []
+    if not questions_posees:
+        questions_posees = generer_questions(
+            constantes_brutes,
+            session.get("symptom_text", ""),
+            int(session.get("age", 0) or 0),
+            int(session.get("sex", 0) or 0),
+        )
+
+    reponses_questions = donnees.get("question_reponses") or session.get("question_reponses") or {}
+    features_questions = encoder_reponses(questions_posees, reponses_questions)
+
     # Construire le vecteur de données pour le modèle
     donnees_modele = {
         "age":              session.get("age", 30),
@@ -510,6 +563,9 @@ def api_triage():
         "neurological_symptoms": 0, "abdominal_pain": 0,
         "fever": 0, "trauma": 0,
         "symptom_text":     session.get("symptom_text", ""),
+        "questions":        questions_posees,
+        "question_reponses": reponses_questions,
+        **features_questions,
     }
 
     # Prédiction ESI
@@ -533,6 +589,10 @@ def api_triage():
         "esi_predit":    esi_predit,
         "niveau_urgence": _libelle_urgence(esi_predit),
         "confiance":     resultat["confiance"],
+        "diagnostic_probable": resultat.get("diagnostic_probable", "Évaluation clinique complémentaire"),
+        "diagnostic_encode": resultat.get("diagnostic_encode", 0),
+        "questions":     questions_posees,
+        "question_reponses": reponses_questions,
         "medecin_id":    medecin_id,
         "etape":         "triage_ok",
     })
@@ -592,6 +652,7 @@ def api_triage():
         "esi_predit":     esi_predit,
         "niveau_urgence": _libelle_urgence(esi_predit),
         "confiance":      resultat["confiance"],
+        "diagnostic_probable": resultat.get("diagnostic_probable", "Évaluation clinique complémentaire"),
         "position_file":  position,
         "attente_estimee": attentes.get(esi_predit, "?"),
         "medecin_assigne": MEDECINS[medecin_id]["nom"],
@@ -723,7 +784,6 @@ def on_connect():
 @socketio.on('rejoindre_medecin')
 def on_rejoindre_medecin(data):
     """Un médecin rejoint sa salle dédiée pour les alertes."""
-    from flask_socketio import join_room
     medecin_id = data.get('medecin_id')
     if medecin_id in MEDECINS:
         join_room(f"medecin_{medecin_id}")

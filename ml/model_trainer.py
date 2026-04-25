@@ -23,6 +23,7 @@ from sklearn.metrics import (
     accuracy_score,
 )
 from nlp_extractor import enrichir_dataframe
+from questions_moteur import FEATURES_QUESTIONS, encoder_reponses
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration
@@ -53,6 +54,8 @@ FEATURES_NLP = [
     "nlp_urgence_critique",
 ]
 
+FEATURES_DIAGNOSTIC = ["diagnostic_encode"]
+
 CIBLE = "esi_level"
 
 
@@ -69,9 +72,178 @@ def charger_et_preparer_donnees(chemin: str) -> pd.DataFrame:
     return df
 
 
+def enrichir_features_questions(df: pd.DataFrame) -> pd.DataFrame:
+    """Ajoute des réponses de questions ciblées synthétiques au DataFrame."""
+    df = df.copy()
+
+    def col_texte(nom: str) -> pd.Series:
+        if nom in df.columns:
+            return df[nom].fillna("").astype(str).str.lower()
+        return pd.Series([""] * len(df), index=df.index)
+
+    def col_numerique(nom: str, defaut: float = 0.0) -> pd.Series:
+        if nom in df.columns:
+            return pd.to_numeric(df[nom], errors="coerce").fillna(defaut)
+        return pd.Series([defaut] * len(df), index=df.index, dtype=float)
+
+    texte = col_texte("symptom_text")
+    diag = col_texte("diagnostic_probable")
+    comorbs = col_texte("comorbidites")
+
+    age = col_numerique("age", 30)
+    sex = col_numerique("sex", 0)
+    temp = col_numerique("temperature", 37.0)
+    fc = col_numerique("heart_rate", 75)
+    ta_sys = col_numerique("bp_systolic", 120)
+    ta_dia = col_numerique("bp_diastolic", 80)
+    spo2 = col_numerique("spo2", 98.0)
+    fr = col_numerique("respiratory_rate", 16)
+    glucose = col_numerique("glucose", 90)
+    douleur = col_numerique("pain_score", 0)
+
+    chest = col_numerique("chest_pain", 0)
+    dyspnea = col_numerique("dyspnea", 0)
+    loss = col_numerique("loss_of_consciousness", 0)
+    bleed = col_numerique("severe_bleeding", 0)
+    neuro = col_numerique("neurological_symptoms", 0)
+    abdominal = col_numerique("abdominal_pain", 0)
+    fever = col_numerique("fever", 0)
+    trauma = col_numerique("trauma", 0)
+
+    df["diagnostic_encode"] = col_numerique("diagnostic_encode", 0).astype(int)
+
+    df["q_douleur_irradiee_bras"] = (
+        (chest > 0)
+        & (
+            (fc > 110)
+            | diag.str.contains("infarct|cardiaque|stemi|nstemi|angine", regex=True)
+            | texte.str.contains("bras gauche|mâchoire|machoire|épaule|epaule")
+        )
+    ).astype(int)
+
+    df["q_antecedent_infarctus"] = (
+        age > 55
+    ).astype(int) & (
+        diag.str.contains("infarct|cardiaque|ischémi|ischemi|angine", regex=True)
+        | comorbs.str.contains("cardiopath|hypertension", regex=True)
+    ).astype(int)
+
+    df["q_medicaments_coeur"] = (
+        comorbs.str.contains("cardiopath|hypertension", regex=True)
+        | diag.str.contains("infarct|cardiaque|angine|hypertension", regex=True)
+    ).astype(int)
+
+    df["q_douleur_repos_effort"] = np.select(
+        [
+            chest > 0,
+            (chest > 0) & (fc > 115),
+            (chest > 0) & (fr > 22),
+        ],
+        [1, 2, 3],
+        default=0,
+    )
+
+    df["q_duree_dyspnee"] = np.select(
+        [spo2 < 88, spo2 < 93, dyspnea > 0],
+        [3, 2, 1],
+        default=0,
+    )
+    df["q_dyspnee_aggrave_effort"] = ((dyspnea > 0) & ((fr > 22) | (spo2 < 94))).astype(int)
+    df["q_antecedent_asthme"] = (
+        comorbs.str.contains("asthme|bpc|bpco|tuberculose|pneumonie", regex=True)
+        | diag.str.contains("asthme|bpc|bpco|tuberculose|pneumonie", regex=True)
+    ).astype(int)
+
+    df["q_duree_fievre"] = np.select(
+        [temp >= 40.0, temp >= 39.0, fever > 0],
+        [2, 1, 1],
+        default=0,
+    )
+    df["q_frissons_sueurs"] = ((fever > 0) | (temp >= 38.8) | diag.str.contains("palud|typho|infection", regex=True)).astype(int)
+    df["q_voyage_paludisme"] = (
+        diag.str.contains("palud|malaria", regex=True)
+        | texte.str.contains("voyage|village|campagne|zone de paludisme")
+    ).astype(int)
+
+    df["q_hypertension_connue"] = (
+        (ta_sys >= 160)
+        | (ta_dia >= 100)
+        | comorbs.str.contains("hypertension|hta", regex=True)
+        | diag.str.contains("hypertension|crise hypertensive", regex=True)
+    ).astype(int)
+    df["q_medicaments_tension"] = (
+        df["q_hypertension_connue"] > 0
+    ).astype(int)
+    df["q_maux_tete_vision"] = (
+        (ta_sys >= 170)
+        | diag.str.contains("hypertension|avc|crise hypertensive", regex=True)
+        | texte.str.contains("maux de tête|tête|vision|vertige")
+    ).astype(int)
+
+    df["q_a_mange_aujourdhui"] = (glucose < 70).astype(int)
+    df["q_insuline_pris"] = (
+        (glucose < 70)
+        | comorbs.str.contains("diabète|diabet", regex=True)
+        | diag.str.contains("diabète|hypoglycémie", regex=True)
+    ).astype(int)
+
+    df["q_localisation_abdomen"] = np.select(
+        [
+            abdominal > 0,
+            diag.str.contains("appendic|flanc droit", regex=True),
+            diag.str.contains("gastro|diffus|centre", regex=True),
+        ],
+        [3, 1, 3],
+        default=0,
+    )
+    df["q_fievre_associee_abdomen"] = ((abdominal > 0) & ((fever > 0) | (temp >= 38.0))).astype(int)
+    df["q_vomissements_abdomen"] = (
+        (abdominal > 0)
+        & (texte.str.contains("vomit|vomiss|naus", regex=True) | diag.str.contains("appendic|gastro", regex=True))
+    ).astype(int)
+
+    df["q_trauma_perte_conscience"] = ((trauma > 0) & (loss > 0)).astype(int)
+    df["q_trauma_saignement"] = ((trauma > 0) & (bleed > 0)).astype(int)
+    df["q_trauma_zone"] = np.select(
+        [
+            trauma > 0,
+            texte.str.contains("tête|crâne|cran", regex=True),
+            texte.str.contains("poitrine|thorax", regex=True),
+            texte.str.contains("ventre|abdomen", regex=True),
+        ],
+        [4, 1, 2, 3],
+        default=0,
+    )
+
+    df["q_neuro_faiblesse"] = ((neuro > 0) & (texte.str.contains("faiblesse|paralys|hémipl|hemipl|côté", regex=True) | diag.str.contains("avc|attaque", regex=True))).astype(int)
+    df["q_neuro_parole"] = ((neuro > 0) & (texte.str.contains("parle|parole|mots", regex=True) | diag.str.contains("avc|aphasie", regex=True))).astype(int)
+    df["q_neuro_confusion"] = ((neuro > 0) & (texte.str.contains("confus|désorient|desorient|ne sait plus", regex=True) | diag.str.contains("méning|mening|avc", regex=True))).astype(int)
+
+    df["q_pediatrie_hydratation"] = ((age < 5) & ((fever > 0) | (dyspnea > 0) | (abdominal > 0))).astype(int)
+    df["q_grossesse_possible"] = ((sex == 0) & (age.between(12, 55)) & ((abdominal > 0) | (fever > 0) | texte.str.contains("saign", regex=True))).astype(int)
+
+    df["q_antecedent_symptome"] = (
+        texte.str.contains("depuis|déjà eu|deja eu|reviens|revient", regex=True)
+        | diag.str.contains("chronique|récidiv|recidiv", regex=True)
+    ).astype(int)
+    df["q_aggravation_effort"] = ((chest > 0) | (dyspnea > 0) | (douleur >= 6)).astype(int)
+    df["q_prise_medicament"] = (
+        texte.str.contains("médicament|traitement|ordonnance|pilule|insuline", regex=True)
+        | comorbs.str.contains("hypertension|diabète|asthme|drépanocytose", regex=True)
+    ).astype(int)
+    df["q_duree_symptomes"] = np.select(
+        [texte.str.contains("depuis hier|depuis ce matin|depuis quelques", regex=True), texte.str.contains("depuis plusieurs|depuis 3 jours|depuis 4 jours|depuis 2 jours", regex=True)],
+        [1, 2],
+        default=0,
+    )
+
+    return df
+
+
 def construire_features(df: pd.DataFrame) -> tuple:
     """Construit les matrices X (features) et y (cible)."""
-    toutes_features = FEATURES_VITALES + FEATURES_BINAIRES + FEATURES_NLP
+    df = enrichir_features_questions(df)
+    toutes_features = FEATURES_VITALES + FEATURES_BINAIRES + FEATURES_NLP + FEATURES_DIAGNOSTIC + FEATURES_QUESTIONS
 
     # Vérifier que toutes les colonnes existent
     manquantes = [c for c in toutes_features if c not in df.columns]
@@ -173,6 +345,47 @@ def charger_modele():
     return modele, scaler, noms_features
 
 
+def _encodage_diagnostic_probable(diagnostic: str) -> int:
+    """Retourne un encodage numérique du diagnostic probable."""
+    if not diagnostic:
+        return 0
+
+    try:
+        from data_generator import DIAGNOSTIC_ENCODE
+
+        return int(DIAGNOSTIC_ENCODE.get(diagnostic, 0))
+    except Exception:
+        return 0
+
+
+def _estimer_diagnostic_probable(donnees_patient: dict, features_nlp: dict) -> str:
+    """Estime un diagnostic probable simple à afficher dans le rapport."""
+    constantes = donnees_patient
+    texte = str(donnees_patient.get("symptom_text", "")).lower()
+
+    if features_nlp.get("nlp_loss_of_consciousness", 0) or features_nlp.get("nlp_severe_bleeding", 0) or features_nlp.get("nlp_trauma", 0):
+        return "Traumatisme grave / urgence vitale"
+    if features_nlp.get("nlp_chest_pain", 0) and (features_nlp.get("nlp_dyspnea", 0) or constantes.get("heart_rate", 0) > 110):
+        return "Syndrome coronarien aigu"
+    if constantes.get("spo2", 98) < 93 or features_nlp.get("nlp_dyspnea", 0):
+        return "Détresse respiratoire"
+    if constantes.get("temperature", 37) >= 39 or features_nlp.get("nlp_fever", 0):
+        if "palud" in texte or "voyage" in texte:
+            return "Paludisme / syndrome fébrile"
+        return "Syndrome infectieux fébrile"
+    if constantes.get("bp_systolic", 120) >= 160 or constantes.get("bp_diastolic", 80) >= 100:
+        return "Hypertension artérielle sévère"
+    if constantes.get("glucose", 90) < 70:
+        return "Hypoglycémie"
+    if features_nlp.get("nlp_abdominal_pain", 0):
+        return "Douleur abdominale aiguë"
+    if features_nlp.get("nlp_neurological", 0):
+        return "Atteinte neurologique aiguë"
+    if features_nlp.get("nlp_pain_score", 0) >= 7:
+        return "Douleur aiguë intense"
+    return "Évaluation clinique complémentaire"
+
+
 def predire_esi(donnees_patient: dict) -> dict:
     """
     Prédit le niveau ESI d'un patient à partir de ses données brutes.
@@ -192,12 +405,24 @@ def predire_esi(donnees_patient: dict) -> dict:
 
     # Extraction NLP si texte disponible
     features_nlp = extraire_features_nlp(donnees_patient.get("symptom_text", ""))
+    questions = donnees_patient.get("questions") or []
+    reponses_questions = donnees_patient.get("question_reponses") or donnees_patient.get("reponses_questions") or {}
+    features_questions = encoder_reponses(questions, reponses_questions) if questions else {feat: 0 for feat in FEATURES_QUESTIONS}
+
+    diagnostic_probable = donnees_patient.get("diagnostic_probable") or _estimer_diagnostic_probable(donnees_patient, features_nlp)
+    diagnostic_encode = donnees_patient.get("diagnostic_encode")
+    if diagnostic_encode is None:
+        diagnostic_encode = _encodage_diagnostic_probable(diagnostic_probable)
 
     # Construction du vecteur de features
     vecteur = {}
     for feat in noms_features:
         if feat in donnees_patient:
             vecteur[feat] = donnees_patient[feat]
+        elif feat in features_questions:
+            vecteur[feat] = features_questions[feat]
+        elif feat == "diagnostic_encode":
+            vecteur[feat] = diagnostic_encode
         elif feat in features_nlp:
             vecteur[feat] = features_nlp[feat]
         else:
@@ -214,6 +439,8 @@ def predire_esi(donnees_patient: dict) -> dict:
 
     return {
         "esi_predit":   esi_predit,
+        "diagnostic_probable": diagnostic_probable,
+        "diagnostic_encode": int(diagnostic_encode),
         "probabilites": {
             f"ESI_{i+1}": round(float(p) * 100, 1)
             for i, p in enumerate(probas)

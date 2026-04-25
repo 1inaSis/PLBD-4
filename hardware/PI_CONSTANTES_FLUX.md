@@ -182,7 +182,7 @@ Response (200 OK):
 
 ### 2. Générer questions adaptatives
 ```
-POST /api/questions_adaptatif
+POST /api/questions
 Content-Type: application/json
 
 Body:
@@ -195,42 +195,47 @@ Response:
   "statut": "succès",
   "questions_proposees": [
     {
-      "id": "q1",
-      "scenario": "douleur_thoracique",
-      "question": "Avez-vous une douleur type pression/écrasement?",
-      "type": "oui_non"
+      "id": "q_duree_dyspnee",
+      "texte": "Depuis combien de temps avez-vous du mal à respirer ?",
+      "type": "choix",
+      "feature_name": "q_duree_dyspnee"
     },
     ...
   ],
-  "scenarios_matched": ["douleur_thoracique", "tachycardie"],
-  "nb_questions": 4,
-  "urgence_bonus": 0.5
+  "nb_questions": 4
 }
 ```
 
-### 3. Soumettre réponses adaptatives
+### 3. Lancer triage final avec réponses
 ```
-POST /api/reponses_adaptatif
+POST /api/triage
 Content-Type: application/json
 
 Body:
 {
-  "patient_id": "PT-ABC123",
-  "reponses": {
-    "q1": true,
-    "q2": "modérée",
-    "q3": 7,
-    "q4": false
+  "session_id": "SES-123",
+  "constantes": {
+    "temperature": 37.4,
+    "spo2": 95.0,
+    "heart_rate": 98,
+    "bp_systolic": 125,
+    "bp_diastolic": 82,
+    "respiratory_rate": 18,
+    "glucose": 96
+  },
+  "question_reponses": {
+    "q_duree_dyspnee": "Depuis quelques heures",
+    "q_dyspnee_aggrave_effort": "Oui"
   }
 }
 
 Response:
 {
   "statut": "succès",
-  "score_total": 3.2,
-  "esi_delta": 0,           # Ajustement ESI si nécessaire
-  "facteurs_alarmants": ["douleur thoracique persistante"],
-  "recommendation": "ESI-2"
+  "patient_id": "PT-SES-123",
+  "esi_predit": 2,
+  "diagnostic_probable": "Détresse respiratoire",
+  "position_file": 1
 }
 ```
 
@@ -284,9 +289,10 @@ python predict_api.py
 ```
 
 ### 2. Ouvrir les 3 interfaces
-- **Borne patient:** http://localhost:5000/borne.html
-- **Salle d'attente:** http://localhost:5000/salle_attente.html
-- **Médecin:** http://localhost:5000/medecin.html
+- **Borne patient:** http://localhost:5000/
+- **Salle d'attente:** http://localhost:5000/salle
+- **Médecin 1:** http://localhost:5000/medecin/M1
+- **Médecin 2:** http://localhost:5000/medecin/M2
 
 ### 3. Workflow test (sans Pi)
 ```bash
@@ -307,14 +313,14 @@ curl -X POST http://localhost:5000/api/symptomes \
 curl http://localhost:5000/api/constantes
 
 # Terminal 5: Générer questions
-curl -X POST http://localhost:5000/api/questions_adaptatif \
+curl -X POST http://localhost:5000/api/questions \
   -H "Content-Type: application/json" \
   -d '{"patient_id": "PT-SES-123"}'
 
-# Terminal 6: Soumettre réponses
-curl -X POST http://localhost:5000/api/reponses_adaptatif \
+# Terminal 6: Triage final avec réponses
+curl -X POST http://localhost:5000/api/triage \
   -H "Content-Type: application/json" \
-  -d '{"patient_id": "PT-SES-123", "reponses": {"q1": true}}'
+  -d '{"session_id": "SES-123", "question_reponses": {"q_duree_dyspnee": "Depuis quelques heures"}}'
 ```
 
 ## ✅ Checklist Déploiement Pi
@@ -337,7 +343,7 @@ curl -X POST http://localhost:5000/api/reponses_adaptatif \
 
 - **capteurs_raspberry.py:** Fonctions de lecture capteurs
 - **predict_api.py:** Endpoints et WebSocket
-- **questionnaire_adaptatif.py:** Génération questions
+- **questions_moteur.py:** Génération questions ciblées
 
 ---
 
