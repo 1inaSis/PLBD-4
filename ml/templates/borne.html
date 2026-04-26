@@ -1,0 +1,516 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HealthGate - Borne Patient</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ========== CONFIG ========== */
+    :root {
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
+      --bg: #f0f4f8; --surface: #ffffff; --surface-soft: #f7f9fc; --border: #d1dce8; --text: #0d1b2a; --text-soft: #334f73;
+      --primary: #0a2342; --accent: #00a8e8; --success: #00a651; --warning: #ffb800; --danger: #cc0000;
+      --esi-1: #cc0000; --esi-2: #ff6600; --esi-3: #ffb800; --esi-4: #00a651; --esi-5: #0072bb;
+      --font-ui: "Inter", sans-serif; --font-data: "JetBrains Mono", monospace; --radius: 14px; --shadow: 0 10px 24px rgba(10,35,66,.08); --t: 180ms ease;
+    }
+    body.theme-dark { --bg:#0a1220; --surface:#10192e; --surface-soft:#13213f; --border:#244061; --text:#e8f1fd; --text-soft:#bdd1ee; --primary:#5ca7ff; --accent:#35c6ff; }
+
+    /* ========== DESIGN SYSTEM ========== */
+    *{box-sizing:border-box} html{font-size:16px}
+    body{margin:0;min-height:100vh;font-family:var(--font-ui);background:radial-gradient(circle at top,rgba(0,168,232,.16),transparent 35%),var(--bg);color:var(--text);padding:var(--space-4);display:flex;justify-content:center;line-height:1.45}
+    .app{width:min(760px,100%);background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
+
+    /* ========== COMPONENTS ========== */
+    .header{padding:var(--space-5);border-bottom:1px solid var(--border);display:grid;gap:var(--space-4);background:linear-gradient(180deg,rgba(0,168,232,.08),transparent)}
+    .brand-row{display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);flex-wrap:wrap}
+    .brand{display:flex;gap:var(--space-3);align-items:center;font-weight:800} .brand small{display:block;color:var(--text-soft);font-weight:500}
+    .status-indicator{display:inline-flex;align-items:center;gap:var(--space-2);border-radius:999px;padding:10px 14px;border:1px solid var(--border);background:var(--surface-soft);font-size:.95rem;font-weight:700}
+    .status-indicator-dot{width:10px;height:10px;border-radius:50%;background:var(--success);animation:pulse 1.8s infinite}
+    .status-indicator.error .status-indicator-dot{background:var(--danger)}
+    @keyframes pulse{0%{transform:scale(.95)}50%{transform:scale(1.1)}100%{transform:scale(.95)}}
+
+    .progress-meta{display:flex;justify-content:space-between;color:var(--text-soft);font-weight:700;font-size:.95rem}
+    .progress-bar{height:12px;border:1px solid var(--border);border-radius:999px;background:var(--surface-soft);overflow:hidden}
+    .progress-bar>span{display:block;height:100%;width:16%;background:var(--accent);transition:width var(--t)}
+
+    .card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-soft);padding:var(--space-5);display:grid;gap:var(--space-4)}
+    .step-panel{display:none;padding:var(--space-5)} .step-panel.active{display:block}
+
+    .badge-esi{display:inline-flex;min-width:92px;justify-content:center;padding:10px 14px;border-radius:999px;color:#fff;font-weight:800}
+    .badge-esi.esi-1{background:var(--esi-1)} .badge-esi.esi-2{background:var(--esi-2)} .badge-esi.esi-3{background:var(--esi-3);color:#222}
+    .badge-esi.esi-4{background:var(--esi-4)} .badge-esi.esi-5{background:var(--esi-5)}
+
+    .patient-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:var(--space-4);display:grid;gap:var(--space-2)}
+
+    .btn-primary,.btn-danger,.btn-ghost{min-height:60px;border-radius:12px;font:800 1.04rem var(--font-ui);cursor:pointer;transition:transform var(--t),filter var(--t),box-shadow var(--t);border:1px solid transparent}
+    .btn-primary{background:var(--primary);color:#fff}.btn-danger{background:var(--danger);color:#fff}.btn-ghost{background:var(--surface);color:var(--text);border-color:var(--border)}
+    .btn-primary:hover,.btn-danger:hover,.btn-ghost:hover{transform:translateY(-1px)} .btn-primary:active,.btn-danger:active,.btn-ghost:active{filter:brightness(.98)}
+    .btn-primary:disabled,.btn-danger:disabled,.btn-ghost:disabled{opacity:.55;cursor:not-allowed;transform:none}
+    .btn-primary.loading,.btn-danger.loading,.btn-ghost.loading{pointer-events:none;opacity:.7}
+    .btn-primary.error,.btn-danger.error,.btn-ghost.error{box-shadow:0 0 0 2px rgba(204,0,0,.35)} .btn-primary.success,.btn-danger.success,.btn-ghost.success{box-shadow:0 0 0 2px rgba(0,166,81,.35)}
+
+    .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3)}
+    .icon-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3)}
+    .icon-btn{min-height:84px;border:1px solid var(--border);border-radius:12px;background:var(--surface);display:grid;grid-template-columns:28px 1fr;gap:var(--space-3);align-items:center;padding:0 var(--space-3);font:700 1rem var(--font-ui);cursor:pointer;transition:border-color var(--t),background var(--t)}
+    .icon-btn:hover,.icon-btn.active{border-color:var(--accent);background:rgba(0,168,232,.12)}
+
+    .constante{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:var(--space-4);display:grid;gap:var(--space-3)}
+    .constante header{display:flex;justify-content:space-between;align-items:center} .constante-value{font:700 2rem var(--font-data)} .constante-trend{font:500 .95rem var(--font-data);color:var(--text-soft)}
+    .meter{height:10px;border:1px solid var(--border);border-radius:999px;background:var(--surface-soft);overflow:hidden}.meter>span{display:block;height:100%;width:0;background:var(--accent);transition:width var(--t)}
+
+    .feedback{min-height:52px;border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:12px 14px;display:flex;align-items:center;font-weight:700;color:var(--text-soft)}
+    .feedback.success{border-color:rgba(0,166,81,.35);color:var(--success)} .feedback.error{border-color:rgba(204,0,0,.35);color:var(--danger)}
+
+    .fullscreen-esi{position:fixed;inset:0;display:none;place-items:center;color:#fff;z-index:50;text-align:center;animation:screenPulse 1.6s infinite}
+    .fullscreen-esi.visible{display:grid} @keyframes screenPulse{0%{filter:saturate(.95)}50%{filter:saturate(1.1)}100%{filter:saturate(.95)}}
+
+    .ticket{border:1px dashed var(--border);background:linear-gradient(180deg,#fff,#f6fbff);border-radius:12px;padding:var(--space-4);display:grid;gap:var(--space-3);font-family:var(--font-data)}
+    .ticket-top{display:flex;justify-content:space-between;align-items:center}
+    .qr{width:96px;height:96px;border-radius:10px;border:1px solid #20304f;background:repeating-linear-gradient(45deg,#0a2342 0 5px,#fff 5px 10px)}
+    textarea{width:100%;min-height:150px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:var(--space-3);font-size:1rem}
+    .answer-zone{display:grid;gap:var(--space-3)}
+    .answer-input{width:100%;min-height:56px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:0 var(--space-3);font-size:1rem}
+    .answer-input.text{min-height:110px;padding:var(--space-3);resize:vertical}
+    .ecg{height:56px;border:1px solid var(--border);border-radius:12px;background:var(--surface);position:relative;overflow:hidden}
+    .ecg::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,168,232,.25),transparent);animation:scan 2.2s linear infinite}
+    @keyframes scan{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+    /* ========== LAYOUT ========== */
+    @media (max-width:760px){.row,.icon-grid{grid-template-columns:1fr}.header,.step-panel{padding:var(--space-4)}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="brand-row">
+        <div class="brand">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="7" fill="rgba(0,168,232,.14)"/><path d="M12 6v12M6 12h12" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/></svg>
+          <div>HealthGate<small>Borne de triage medical</small></div>
+        </div>
+        <div class="status-indicator" id="netState"><span class="status-indicator-dot"></span><span id="netText">Connecte</span></div>
+      </div>
+      <div class="progress-meta"><span id="clock">--:--</span><span id="stepText">Etape 1/6</span></div>
+      <div class="progress-bar"><span id="globalProgress"></span></div>
+    </div>
+
+    <section class="step-panel active" data-step="1"><div class="card"><h1>Scan de la carte patient</h1><p>Placez votre carte devant la camera.</p><div class="ecg"></div><div class="feedback" id="scanFeedback">Pret pour capture</div><div class="progress-bar"><span id="scanProgress"></span></div><div class="row"><button type="button" class="btn-primary" id="btnScan">Photographier</button><button type="button" class="btn-ghost" id="btnSkipCard">Continuer sans carte</button></div></div></section>
+    <section class="step-panel" data-step="2"><div class="card"><h2>Vos symptomes</h2><p>Touchez les icones puis completez si besoin.</p><div class="icon-grid" id="symptomGrid"></div><textarea id="symptomText" placeholder="Ex: douleur thoracique, essoufflement..."></textarea><div class="row"><button type="button" class="btn-ghost" data-go="1">Retour</button><button type="button" class="btn-primary" id="btnSymptNext">Suivant</button></div></div></section>
+    <section class="step-panel" data-step="3"><div class="card"><h2>Mesure des constantes</h2><p>Restez immobile pendant la lecture capteurs.</p><div class="row"><article class="constante"><header><strong>Temperature</strong><span class="constante-trend" id="trendTemp">--</span></header><div class="constante-value" id="valTemp">--</div><div class="meter"><span id="barTemp"></span></div></article><article class="constante"><header><strong>SpO2</strong><span class="constante-trend" id="trendSpo2">--</span></header><div class="constante-value" id="valSpo2">--</div><div class="meter"><span id="barSpo2"></span></div></article><article class="constante"><header><strong>Tension</strong><span class="constante-trend" id="trendBp">--</span></header><div class="constante-value" id="valBp">--</div><div class="meter"><span id="barBp"></span></div></article></div><div class="feedback" id="sensorFeedback">Mesure en cours...</div><div class="row"><button type="button" class="btn-ghost" data-go="2">Retour</button><button type="button" class="btn-primary" id="btnToQuestions">Questions</button></div></div></section>
+    <section class="step-panel" data-step="4"><div class="card"><h2 id="qTitle">Question 1/5</h2><p id="qText">Avez-vous une douleur thoracique forte ?</p><div class="answer-zone" id="qAnswerZone"></div><div class="feedback" id="qFeedback">Choisissez une reponse</div><div class="row"><button type="button" class="btn-ghost" id="btnQuestionBack">Retour</button><button type="button" class="btn-primary" id="btnNextQ">Suivant</button></div></div></section>
+    <section class="step-panel" data-step="5"><div class="card"><h2>Resultat du triage</h2><div class="badge-esi esi-3" id="resultBadge">ESI 3</div><p id="resultText">Prise en charge en environ 30 min</p><div class="row"><button type="button" class="btn-ghost" data-go="4">Retour</button><button type="button" class="btn-primary" data-go="6">Voir ticket</button></div></div></section>
+    <section class="step-panel" data-step="6"><div class="card"><h2>Ticket patient</h2><div class="ticket"><div class="ticket-top"><div><div>Ticket</div><div style="font-size:2rem;font-weight:700" id="ticketNo">A-031</div></div><div class="qr" aria-label="QR Code"></div></div><div>ESI: <strong id="ticketEsi">3</strong></div><div>Heure: <strong id="ticketTime">--:--</strong></div><div>Position: <strong id="ticketPos">3eme patient</strong></div></div><div class="row"><button type="button" class="btn-ghost" data-go="5">Retour</button><button type="button" class="btn-danger" id="btnReset">Terminer</button></div></div></section>
+  </div>
+
+  <div class="fullscreen-esi" id="esiScreen"><div><div class="badge-esi esi-1" id="esiScreenBadge">ESI 1</div><h2 id="esiScreenText">Prise en charge immediate</h2></div></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
+  <script>
+    const state = {
+      step: 1,
+      connected: false,
+      symptoms: [],
+      sessionId: null,
+      patientId: null,
+      constantes: {},
+      questions: [],
+      questionIndex: 0,
+      reponses: {},
+      triageResult: null,
+    };
+
+    const symptomOptions = [
+      { k: "douleur thoracique", svg: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-8-4.5-8-11c0-3.3 2.7-6 6-6 1.8 0 3.4.9 4.4 2.2C14.6 4.9 16.2 4 18 4c3.3 0 6 2.7 6 6 0 6.5-8 11-8 11z" stroke="var(--accent)" stroke-width="2" fill="rgba(0,168,232,0.1)"/></svg>' },
+      { k: "dyspnee", svg: '<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="5" stroke="var(--accent)" stroke-width="2" fill="rgba(0,168,232,0.1)"/></svg>' },
+      { k: "fievre", svg: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v10" stroke="var(--warning)" stroke-width="2"/><rect x="9" y="11" width="6" height="9" rx="3" stroke="var(--warning)" fill="rgba(255,184,0,0.12)"/></svg>' },
+      { k: "saignement", svg: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3c-3 4-5 7-5 10a5 5 0 0010 0c0-3-2-6-5-10z" stroke="var(--danger)" stroke-width="2" fill="rgba(204,0,0,0.12)"/></svg>' },
+    ];
+
+    const E = {
+      panels: [...document.querySelectorAll('.step-panel')],
+      progress: document.getElementById('globalProgress'),
+      stepText: document.getElementById('stepText'),
+      clock: document.getElementById('clock'),
+      netText: document.getElementById('netText'),
+      netState: document.getElementById('netState'),
+      scanFeedback: document.getElementById('scanFeedback'),
+      scanProgress: document.getElementById('scanProgress'),
+      symptomGrid: document.getElementById('symptomGrid'),
+      symptomText: document.getElementById('symptomText'),
+      valTemp: document.getElementById('valTemp'),
+      valSpo2: document.getElementById('valSpo2'),
+      valBp: document.getElementById('valBp'),
+      barTemp: document.getElementById('barTemp'),
+      barSpo2: document.getElementById('barSpo2'),
+      barBp: document.getElementById('barBp'),
+      trendTemp: document.getElementById('trendTemp'),
+      trendSpo2: document.getElementById('trendSpo2'),
+      trendBp: document.getElementById('trendBp'),
+      sensorFeedback: document.getElementById('sensorFeedback'),
+      qTitle: document.getElementById('qTitle'),
+      qText: document.getElementById('qText'),
+      qAnswerZone: document.getElementById('qAnswerZone'),
+      qFeedback: document.getElementById('qFeedback'),
+      resultBadge: document.getElementById('resultBadge'),
+      resultText: document.getElementById('resultText'),
+      esiScreen: document.getElementById('esiScreen'),
+      esiScreenBadge: document.getElementById('esiScreenBadge'),
+      esiScreenText: document.getElementById('esiScreenText'),
+      ticketNo: document.getElementById('ticketNo'),
+      ticketEsi: document.getElementById('ticketEsi'),
+      ticketTime: document.getElementById('ticketTime'),
+      ticketPos: document.getElementById('ticketPos'),
+    };
+
+    const btnScan = document.getElementById('btnScan');
+    const btnSkipCard = document.getElementById('btnSkipCard');
+    const btnNextQ = document.getElementById('btnNextQ');
+    const btnReset = document.getElementById('btnReset');
+
+    function applyTheme() {
+      const h = new Date().getHours();
+      if ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) || h >= 19 || h <= 6) {
+        document.body.classList.add('theme-dark');
+      }
+    }
+
+    function tick() {
+      const d = new Date();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      E.clock.textContent = `${hh}:${mm}`;
+      E.ticketTime.textContent = `${hh}:${mm}`;
+    }
+
+    function setStep(step) {
+      state.step = step;
+      E.panels.forEach((p) => p.classList.toggle('active', Number(p.dataset.step) === step));
+      E.progress.style.width = `${((step - 1) / 5) * 100}%`;
+      E.stepText.textContent = `Etape ${step}/6`;
+      if (step === 4) {
+        renderQuestion();
+      }
+    }
+
+    function setFeedback(el, message, ok) {
+      el.className = ok === null ? 'feedback' : ok ? 'feedback success' : 'feedback error';
+      el.textContent = message;
+    }
+
+    async function api(path, opts = {}) {
+      const res = await fetch(path, {
+        method: opts.method || 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.message || 'Erreur API');
+      }
+      return json;
+    }
+
+    function renderSymptoms() {
+      E.symptomGrid.innerHTML = symptomOptions
+        .map((s) => `<button type="button" class="icon-btn" data-s="${s.k}">${s.svg}<span>${s.k}</span></button>`)
+        .join('');
+
+      E.symptomGrid.querySelectorAll('.icon-btn').forEach((b) => {
+        b.onclick = () => {
+          b.classList.toggle('active');
+          const key = b.dataset.s;
+          if (state.symptoms.includes(key)) {
+            state.symptoms = state.symptoms.filter((v) => v !== key);
+          } else {
+            state.symptoms.push(key);
+          }
+          if (!E.symptomText.value.trim()) {
+            E.symptomText.value = state.symptoms.join(', ');
+          }
+        };
+      });
+    }
+
+    async function startScan() {
+      btnScan.classList.add('loading');
+      setFeedback(E.scanFeedback, 'Lecture de la carte en cours...', null);
+      E.scanProgress.style.width = '35%';
+
+      try {
+        const data = await api('/api/scanner', { method: 'POST', body: {} });
+        state.sessionId = data.session_id;
+        state.patientId = data.session_id;
+        E.scanProgress.style.width = '100%';
+        setFeedback(E.scanFeedback, `Carte lue: ${data.prenom || ''} ${data.nom || ''}`.trim(), true);
+        setStep(2);
+      } catch (err) {
+        setFeedback(E.scanFeedback, `Erreur scan: ${err.message}`, false);
+      } finally {
+        btnScan.classList.remove('loading');
+      }
+    }
+
+    function skipScan() {
+      state.sessionId = `MANUEL-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+      state.patientId = state.sessionId;
+      setFeedback(E.scanFeedback, 'Mode manuel active', true);
+      setStep(2);
+    }
+
+    async function saveSymptomesAndContinue() {
+      const symptomText = E.symptomText.value.trim();
+      if (!symptomText) {
+        alert('Veuillez renseigner les symptomes.');
+        return;
+      }
+      try {
+        await api('/api/symptomes', {
+          method: 'POST',
+          body: { session_id: state.sessionId, symptom_text: symptomText },
+        });
+        setStep(3);
+        await loadConstantesAndQuestions();
+      } catch (err) {
+        alert(`Erreur symptomes: ${err.message}`);
+      }
+    }
+
+    function applyConstantes(constantes) {
+      const t = Number(constantes.temperature || 37);
+      const spo2 = Number(constantes.spo2 || 98);
+      const sys = Number(constantes.bp_systolic || 120);
+      const dia = Number(constantes.bp_diastolic || 80);
+
+      E.valTemp.textContent = `${t.toFixed(1)} C`;
+      E.valSpo2.textContent = `${spo2.toFixed(0)}%`;
+      E.valBp.textContent = `${sys}/${dia}`;
+      E.barTemp.style.width = `${Math.min(100, (t / 40) * 100)}%`;
+      E.barSpo2.style.width = `${Math.min(100, spo2)}%`;
+      E.barBp.style.width = `${Math.min(100, (sys / 180) * 100)}%`;
+      E.trendTemp.textContent = t > 37.8 ? '↑' : '→';
+      E.trendSpo2.textContent = spo2 < 94 ? '↓' : '→';
+      E.trendBp.textContent = sys > 140 ? '↑' : '→';
+    }
+
+    async function loadConstantesAndQuestions() {
+      try {
+        setFeedback(E.sensorFeedback, 'Mesure capteurs en cours...', null);
+        const c = await api('/api/constantes');
+        state.constantes = c.constantes || {};
+        applyConstantes(state.constantes);
+        setFeedback(E.sensorFeedback, 'Constantes mesurees', true);
+
+        const q = await api('/api/questions', {
+          method: 'POST',
+          body: { session_id: state.sessionId, constantes: state.constantes },
+        });
+        state.questions = q.questions_proposees || [];
+        state.questionIndex = 0;
+      } catch (err) {
+        setFeedback(E.sensorFeedback, `Erreur capteurs/questions: ${err.message}`, false);
+      }
+    }
+
+    function renderQuestion() {
+      if (!state.questions.length) {
+        E.qTitle.textContent = 'Aucune question';
+        E.qText.textContent = 'Passage direct au triage.';
+        E.qAnswerZone.innerHTML = '';
+        return;
+      }
+      const q = state.questions[state.questionIndex];
+      E.qTitle.textContent = `Question ${state.questionIndex + 1}/${state.questions.length}`;
+      E.qText.textContent = q.texte || 'Question';
+      setFeedback(E.qFeedback, 'Choisissez une reponse', null);
+
+      const stored = state.reponses[q.id];
+
+      if (q.type === 'oui_non') {
+        E.qAnswerZone.innerHTML = `
+          <div class="row">
+            <button type="button" class="btn-primary" id="btnAnsOui">Oui</button>
+            <button type="button" class="btn-ghost" id="btnAnsNon">Non</button>
+          </div>
+        `;
+        const btnOui = document.getElementById('btnAnsOui');
+        const btnNon = document.getElementById('btnAnsNon');
+        btnOui.onclick = () => saveAnswer('Oui');
+        btnNon.onclick = () => saveAnswer('Non');
+        if (stored != null) {
+          if (String(stored).toLowerCase().includes('oui')) {
+            btnOui.classList.add('success');
+          } else {
+            btnNon.classList.add('success');
+          }
+        }
+        return;
+      }
+
+      if (q.type === 'choix') {
+        const choix = Array.isArray(q.choix) ? q.choix : [];
+        E.qAnswerZone.innerHTML = `<div class="answer-zone">${choix.map((c, idx) => `<button type="button" class="btn-ghost" data-choix="${idx}">${c}</button>`).join('')}</div>`;
+        E.qAnswerZone.querySelectorAll('[data-choix]').forEach((btn) => {
+          btn.onclick = () => saveAnswer(choix[Number(btn.dataset.choix)] || '');
+        });
+        return;
+      }
+
+      const placeholder = q.placeholder || 'Ecrivez votre reponse...';
+      E.qAnswerZone.innerHTML = `<textarea id="qTextInput" class="answer-input text" placeholder="${placeholder}"></textarea>`;
+      const input = document.getElementById('qTextInput');
+      if (stored != null) {
+        input.value = String(stored);
+      }
+    }
+
+    function saveAnswer(value) {
+      const q = state.questions[state.questionIndex];
+      if (!q) return;
+      state.reponses[q.id] = value;
+      setFeedback(E.qFeedback, `Reponse: ${value}`, true);
+    }
+
+    function capturerReponseCouranteDepuisUI() {
+      const q = state.questions[state.questionIndex];
+      if (!q) return;
+      if (q.type === 'oui_non' || q.type === 'choix') return;
+
+      const input = document.getElementById('qTextInput');
+      if (!input) return;
+      const valeur = (input.value || '').trim();
+      if (valeur) {
+        state.reponses[q.id] = valeur;
+      }
+    }
+
+    async function nextQuestionOrTriage() {
+      const q = state.questions[state.questionIndex];
+      capturerReponseCouranteDepuisUI();
+      if (q && state.reponses[q.id] == null) {
+        setFeedback(E.qFeedback, 'Reponse requise', false);
+        return;
+      }
+
+      if (state.questionIndex < state.questions.length - 1) {
+        state.questionIndex += 1;
+        renderQuestion();
+        return;
+      }
+
+      await submitTriage();
+    }
+
+    function applyResultView(result) {
+      const esi = Number(result.esi_predit || 5);
+      const cls = `esi-${esi}`;
+      E.resultBadge.className = `badge-esi ${cls}`;
+      E.resultBadge.textContent = `ESI ${esi}`;
+      E.resultText.textContent = `${result.niveau_urgence || ''} | Attente estimee: ${result.attente_estimee || '?'}`;
+      E.ticketNo.textContent = result.patient_id || '---';
+      E.ticketEsi.textContent = String(esi);
+      E.ticketPos.textContent = `${result.position_file || '?'}eme patient`;
+
+      if (esi <= 2) {
+        E.esiScreen.className = 'fullscreen-esi visible';
+        E.esiScreen.style.background = esi === 1 ? 'rgba(204,0,0,.92)' : 'rgba(255,102,0,.92)';
+        E.esiScreenBadge.className = `badge-esi ${cls}`;
+        E.esiScreenText.textContent = esi === 1 ? 'Prise en charge immediate' : 'Triage prioritaire';
+        setTimeout(() => {
+          E.esiScreen.className = 'fullscreen-esi';
+        }, 2200);
+      }
+    }
+
+    async function submitTriage() {
+      try {
+        await api('/api/questions/reponses', {
+          method: 'POST',
+          body: { session_id: state.sessionId, reponses: state.reponses },
+        });
+
+        const result = await api('/api/triage', {
+          method: 'POST',
+          body: {
+            session_id: state.sessionId,
+            constantes: state.constantes,
+            question_reponses: state.reponses,
+          },
+        });
+
+        state.triageResult = result;
+        state.patientId = result.patient_id || state.patientId;
+        applyResultView(result);
+        setStep(5);
+      } catch (err) {
+        alert(`Erreur triage: ${err.message}`);
+      }
+    }
+
+    function resetFlow() {
+      state.step = 1;
+      state.sessionId = null;
+      state.patientId = null;
+      state.constantes = {};
+      state.questions = [];
+      state.questionIndex = 0;
+      state.reponses = {};
+      state.triageResult = null;
+      state.symptoms = [];
+      E.scanProgress.style.width = '0%';
+      setFeedback(E.scanFeedback, 'Pret pour capture', null);
+      E.symptomText.value = '';
+      renderSymptoms();
+      setStep(1);
+    }
+
+    function setNet(on) {
+      state.connected = on;
+      E.netText.textContent = on ? 'Connecte' : 'Hors ligne';
+      E.netState.className = on ? 'status-indicator' : 'status-indicator error';
+    }
+
+    function connectSocket() {
+      try {
+        const s = io();
+        s.on('connect', () => {
+          setNet(true);
+          s.emit('rejoindre_borne', { patient_id: state.sessionId || 'ANON' });
+        });
+        s.on('disconnect', () => setNet(false));
+        s.on('triage_complete', (payload) => {
+          if (!payload) return;
+          applyResultView(payload);
+        });
+      } catch (_) {
+        setNet(false);
+      }
+    }
+
+    btnScan.onclick = startScan;
+    btnSkipCard.onclick = skipScan;
+    btnNextQ.onclick = nextQuestionOrTriage;
+    btnReset.onclick = resetFlow;
+
+    document.querySelectorAll('[data-answer]').forEach((b) => {
+      b.onclick = () => saveAnswer(b.dataset.answer);
+    });
+
+    document.querySelectorAll('[data-go="1"]').forEach((b) => (b.onclick = () => setStep(1)));
+    document.querySelectorAll('[data-go="2"]').forEach((b) => (b.onclick = () => setStep(2)));
+    document.querySelectorAll('[data-go="5"]').forEach((b) => (b.onclick = () => setStep(5)));
+    document.querySelectorAll('[data-go="6"]').forEach((b) => (b.onclick = () => setStep(6)));
+
+    document.getElementById('btnSymptNext').onclick = saveSymptomesAndContinue;
+    document.getElementById('btnToQuestions').onclick = () => setStep(4);
+    document.getElementById('btnQuestionBack').onclick = () => setStep(3);
+
+    applyTheme();
+    renderSymptoms();
+    tick();
+    setInterval(tick, 1000);
+    connectSocket();
+  </script>
+</body>
+</html>

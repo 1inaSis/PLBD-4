@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import hashlib
+import re
 from typing import Dict, List, Tuple
 
 from nlp_extractor import extraire_features_nlp, normaliser_texte
@@ -68,6 +69,7 @@ def _question(
     feature_name: str,
     type_question: str = "oui_non",
     choix: List[str] | None = None,
+    placeholder: str | None = None,
 ) -> dict:
     return {
         "id": question_id,
@@ -75,6 +77,7 @@ def _question(
         "type": type_question,
         "feature_name": feature_name,
         **({"choix": choix} if choix else {}),
+        **({"placeholder": placeholder} if placeholder else {}),
     }
 
 
@@ -117,10 +120,10 @@ QUESTION_BANK: Dict[str, Dict] = {
         "questions": [
             _question(
                 "q_duree_dyspnee",
-                "Depuis combien de temps avez-vous du mal à respirer ?",
+                "Décrivez depuis quand la gêne respiratoire a commencé.",
                 "q_duree_dyspnee",
-                "choix",
-                ["Moins de 1 heure", "Depuis quelques heures", "Depuis 1 à 3 jours", "Depuis plus de 3 jours"],
+                "texte_libre",
+                placeholder="Exemple: depuis 2 heures, depuis hier, depuis 4 jours",
             ),
             _question(
                 "q_dyspnee_aggrave_effort",
@@ -142,10 +145,10 @@ QUESTION_BANK: Dict[str, Dict] = {
         "questions": [
             _question(
                 "q_duree_fievre",
-                "Depuis combien de temps avez-vous de la fièvre ?",
+                "Depuis quand la fièvre est-elle présente ?",
                 "q_duree_fievre",
-                "choix",
-                ["Moins de 24h", "1 à 3 jours", "Plus de 3 jours"],
+                "texte_libre",
+                placeholder="Exemple: depuis ce matin, depuis 2 jours",
             ),
             _question(
                 "q_frissons_sueurs",
@@ -217,10 +220,10 @@ QUESTION_BANK: Dict[str, Dict] = {
         "questions": [
             _question(
                 "q_localisation_abdomen",
-                "La douleur est-elle à droite, à gauche ou au centre ?",
+                "Où se situe surtout la douleur abdominale ?",
                 "q_localisation_abdomen",
-                "choix",
-                ["Droite", "Gauche", "Centre", "Diffuse"],
+                "texte_libre",
+                placeholder="Exemple: en bas à droite, au centre, partout",
             ),
             _question(
                 "q_fievre_associee_abdomen",
@@ -296,10 +299,10 @@ QUESTION_BANK: Dict[str, Dict] = {
             ),
             _question(
                 "q_duree_symptomes",
-                "Depuis combien de temps cela a commencé ?",
+                "Expliquez depuis quand les symptômes ont commencé.",
                 "q_duree_symptomes",
-                "choix",
-                ["Moins de 24h", "1 à 3 jours", "Plus de 3 jours"],
+                "texte_libre",
+                placeholder="Exemple: depuis hier soir, depuis 3 jours",
             ),
         ],
     },
@@ -336,8 +339,8 @@ FALLBACK_QUESTIONS = [
         "q_duree_symptomes",
         "Depuis quand vos symptômes ont-ils commencé ?",
         "q_duree_symptomes",
-        "choix",
-        ["Moins de 24h", "1 à 3 jours", "Plus de 3 jours"],
+        "texte_libre",
+        placeholder="Exemple: depuis ce matin, depuis 2 jours",
     ),
     _question(
         "q_antecedent_symptome",
@@ -390,6 +393,92 @@ def _encoder_choix(question: dict, reponse) -> int:
     return 0
 
 
+def _normaliser_texte_reponse(reponse) -> str:
+    return normaliser_texte(str(reponse or "").strip())
+
+
+def _encoder_duree_generique(texte: str) -> int:
+    if not texte:
+        return 0
+
+    if any(mot in texte for mot in ["semaine", "semaines", "mois", "plus de 3 jours", "4 jours", "5 jours", "6 jours"]):
+        return 2
+    if any(mot in texte for mot in ["jour", "jours", "hier", "avant hier", "2 jours", "3 jours"]):
+        return 1
+    if any(mot in texte for mot in ["heure", "heures", "ce matin", "cette nuit", "depuis peu", "quelques heures", "minute", "minutes"]):
+        return 0
+
+    match = re.search(r"(\d+)", texte)
+    if match:
+        valeur = int(match.group(1))
+        if "heure" in texte or "h" in texte:
+            return 0 if valeur < 24 else 1
+        if "jour" in texte:
+            return 2 if valeur > 3 else 1
+
+    return 0
+
+
+def _encoder_duree_dyspnee(texte: str) -> int:
+    if not texte:
+        return 0
+
+    if any(mot in texte for mot in ["semaine", "semaines", "plus de 3 jours", "4 jours", "5 jours", "6 jours", "mois"]):
+        return 3
+    if any(mot in texte for mot in ["1 jour", "2 jours", "3 jours", "depuis hier", "jours"]):
+        return 2
+    if any(mot in texte for mot in ["quelques heures", "2 heures", "3 heures", "4 heures", "5 heures", "6 heures", "7 heures", "8 heures"]):
+        return 1
+    if any(mot in texte for mot in ["minute", "minutes", "moins de 1 heure", "ce matin", "depuis peu", "1 heure"]):
+        return 0
+
+    match = re.search(r"(\d+)", texte)
+    if match:
+        valeur = int(match.group(1))
+        if "heure" in texte or "h" in texte:
+            if valeur <= 1:
+                return 0
+            if valeur <= 8:
+                return 1
+            if valeur < 24:
+                return 1
+            return 2
+        if "jour" in texte:
+            return 3 if valeur > 3 else 2
+
+    return 0
+
+
+def _encoder_localisation_abdomen(texte: str) -> int:
+    if any(mot in texte for mot in ["droite", "flanc droit", "fosse iliaque droite", "bas droite"]):
+        return 0
+    if any(mot in texte for mot in ["gauche", "flanc gauche", "bas gauche"]):
+        return 1
+    if any(mot in texte for mot in ["centre", "milieu", "epigastre", "autour du nombril"]):
+        return 2
+    if any(mot in texte for mot in ["partout", "diffuse", "diffus", "tout le ventre"]):
+        return 3
+    return 0
+
+
+def _encoder_texte_libre(question: dict, reponse) -> int:
+    texte = _normaliser_texte_reponse(reponse)
+    feature = question.get("feature_name") or ""
+
+    if not texte:
+        return 0
+
+    if feature == "q_duree_dyspnee":
+        return _encoder_duree_dyspnee(texte)
+    if feature in {"q_duree_fievre", "q_duree_symptomes"}:
+        return _encoder_duree_generique(texte)
+    if feature == "q_localisation_abdomen":
+        return _encoder_localisation_abdomen(texte)
+
+    # Pour les autres features, un texte non vide est interpreté comme une confirmation.
+    return 1
+
+
 def _signature_patient(constantes: dict, symptom_text: str, age: int, sex: int) -> int:
     """Construit une signature stable pour varier la sélection de manière déterministe."""
     parties = [
@@ -430,7 +519,32 @@ def _enrichir_candidats_transverses(
         candidats.append((70, deepcopy(_question("q_grossesse_possible", "Existe-t-il une possibilité de grossesse ?", "q_grossesse_possible"))))
 
     if features_nlp.get("nlp_fever", 0) == 1 and constantes.get("temperature", 37) >= 38.5:
-        candidats.append((68, deepcopy(_question("q_duree_symptomes", "Depuis combien de temps les symptômes ont-ils débuté ?", "q_duree_symptomes", "choix", ["Moins de 24h", "1 à 3 jours", "Plus de 3 jours"])) ))
+        candidats.append((68, deepcopy(_question("q_duree_symptomes", "Décrivez depuis quand les symptômes ont débuté.", "q_duree_symptomes", "texte_libre", placeholder="Exemple: depuis hier, depuis 3 jours")) ))
+
+    if constantes.get("spo2", 98) < 92:
+        candidats.append((91, deepcopy(_question("q_duree_dyspnee", "La gêne respiratoire est présente depuis quand exactement ?", "q_duree_dyspnee", "texte_libre", placeholder="Exemple: depuis 1h, depuis cette nuit"))))
+
+    if constantes.get("temperature", 37) >= 39.2:
+        candidats.append((89, deepcopy(_question("q_duree_fievre", "Précisez la durée de la fièvre et son évolution.", "q_duree_fievre", "texte_libre", placeholder="Exemple: fièvre depuis 2 jours, en hausse"))))
+
+
+def _garantir_question_ouverte(selection: list, candidats: List[Tuple[int, dict]], vus: set) -> list:
+    if any(q.get("type") == "texte_libre" for q in selection):
+        return selection
+
+    ouverts = [q for _, q in sorted(candidats, key=lambda item: item[0], reverse=True) if q.get("type") == "texte_libre"]
+    for q in ouverts:
+        feature = q.get("feature_name")
+        if feature in vus:
+            continue
+        if selection:
+            selection[-1] = deepcopy(q)
+        else:
+            selection.append(deepcopy(q))
+        vus.add(feature)
+        break
+
+    return selection
 
 
 def _selection_diversifiee(candidats: List[Tuple[int, dict]], signature: int, nb_voulu: int) -> list:
@@ -482,6 +596,43 @@ def _selection_diversifiee(candidats: List[Tuple[int, dict]], signature: int, nb
     return selection[:nb_voulu]
 
 
+def detecter_flags(constantes: dict, symptom_text: str, age: int, sex: int) -> dict:
+    """Retourne des drapeaux cliniques rapides utilises avant generation des questions."""
+    constantes = constantes or {}
+    nlp = extraire_features_nlp(symptom_text or "")
+
+    flags = {
+        "critique_immediate": False,
+        "detresse_respiratoire": False,
+        "suspicion_cardiaque": False,
+        "fievre_elevee": False,
+        "profil_vulnerable": age < 5 or age > 70,
+        "grossesse_possible": sex == 0 and 12 <= age <= 55,
+    }
+
+    spo2 = float(constantes.get("spo2", 98) or 98)
+    fc = float(constantes.get("heart_rate", 75) or 75)
+    temp = float(constantes.get("temperature", 37) or 37)
+    ta_sys = float(constantes.get("bp_systolic", 120) or 120)
+
+    if nlp.get("nlp_loss_of_consciousness", 0) == 1 or nlp.get("nlp_severe_bleeding", 0) == 1:
+        flags["critique_immediate"] = True
+
+    if spo2 < 92 or nlp.get("nlp_dyspnea", 0) == 1:
+        flags["detresse_respiratoire"] = True
+
+    if nlp.get("nlp_chest_pain", 0) == 1 and (fc > 110 or ta_sys > 160):
+        flags["suspicion_cardiaque"] = True
+
+    if temp >= 39 or nlp.get("nlp_fever", 0) == 1:
+        flags["fievre_elevee"] = True
+
+    if flags["critique_immediate"]:
+        flags["detresse_respiratoire"] = True
+
+    return flags
+
+
 def generer_questions(constantes: dict, symptom_text: str, age: int, sex: int) -> list:
     """Génère 4 à 6 questions adaptées au patient."""
     constantes = constantes or {}
@@ -513,6 +664,7 @@ def generer_questions(constantes: dict, symptom_text: str, age: int, sex: int) -
     nb_voulu = MIN_QUESTIONS + (signature % (MAX_QUESTIONS - MIN_QUESTIONS + 1))
     selection = _selection_diversifiee(questions_candidats, signature, nb_voulu)
     vus = {q["feature_name"] for q in selection}
+    selection = _garantir_question_ouverte(selection, questions_candidats, vus)
 
     # S'assurer qu'il y a au moins MIN_QUESTIONS questions.
     if len(selection) < MIN_QUESTIONS:
@@ -550,6 +702,8 @@ def encoder_reponses(questions: list, reponses: dict) -> dict:
             features[feature_name] = _normaliser_bool(valeur)
         elif question.get("type") == "choix":
             features[feature_name] = _encoder_choix(question, valeur)
+        elif question.get("type") == "texte_libre":
+            features[feature_name] = _encoder_texte_libre(question, valeur)
         else:
             features[feature_name] = _normaliser_bool(valeur)
 

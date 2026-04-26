@@ -90,28 +90,117 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
   <script>
-    /* ========== LOGIC (JS) ========== */
-    const patients=[
-      {id:'A031',name:'Youssef B.',esi:1,wait:18,status:'Critique'},
-      {id:'A032',name:'Rania M.',esi:2,wait:22,status:'Prioritaire'},
-      {id:'A033',name:'Amina R.',esi:3,wait:30,status:'Stable'},
-      {id:'A034',name:'Ali K.',esi:4,wait:42,status:'Observation'},
-      {id:'A035',name:'Imane L.',esi:5,wait:55,status:'Non critique'}
-    ];
-    const Q=queue,CW=countWaiting,CC=countCritical,AW=avgWait,LU=lastUpdate,AT=alertText,CLK=clock,NET=netText,NS=netState;
-    let connected=false;
+    const state = { connected: false, file: [], alertes: [] };
 
-    function applyTheme(){const h=new Date().getHours();if((window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)||h>=19||h<=6)document.body.classList.add('theme-dark')}
-    function tick(){const d=new Date();CLK.textContent=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});LU.textContent=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}
-    function renderQueue(highlightId){Q.innerHTML=patients.map(p=>`<article class="patient-card ${p.esi<=2?'critical':''} ${highlightId===p.id?'highlight':''}"><div><strong style="font-size:1.4rem">${p.id}</strong><div>${p.name}</div></div><div class="badge-esi esi-${p.esi}">ESI ${p.esi}</div><div style="font-family:var(--font-data);font-size:1.6rem">${p.wait} min</div><div>${p.status}</div></article>`).join('')}
-    function refreshStats(){CW.textContent=String(patients.length);CC.textContent=String(patients.filter(p=>p.esi<=2).length);AW.textContent=`${Math.round(patients.reduce((a,b)=>a+b.wait,0)/patients.length)} min`;const c=patients.find(p=>p.esi===1)||patients[0];AT.textContent=`${c.id} - ${c.name} (${c.wait} min)`}
-    function simulate(){patients.forEach(p=>p.wait+=Math.random()<.7?1:0);if(Math.random()<.22){const i=Math.floor(Math.random()*patients.length);patients[i].esi=Math.max(1,Math.min(5,patients[i].esi+(Math.random()<.5?-1:1)));renderQueue(patients[i].id)}else renderQueue();refreshStats()}
+    const Q = document.getElementById('queue');
+    const CW = document.getElementById('countWaiting');
+    const CC = document.getElementById('countCritical');
+    const AW = document.getElementById('avgWait');
+    const LU = document.getElementById('lastUpdate');
+    const AT = document.getElementById('alertText');
+    const CLK = document.getElementById('clock');
+    const NET = document.getElementById('netText');
+    const NS = document.getElementById('netState');
 
-    /* ========== SOCKET.IO ========== */
-    function setNet(on){connected=on;NET.textContent=on?'Connecte':'Simulation';NS.className=on?'status-indicator':'status-indicator error'}
-    function connectSocket(){try{const s=io();s.on('connect',()=>setNet(true));s.on('disconnect',()=>setNet(false));s.on('queue_update',d=>{if(d&&d.patients){renderQueue();refreshStats()}})}catch(_){setNet(false)}setInterval(()=>{if(!connected)simulate()},5000)}
+    function applyTheme() {
+      const h = new Date().getHours();
+      if ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) || h >= 19 || h <= 6) {
+        document.body.classList.add('theme-dark');
+      }
+    }
 
-    applyTheme();tick();setInterval(tick,1000);renderQueue();refreshStats();connectSocket();
+    function tick() {
+      const d = new Date();
+      const v = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      CLK.textContent = v;
+      LU.textContent = v;
+    }
+
+    function urgenceLabel(esi) {
+      if (esi <= 1) return 'Critique';
+      if (esi === 2) return 'Prioritaire';
+      if (esi === 3) return 'Urgent';
+      if (esi === 4) return 'Observation';
+      return 'Non critique';
+    }
+
+    function renderQueue(highlightId) {
+      Q.innerHTML = state.file
+        .map((p) => {
+          const esi = p.esi_actuel || p.esi_predit || 5;
+          const pid = p.patient_id || '-';
+          const wait = Number(p.temps_attente_min || 0).toFixed(0);
+          const nom = `${p.prenom || ''} ${p.nom || ''}`.trim() || 'Patient';
+          return `<article class="patient-card ${esi <= 2 ? 'critical' : ''} ${highlightId === pid ? 'highlight' : ''}"><div><strong style="font-size:1.4rem">${pid}</strong><div>${nom}</div></div><div class="badge-esi esi-${esi}">ESI ${esi}</div><div style="font-family:var(--font-data);font-size:1.6rem">${wait} min</div><div>${urgenceLabel(esi)}</div></article>`;
+        })
+        .join('');
+    }
+
+    function refreshStats() {
+      const total = state.file.length;
+      const critiques = state.file.filter((p) => (p.esi_actuel || p.esi_predit || 5) <= 2);
+      const waitAvg = total
+        ? Math.round(state.file.reduce((acc, p) => acc + Number(p.temps_attente_min || 0), 0) / total)
+        : 0;
+
+      CW.textContent = String(total);
+      CC.textContent = String(critiques.length);
+      AW.textContent = `${waitAvg} min`;
+
+      const c = critiques[0];
+      AT.textContent = c
+        ? `${c.patient_id} - ${`${c.prenom || ''} ${c.nom || ''}`.trim()} (${Number(c.temps_attente_min || 0).toFixed(0)} min)`
+        : 'Aucune alerte critique';
+    }
+
+    async function loadFile() {
+      try {
+        const res = await fetch('/api/file');
+        const json = await res.json();
+        if (!res.ok) return;
+        state.file = json.file || [];
+        state.alertes = json.alertes || [];
+        renderQueue();
+        refreshStats();
+      } catch (_) {
+        // ignore transient network errors in dashboard mode
+      }
+    }
+
+    function setNet(on) {
+      state.connected = on;
+      NET.textContent = on ? 'Connecte' : 'Hors ligne';
+      NS.className = on ? 'status-indicator' : 'status-indicator error';
+    }
+
+    function connectSocket() {
+      try {
+        const s = io();
+        s.on('connect', () => setNet(true));
+        s.on('disconnect', () => setNet(false));
+        s.on('file_mise_a_jour', (payload) => {
+          if (!payload) return;
+          state.file = payload.file || [];
+          state.alertes = payload.alertes || [];
+          renderQueue();
+          refreshStats();
+        });
+        s.on('alerte_critique', (payload) => {
+          if (!payload) return;
+          renderQueue(payload.patient_id);
+          refreshStats();
+        });
+      } catch (_) {
+        setNet(false);
+      }
+    }
+
+    applyTheme();
+    tick();
+    setInterval(tick, 1000);
+    loadFile();
+    setInterval(loadFile, 10000);
+    connectSocket();
   </script>
 </body>
 </html>

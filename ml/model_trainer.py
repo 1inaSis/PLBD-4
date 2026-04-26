@@ -34,6 +34,7 @@ CHEMIN_DATA     = os.path.join(BASE_DIR, "data", "patients_50000.csv")
 CHEMIN_MODELE   = os.path.join(BASE_DIR, "models", "random_forest_esi.pkl")
 CHEMIN_SCALER   = os.path.join(BASE_DIR, "models", "scaler.pkl")
 CHEMIN_FEATURES = os.path.join(BASE_DIR, "models", "feature_names.pkl")
+CHEMIN_DIAGNOSTIC_ENCODER = os.path.join(BASE_DIR, "models", "diagnostic_encoder.pkl")
 
 # Colonnes de features utilisées pour l'entraînement
 FEATURES_VITALES = [
@@ -259,6 +260,16 @@ def construire_features(df: pd.DataFrame) -> tuple:
     return X, y, toutes_features
 
 
+def charger_donnees(chemin: str = CHEMIN_DATA) -> pd.DataFrame:
+    """Alias requis pour compatibilite avec le contrat projet."""
+    return charger_et_preparer_donnees(chemin)
+
+
+def preparer_features(df: pd.DataFrame) -> tuple:
+    """Alias requis pour compatibilite avec le contrat projet."""
+    return construire_features(df)
+
+
 def entrainer_modele(X_train: np.ndarray, y_train: np.ndarray) -> RandomForestClassifier:
     """
     Entraîne le modèle Random Forest avec les hyperparamètres optimisés
@@ -332,6 +343,23 @@ def sauvegarder_artefacts(modele, scaler, noms_features) -> None:
     with open(CHEMIN_FEATURES, "wb") as f:
         pickle.dump(noms_features, f)
     print(f"[OK] Noms des features sauvegardés → {CHEMIN_FEATURES}")
+
+    # Conserve explicitement l'encodeur de diagnostic attendu par la structure finale.
+    try:
+        from data_generator import DIAGNOSTIC_ENCODE
+
+        with open(CHEMIN_DIAGNOSTIC_ENCODER, "wb") as f:
+            pickle.dump(DIAGNOSTIC_ENCODE, f)
+        print(f"[OK] Encodeur diagnostic sauvegardé → {CHEMIN_DIAGNOSTIC_ENCODER}")
+    except Exception:
+        with open(CHEMIN_DIAGNOSTIC_ENCODER, "wb") as f:
+            pickle.dump({}, f)
+        print(f"[WARN] Encodeur diagnostic par défaut sauvegardé → {CHEMIN_DIAGNOSTIC_ENCODER}")
+
+
+def sauvegarder(modele, scaler, noms_features) -> None:
+    """Alias requis pour compatibilite avec le contrat projet."""
+    sauvegarder_artefacts(modele, scaler, noms_features)
 
 
 def charger_modele():

@@ -13,6 +13,7 @@ import sys
 import os
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 # Ajouter le dossier parent au chemin Python
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -21,6 +22,7 @@ from nlp_extractor import extraire_features_nlp, normaliser_texte
 from model_trainer import predire_esi
 from queue_manager import GestionnaireFile, PatientEnFile
 from questions_moteur import generer_questions, encoder_reponses
+import predict_api
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -418,6 +420,111 @@ class TestIntegration(unittest.TestCase):
         resultat = predire_esi(donnees_patient)
         self.assertGreaterEqual(resultat["esi_predit"], 4,
                                 "Patient non urgent doit être ESI ≥ 4")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tests du contrat API Flask
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestAPIContract(unittest.TestCase):
+    """Valide les endpoints critiques de l'API HealthGate."""
+
+    def setUp(self):
+        self.client = predict_api.app.test_client()
+        predict_api.patients_session.clear()
+        predict_api.gestionnaire_file.file.clear()
+        for med in predict_api.MEDECINS.values():
+            med["patients"].clear()
+
+    def test_api_sante_ok(self):
+        response = self.client.get("/api/sante")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["statut"], "ok")
+        self.assertIn("queue_patients", data)
+
+    @patch("predict_api.scanner_piece_identite")
+    @patch("predict_api.lire_toutes_constantes")
+    @patch("predict_api.predire_esi")
+    def test_parcours_minimal_scan_to_triage(self, mock_predire, mock_constantes, mock_scanner):
+        mock_scanner.return_value = {
+            "nom": "TEST",
+            "prenom": "PATIENT",
+            "age": 45,
+            "sexe": "M",
+        }
+        mock_constantes.return_value = {
+            "temperature": 37.3,
+            "spo2": 96,
+            "heart_rate": 86,
+            "bp_systolic": 130,
+            "bp_diastolic": 82,
+            "respiratory_rate": 18,
+            "glucose": 95,
+        }
+        mock_predire.return_value = {
+            "esi_predit": 3,
+            "confiance": 82.4,
+            "diagnostic_probable": "Syndrome infectieux febrile",
+            "diagnostic_encode": 0,
+            "probabilites": {"ESI_1": 1.0, "ESI_2": 10.0, "ESI_3": 70.0, "ESI_4": 15.0, "ESI_5": 4.0},
+        }
+
+        scan_res = self.client.post("/api/scanner", json={})
+        self.assertEqual(scan_res.status_code, 200)
+        session_id = scan_res.get_json()["session_id"]
+
+        sympt_res = self.client.post(
+            "/api/symptomes",
+            json={"session_id": session_id, "symptom_text": "fievre et toux"},
+        )
+        self.assertEqual(sympt_res.status_code, 200)
+
+        q_res = self.client.post(
+            "/api/questions",
+            json={"session_id": session_id, "constantes": mock_constantes.return_value},
+        )
+        self.assertEqual(q_res.status_code, 200)
+
+        rep_res = self.client.post(
+            "/api/questions/reponses",
+            json={"session_id": session_id, "reponses": {}},
+        )
+        self.assertEqual(rep_res.status_code, 200)
+
+        triage_res = self.client.post(
+            "/api/triage",
+            json={
+                "session_id": session_id,
+                "constantes": mock_constantes.return_value,
+                "question_reponses": {},
+            },
+        )
+        self.assertEqual(triage_res.status_code, 200)
+        triage_data = triage_res.get_json()
+        self.assertEqual(triage_data["statut"], "succes")
+        self.assertIn("patient_id", triage_data)
+
+        queue_res = self.client.get(f"/api/queue/{triage_data['patient_id']}")
+        self.assertEqual(queue_res.status_code, 200)
+        self.assertEqual(queue_res.get_json()["statut"], "succes")
+
+    def test_alertes_endpoint(self):
+        predict_api.gestionnaire_file.ajouter_patient(
+            patient_id="PT-TEST",
+            esi_predit=1,
+            age=50,
+            constantes={"spo2": 90, "heart_rate": 120, "temperature": 38.5},
+        )
+        predict_api.patients_session["PT-TEST"] = {"nom": "A", "prenom": "B"}
+
+        alertes_res = self.client.get("/api/alertes")
+        self.assertEqual(alertes_res.status_code, 200)
+        data = alertes_res.get_json()
+        self.assertGreaterEqual(data["nb_alertes"], 1)
+
+        lu_res = self.client.post("/api/alertes/PT-TEST/lue")
+        self.assertEqual(lu_res.status_code, 200)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

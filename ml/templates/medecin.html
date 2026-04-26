@@ -97,27 +97,209 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
   <script>
-    /* ========== LOGIC (JS) ========== */
-    const patients=[
-      {id:'A031',name:'Mohamed Bouziri',age:42,esi:2,wait:22,reason:'Douleur thoracique + dyspnee',vitals:{temp:38.1,spo2:92,fc:118,ta:'162/98',fr:24,gly:130},diag:{label:'Suspicion syndrome coronarien',conf:87,explain:'Risque cardio eleve + desaturation'}},
-      {id:'A032',name:'Amina R.',age:29,esi:3,wait:29,reason:'Fievre + nausees',vitals:{temp:38.7,spo2:96,fc:102,ta:'134/85',fr:19,gly:112},diag:{label:'Infection probable',conf:74,explain:'Fievre persistante, hemodynamique stable'}},
-      {id:'A033',name:'Youssef K.',age:38,esi:1,wait:15,reason:'Perte de connaissance',vitals:{temp:36.8,spo2:90,fc:128,ta:'178/110',fr:26,gly:145},diag:{label:'Urgence neurologique/cardiaque',conf:66,explain:'Alt conscience + tachycardie + HTA'}}
+    const state = { selected: 0, connected: false, patients: [] };
+    const medecinId = location.pathname.split('/').pop() || 'M1';
+
+    const vitalKeys = [
+      ['Temp', 'temperature', 'C'],
+      ['SpO2', 'spo2', '%'],
+      ['FC', 'heart_rate', 'bpm'],
+      ['TA SYS', 'bp_systolic', 'mmHg'],
+      ['TA DIA', 'bp_diastolic', 'mmHg'],
+      ['Gly', 'glucose', 'mg/L'],
     ];
-    const vitalKeys=[['Temp','temp','C'],['SpO2','spo2','%'],['FC','fc','bpm'],['TA','ta',''],['FR','fr','/min'],['Gly','gly','mg/L']];
-    let selected=0,connected=false;
-    const L=patientList,N=patientName,E=patientEsi,W=patientWait,R=patientReason,V=vitals,DL=diagLabel,DX=diagExplain,DB=diagConfBar,DT=diagConfText,DW=diagWarn,T=toast,NET=netText,NS=netState;
 
-    function applyTheme(){const h=new Date().getHours();if((window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)||h>=19||h<=6)document.body.classList.add('theme-dark')}
-    function toast(msg,critical){T.textContent=msg;T.className=critical?'toast show critical':'toast show';if(!critical)setTimeout(()=>T.className='toast',2600)}
-    function renderList(){const q=(search.value||'').toLowerCase();L.innerHTML=patients.filter(p=>`${p.id} ${p.name} ${p.reason}`.toLowerCase().includes(q)).map((p,i)=>`<article class="patient-card ${i===selected?'active':''}" data-i="${i}"><div style="display:flex;justify-content:space-between;gap:10px"><strong>${p.id} - ${p.name}</strong><span class="badge-esi esi-${p.esi}">ESI ${p.esi}</span></div><div style="color:var(--text-soft)">${p.reason}</div><div class="mono">${p.wait} min</div></article>`).join('');L.querySelectorAll('.patient-card').forEach(c=>c.onclick=()=>{selected=Number(c.dataset.i);renderList();renderPatient()})}
-    function renderPatient(){const p=patients[selected];N.textContent=`${p.name}, ${p.age} ans`;E.className=`badge-esi esi-${p.esi}`;E.textContent=`ESI ${p.esi}`;W.textContent=`Attente: ${p.wait} min`;R.textContent=p.reason;V.innerHTML=vitalKeys.map(([label,key,unit])=>{const val=p.vitals[key];const trend=(label==='SpO2'&&Number(val)<94)?'↓':(label==='FC'&&Number(val)>110)?'↑':'→';const bar=label==='SpO2'?Math.min(100,Number(val)):label==='Temp'?Math.min(100,(Number(val)/40)*100):label==='FC'?Math.min(100,(Number(val)/160)*100):label==='FR'?Math.min(100,(Number(val)/30)*100):70;return `<article class="constante"><div class="l">${label}</div><div class="v">${val}${unit?` ${unit}`:''}</div><div class="trend">Tendance ${trend}</div><div class="progress-bar"><span style="width:${bar}%;background:${label==='SpO2'&&Number(val)<94?'var(--danger)':'var(--accent)'}"></span></div></article>`}).join('');DL.textContent=p.diag.label;DX.textContent=p.diag.explain;DB.style.width=`${p.diag.conf}%`;DT.textContent=`Confiance ${p.diag.conf}%`;DW.style.display=p.diag.conf<70?'block':'none'}
+    const L = document.getElementById('patientList');
+    const N = document.getElementById('patientName');
+    const E = document.getElementById('patientEsi');
+    const W = document.getElementById('patientWait');
+    const R = document.getElementById('patientReason');
+    const V = document.getElementById('vitals');
+    const DL = document.getElementById('diagLabel');
+    const DX = document.getElementById('diagExplain');
+    const DB = document.getElementById('diagConfBar');
+    const DT = document.getElementById('diagConfText');
+    const DW = document.getElementById('diagWarn');
+    const T = document.getElementById('toast');
+    const NET = document.getElementById('netText');
+    const NS = document.getElementById('netState');
+    const search = document.getElementById('search');
+    const btnTaken = document.getElementById('btnTaken');
+    const btnAlert = document.getElementById('btnAlert');
 
-    /* ========== SOCKET.IO ========== */
-    function setNet(on){connected=on;NET.textContent=on?'Connecte':'Simulation';NS.className=on?'status-indicator':'status-indicator error'}
-    function connectSocket(){try{const s=io();s.on('connect',()=>setNet(true));s.on('disconnect',()=>setNet(false));s.on('doctor_notification',d=>toast(d?.message||'Mise a jour file',Boolean(d?.critical)))}catch(_){setNet(false)}setInterval(()=>{if(!connected){const i=Math.floor(Math.random()*patients.length);patients[i].wait+=1;if(Math.random()<.35){patients[i].esi=Math.max(1,patients[i].esi-1);toast(`Alerte: ${patients[i].id} passe ESI ${patients[i].esi}`,patients[i].esi<=2)}renderList();renderPatient()}},6000)}
+    function applyTheme() {
+      const h = new Date().getHours();
+      if ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) || h >= 19 || h <= 6) {
+        document.body.classList.add('theme-dark');
+      }
+    }
 
-    search.oninput=renderList;btnTaken.onclick=()=>toast('Patient marque pris en charge',false);btnAlert.onclick=()=>toast('Signalement critique envoye',true);
-    applyTheme();renderList();renderPatient();connectSocket();
+    function showToast(msg, critical) {
+      T.textContent = msg;
+      T.className = critical ? 'toast show critical' : 'toast show';
+      if (!critical) {
+        setTimeout(() => {
+          T.className = 'toast';
+        }, 2600);
+      }
+    }
+
+    function currentPatient() {
+      if (!state.patients.length) return null;
+      return state.patients[Math.min(state.selected, state.patients.length - 1)];
+    }
+
+    function renderList() {
+      const q = (search.value || '').toLowerCase();
+      const filtered = state.patients.filter((p) => {
+        const txt = `${p.patient_id} ${p.nom || ''} ${p.prenom || ''} ${p.symptom_text || ''}`.toLowerCase();
+        return txt.includes(q);
+      });
+
+      L.innerHTML = filtered
+        .map((p, i) => {
+          const esi = Number(p.esi_predit || 5);
+          const name = `${p.prenom || ''} ${p.nom || ''}`.trim() || 'Patient';
+          return `<article class="patient-card ${i === state.selected ? 'active' : ''}" data-i="${i}"><div style="display:flex;justify-content:space-between;gap:10px"><strong>${p.patient_id} - ${name}</strong><span class="badge-esi esi-${esi}">ESI ${esi}</span></div><div style="color:var(--text-soft)">${p.symptom_text || '-'}</div><div class="mono">${Number(p.temps_attente_min || 0).toFixed(0)} min</div></article>`;
+        })
+        .join('');
+
+      L.querySelectorAll('.patient-card').forEach((card) => {
+        card.onclick = () => {
+          state.selected = Number(card.dataset.i);
+          renderList();
+          renderPatient();
+        };
+      });
+    }
+
+    function renderPatient() {
+      const p = currentPatient();
+      if (!p) {
+        N.textContent = 'Aucun patient';
+        E.className = 'badge-esi esi-5';
+        E.textContent = 'ESI -';
+        W.textContent = 'Attente: -';
+        R.textContent = '-';
+        V.innerHTML = '';
+        DL.textContent = '-';
+        DX.textContent = '-';
+        DB.style.width = '0%';
+        DT.textContent = 'Confiance 0%';
+        DW.style.display = 'none';
+        return;
+      }
+
+      const esi = Number(p.esi_predit || 5);
+      N.textContent = `${(p.prenom || '')} ${(p.nom || '')}`.trim();
+      E.className = `badge-esi esi-${esi}`;
+      E.textContent = `ESI ${esi}`;
+      W.textContent = `Attente: ${Number(p.temps_attente_min || 0).toFixed(0)} min`;
+      R.textContent = p.symptom_text || 'Symptomes non renseignes';
+
+      const constantes = p.constantes || {};
+      V.innerHTML = vitalKeys
+        .map(([label, key, unit]) => {
+          const val = constantes[key] != null ? constantes[key] : '-';
+          const n = Number(val);
+          const trend = label === 'SpO2' && n < 94 ? '↓' : label === 'FC' && n > 110 ? '↑' : '→';
+          const bar = label === 'SpO2' ? Math.min(100, n || 0) : label === 'Temp' ? Math.min(100, ((n || 0) / 40) * 100) : 70;
+          return `<article class="constante"><div class="l">${label}</div><div class="v">${val}${unit ? ` ${unit}` : ''}</div><div class="trend">Tendance ${trend}</div><div class="progress-bar"><span style="width:${bar}%;background:${label === 'SpO2' && n < 94 ? 'var(--danger)' : 'var(--accent)'}"></span></div></article>`;
+        })
+        .join('');
+
+      const conf = Number(p.confiance_modele || 0);
+      DL.textContent = p.diagnostic_probable || 'Evaluation clinique complementaire';
+      DX.textContent = `Priorite file: ${p.position_file || '?'}`;
+      DB.style.width = `${Math.max(0, Math.min(100, conf))}%`;
+      DT.textContent = `Confiance ${conf}%`;
+      DW.style.display = conf < 70 ? 'block' : 'none';
+    }
+
+    async function loadPatients() {
+      try {
+        const res = await fetch(`/api/medecin/${medecinId}`);
+        const json = await res.json();
+        if (!res.ok) return;
+        state.patients = json.patients || [];
+        state.selected = Math.min(state.selected, Math.max(0, state.patients.length - 1));
+        renderList();
+        renderPatient();
+      } catch (_) {
+        // ignore transient errors on polling
+      }
+    }
+
+    function setNet(on) {
+      state.connected = on;
+      NET.textContent = on ? 'Connecte' : 'Hors ligne';
+      NS.className = on ? 'status-indicator' : 'status-indicator error';
+    }
+
+    function connectSocket() {
+      try {
+        const s = io();
+        s.on('connect', () => {
+          setNet(true);
+          s.emit('rejoindre_medecin', { medecin_id: medecinId });
+        });
+        s.on('disconnect', () => setNet(false));
+        s.on('file_mise_a_jour', () => loadPatients());
+        s.on('alerte_critique', (payload) => {
+          if (!payload) return;
+          showToast(`Alerte critique: ${payload.patient_id} (ESI ${payload.esi})`, true);
+          loadPatients();
+        });
+      } catch (_) {
+        setNet(false);
+      }
+    }
+
+    async function priseEnCharge() {
+      const p = currentPatient();
+      if (!p) return;
+      try {
+        const res = await fetch('/api/prise_en_charge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patient_id: p.patient_id, medecin_id: medecinId }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || 'Erreur');
+        showToast('Patient marque comme pris en charge', false);
+        loadPatients();
+      } catch (err) {
+        showToast(`Echec prise en charge: ${err.message}`, true);
+      }
+    }
+
+    async function signalerAlerte() {
+      const p = currentPatient();
+      if (!p) return;
+      const newEsi = Math.max(1, Number(p.esi_predit || 3) - 1);
+      try {
+        const res = await fetch('/api/degradation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patient_id: p.patient_id, nouvel_esi: newEsi, nouvelles_constantes: p.constantes || {} }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || 'Erreur');
+        showToast(`Degradation signalee: ESI ${newEsi}`, true);
+        loadPatients();
+      } catch (err) {
+        showToast(`Echec signalement: ${err.message}`, true);
+      }
+    }
+
+    search.oninput = renderList;
+    btnTaken.onclick = priseEnCharge;
+    btnAlert.onclick = signalerAlerte;
+
+    applyTheme();
+    loadPatients();
+    setInterval(loadPatients, 10000);
+    connectSocket();
   </script>
 </body>
 </html>
