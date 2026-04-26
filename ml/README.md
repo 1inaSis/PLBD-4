@@ -17,6 +17,7 @@ HealthGate automatise le pre-triage des urgences avec:
 ml/
   capteurs_raspberry.py
   data_generator.py
+  question_bank_generator.py
   model_trainer.py
   nlp_extractor.py
   predict_api.py
@@ -27,6 +28,7 @@ ml/
   requirements.txt
   data/
     patients_50000.csv
+    questions_50000.csv
   models/
     diagnostic_encoder.pkl
     feature_names.pkl
@@ -62,7 +64,23 @@ py -m pip install -r requirements.txt
 py model_trainer.py
 ```
 
-### 4.2 Demarrage serveur
+### 4.2 Generation de la banque de 50 000 questions
+
+```bash
+py question_bank_generator.py --count 50000 --out data/questions_50000.csv
+```
+
+Cette banque est chargee automatiquement par `questions_moteur.py` pour varier les formulations
+et limiter la repetition des questions entre patients.
+
+### 4.3 Lien avec l'entrainement du modele
+
+Le modele ESI est entraine sur des features structurees (constantes, NLP, reponses encodees),
+pas directement sur le texte brut des questions. La banque de 50 000 questions ameliore la
+diversite du dialogue patient et la qualite des reponses, puis `encoder_reponses()` transforme
+ces reponses en features exploitables par `model_trainer.py`.
+
+### 4.4 Demarrage serveur
 
 ```bash
 py predict_api.py
@@ -133,6 +151,7 @@ Couverture actuelle:
 ## 8. Notes implementation
 - `model_trainer.py` expose aussi les alias requis par contrat: `charger_donnees`, `preparer_features`, `sauvegarder`.
 - `questions_moteur.py` expose `detecter_flags` pour le pre-filtrage clinique.
+- `questions_moteur.py` charge optionnellement `data/questions_50000.csv` pour reduire les redites de questions.
 - Les pages HTML sont dans `templates/` et consomment les APIs Flask + Socket.IO.
 
 ## 9. Verification finale executee

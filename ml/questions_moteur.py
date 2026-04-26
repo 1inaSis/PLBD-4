@@ -13,8 +13,12 @@ Les réponses sont ensuite encodées en features numériques réutilisables par 
 
 from __future__ import annotations
 
+import csv
 from copy import deepcopy
 import hashlib
+import json
+from pathlib import Path
+import random
 import re
 from typing import Dict, List, Tuple
 
@@ -23,6 +27,9 @@ from nlp_extractor import extraire_features_nlp, normaliser_texte
 
 MIN_QUESTIONS = 4
 MAX_QUESTIONS = 6
+BASE_DIR = Path(__file__).resolve().parent
+QUESTION_BANK_PATH = BASE_DIR / "data" / "questions_50000.csv"
+_EXTERNAL_QUESTION_BANK: List[dict] | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -479,6 +486,127 @@ def _encoder_texte_libre(question: dict, reponse) -> int:
     return 1
 
 
+def _charger_banque_questions_externe() -> List[dict]:
+    global _EXTERNAL_QUESTION_BANK
+    if _EXTERNAL_QUESTION_BANK is not None:
+        return _EXTERNAL_QUESTION_BANK
+
+    if not QUESTION_BANK_PATH.exists():
+        _EXTERNAL_QUESTION_BANK = []
+        return _EXTERNAL_QUESTION_BANK
+
+    banque: List[dict] = []
+    try:
+        with QUESTION_BANK_PATH.open("r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                feature_name = str(row.get("feature_name", "")).strip()
+                if feature_name not in FEATURES_QUESTIONS:
+                    continue
+
+                qtype = str(row.get("type", "oui_non")).strip() or "oui_non"
+                if qtype not in {"oui_non", "choix", "texte_libre"}:
+                    qtype = "oui_non"
+
+                choix = []
+                choix_raw = row.get("choix_json", "")
+                if choix_raw:
+                    try:
+                        parsed = json.loads(choix_raw)
+                        if isinstance(parsed, list):
+                            choix = [str(v) for v in parsed]
+                    except Exception:
+                        choix = []
+
+                banque.append(
+                    {
+                        "id": str(row.get("question_uid", "")).strip() or f"ext_{len(banque)+1}",
+                        "scenario": str(row.get("scenario", "general")).strip() or "general",
+                        "feature_name": feature_name,
+                        "type": qtype,
+                        "texte": str(row.get("texte", "")).strip(),
+                        "choix": choix,
+                        "placeholder": str(row.get("placeholder", "")).strip(),
+                        "poids": int(str(row.get("poids", "60") or "60")),
+                    }
+                )
+    except Exception:
+        banque = []
+
+    _EXTERNAL_QUESTION_BANK = banque
+    return _EXTERNAL_QUESTION_BANK
+
+
+def _inferer_scenarios(
+    constantes: dict,
+    features_nlp: dict,
+    age: int,
+    sex: int,
+    texte_norm: str,
+) -> List[str]:
+    scenarios = ["general"]
+
+    if features_nlp.get("nlp_chest_pain", 0) == 1:
+        scenarios.append("douleur_thoracique")
+    if features_nlp.get("nlp_dyspnea", 0) == 1 or constantes.get("spo2", 98) < 93:
+        scenarios.append("dyspnee")
+    if features_nlp.get("nlp_fever", 0) == 1 or constantes.get("temperature", 37) >= 39.0:
+        scenarios.append("fievre")
+    if features_nlp.get("nlp_abdominal_pain", 0) == 1 or "ventre" in texte_norm:
+        scenarios.append("abdomen")
+    if features_nlp.get("nlp_trauma", 0) == 1:
+        scenarios.append("trauma")
+    if features_nlp.get("nlp_neurological", 0) == 1:
+        scenarios.append("neuro")
+    if constantes.get("bp_systolic", 120) >= 160 or constantes.get("bp_diastolic", 80) >= 100:
+        scenarios.append("hypertension")
+    if constantes.get("glucose", 90) < 70 or "diabet" in texte_norm:
+        scenarios.append("glycemie")
+    if age < 5:
+        scenarios.append("pediatrie")
+    if sex == 0 and 12 <= age <= 55 and "saign" in texte_norm:
+        scenarios.append("grossesse")
+
+    return list(dict.fromkeys(scenarios))
+
+
+def _ajouter_candidats_banque_externe(
+    candidats: List[Tuple[int, dict]],
+    constantes: dict,
+    features_nlp: dict,
+    age: int,
+    sex: int,
+    texte_norm: str,
+    signature: int,
+) -> None:
+    banque = _charger_banque_questions_externe()
+    if not banque:
+        return
+
+    scenarios = set(_inferer_scenarios(constantes, features_nlp, age, sex, texte_norm))
+    pool = [q for q in banque if q.get("scenario") in scenarios]
+    if not pool:
+        return
+
+    rng = random.Random(signature)
+    rng.shuffle(pool)
+
+    # On injecte un sous-ensemble large pour favoriser la diversité, puis la sélection
+    # finale garde les meilleures questions sans doublons de feature.
+    limite = min(len(pool), 80)
+    for ext in pool[:limite]:
+        q = _question(
+            question_id=ext.get("id") or f"ext_{signature}",
+            texte=ext.get("texte") or "Pouvez-vous préciser vos symptômes ?",
+            feature_name=ext.get("feature_name") or "q_antecedent_symptome",
+            type_question=ext.get("type") or "oui_non",
+            choix=ext.get("choix") or None,
+            placeholder=ext.get("placeholder") or None,
+        )
+        score = int(ext.get("poids", 60))
+        candidats.append((score, deepcopy(q)))
+
+
 def _signature_patient(constantes: dict, symptom_text: str, age: int, sex: int) -> int:
     """Construit une signature stable pour varier la sélection de manière déterministe."""
     parties = [
@@ -647,6 +775,17 @@ def generer_questions(constantes: dict, symptom_text: str, age: int, sex: int) -
             for ordre, question in enumerate(scenario["questions"]):
                 questions_candidats.append((scenario["poids"] - ordre, deepcopy(question)))
 
+    signature = _signature_patient(constantes, symptom_text, age, sex)
+    _ajouter_candidats_banque_externe(
+        questions_candidats,
+        constantes,
+        features_nlp,
+        age,
+        sex,
+        texte_norm,
+        signature,
+    )
+
     _enrichir_candidats_transverses(
         questions_candidats,
         constantes,
@@ -660,7 +799,6 @@ def generer_questions(constantes: dict, symptom_text: str, age: int, sex: int) -
         for ordre, question in enumerate(FALLBACK_QUESTIONS):
             questions_candidats.append((50 - ordre, deepcopy(question)))
 
-    signature = _signature_patient(constantes, symptom_text, age, sex)
     nb_voulu = MIN_QUESTIONS + (signature % (MAX_QUESTIONS - MIN_QUESTIONS + 1))
     selection = _selection_diversifiee(questions_candidats, signature, nb_voulu)
     vus = {q["feature_name"] for q in selection}

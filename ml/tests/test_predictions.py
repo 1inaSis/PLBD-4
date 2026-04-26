@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from nlp_extractor import extraire_features_nlp, normaliser_texte
 from model_trainer import predire_esi
 from queue_manager import GestionnaireFile, PatientEnFile
-from questions_moteur import generer_questions, encoder_reponses
+from questions_moteur import generer_questions, encoder_reponses, _charger_banque_questions_externe
 import predict_api
 
 
@@ -155,6 +155,28 @@ class TestQuestionsMoteur(unittest.TestCase):
         features = encoder_reponses(questions, {"q1": "Oui", "q2": "1 à 3 jours"})
         self.assertEqual(features["q_antecedent_asthme"], 1)
         self.assertEqual(features["q_duree_fievre"], 1)
+
+    def test_pas_de_doublon_feature_questionnaire(self):
+        questions = generer_questions(
+            {"temperature": 39.1, "spo2": 89, "heart_rate": 122, "bp_systolic": 165, "bp_diastolic": 98},
+            "Douleur thoracique intense avec essoufflement depuis ce matin",
+            62,
+            1,
+        )
+        feature_names = [q["feature_name"] for q in questions]
+        self.assertEqual(
+            len(feature_names),
+            len(set(feature_names)),
+            "Les features de questions ne doivent pas se répéter dans une même session",
+        )
+
+    def test_banque_externe_disponible(self):
+        banque = _charger_banque_questions_externe()
+        self.assertGreaterEqual(
+            len(banque),
+            1000,
+            "La banque externe doit contenir un volume significatif de questions",
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
