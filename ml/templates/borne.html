@@ -329,9 +329,9 @@
 
       if (q.type === 'oui_non') {
         E.qAnswerZone.innerHTML = `
-          <div class="row">
-            <button type="button" class="btn-primary" id="btnAnsOui">Oui</button>
-            <button type="button" class="btn-ghost" id="btnAnsNon">Non</button>
+          <div class="row" role="group" aria-label="Reponse oui non">
+            <button type="button" class="btn-primary" id="btnAnsOui">OUI</button>
+            <button type="button" class="btn-ghost" id="btnAnsNon">NON</button>
           </div>
         `;
         const btnOui = document.getElementById('btnAnsOui');
@@ -350,19 +350,15 @@
 
       if (q.type === 'choix') {
         const choix = Array.isArray(q.choix) ? q.choix : [];
-        E.qAnswerZone.innerHTML = `<div class="answer-zone">${choix.map((c, idx) => `<button type="button" class="btn-ghost" data-choix="${idx}">${c}</button>`).join('')}</div>`;
+        E.qAnswerZone.innerHTML = `<div class="answer-zone" role="group" aria-label="Choix de reponse">${choix.map((c, idx) => `<button type="button" class="btn-ghost" data-choix="${idx}">${c}</button>`).join('')}</div>`;
         E.qAnswerZone.querySelectorAll('[data-choix]').forEach((btn) => {
           btn.onclick = () => saveAnswer(choix[Number(btn.dataset.choix)] || '');
         });
         return;
       }
 
-      const placeholder = q.placeholder || 'Ecrivez votre reponse...';
-      E.qAnswerZone.innerHTML = `<textarea id="qTextInput" class="answer-input text" placeholder="${placeholder}"></textarea>`;
-      const input = document.getElementById('qTextInput');
-      if (stored != null) {
-        input.value = String(stored);
-      }
+      E.qAnswerZone.innerHTML = '';
+      setFeedback(E.qFeedback, 'Type de question non supporte, reponse binaire appliquee.', false);
     }
 
     function saveAnswer(value) {
@@ -376,13 +372,6 @@
       const q = state.questions[state.questionIndex];
       if (!q) return;
       if (q.type === 'oui_non' || q.type === 'choix') return;
-
-      const input = document.getElementById('qTextInput');
-      if (!input) return;
-      const valeur = (input.value || '').trim();
-      if (valeur) {
-        state.reponses[q.id] = valeur;
-      }
     }
 
     async function nextQuestionOrTriage() {

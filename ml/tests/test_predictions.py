@@ -21,7 +21,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from nlp_extractor import extraire_features_nlp, normaliser_texte
 from model_trainer import predire_esi
 from queue_manager import GestionnaireFile, PatientEnFile
-from questions_moteur import generer_questions, encoder_reponses, _charger_banque_questions_externe
+from questions_moteur import (
+    BANQUE_QUESTIONS,
+    generer_questions,
+    encoder_reponses,
+    _charger_banque_questions_externe,
+    _selection_diversifiee,
+)
 import predict_api
 
 
@@ -177,6 +183,63 @@ class TestQuestionsMoteur(unittest.TestCase):
             1000,
             "La banque externe doit contenir un volume significatif de questions",
         )
+
+    def test_selection_evite_ids_recents(self):
+        candidats = [
+            (95, {"id": "Q001", "feature_name": "q_antecedent_asthme", "type": "oui_non", "texte": "V1"}),
+            (94, {"id": "Q002", "feature_name": "q_antecedent_asthme", "type": "oui_non", "texte": "V2"}),
+            (93, {"id": "Q003", "feature_name": "q_duree_fievre", "type": "texte_libre", "texte": "V3"}),
+            (92, {"id": "Q004", "feature_name": "q_duree_fievre", "type": "texte_libre", "texte": "V4"}),
+        ]
+        selection = _selection_diversifiee(
+            candidats,
+            signature=12345,
+            nb_voulu=2,
+            ids_a_eviter={"Q001", "Q003"},
+        )
+        ids = {q["id"] for q in selection}
+        self.assertIn("Q002", ids)
+        self.assertIn("Q004", ids)
+
+    def test_pas_de_grossesse_chez_homme_trauma(self):
+        questions = generer_questions(
+            {"temperature": 37.0, "spo2": 98, "heart_rate": 82, "bp_systolic": 120, "bp_diastolic": 76, "glucose": 92},
+            "j'ai mal au pied après une chute",
+            30,
+            1,
+        )
+        categories = {q.get("categorie") for q in questions}
+        self.assertIn("trauma", categories)
+        self.assertNotIn("grossesse", categories)
+
+    def test_pas_de_pediatrie_chez_adulte_sans_enfant(self):
+        questions = generer_questions(
+            {"temperature": 37.2, "spo2": 97, "heart_rate": 75, "bp_systolic": 118, "bp_diastolic": 74, "glucose": 88},
+            "douleur thoracique depuis ce matin",
+            34,
+            1,
+        )
+        categories = {q.get("categorie") for q in questions}
+        self.assertNotIn("pediatrie", categories)
+
+    def test_types_banque_stricte(self):
+        for categorie, questions in BANQUE_QUESTIONS.items():
+            for question in questions:
+                self.assertIn(question["type"], ["oui_non", "choix"])
+                if question["type"] == "choix":
+                    self.assertIsInstance(question.get("choix"), list)
+                    self.assertGreaterEqual(len(question["choix"]), 2)
+
+    def test_generation_entre_3_et_5_questions(self):
+        for _ in range(10):
+            questions = generer_questions(
+                {"temperature": 39.6, "spo2": 90, "heart_rate": 122, "bp_systolic": 168, "bp_diastolic": 102, "glucose": 260},
+                "j'ai mal au ventre avec de la fièvre et je respire mal",
+                42,
+                0,
+            )
+            self.assertGreaterEqual(len(questions), 3)
+            self.assertLessEqual(len(questions), 5)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

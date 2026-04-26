@@ -12,6 +12,7 @@ Pipeline complet :
 
 import os
 import pickle
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -24,6 +25,7 @@ from sklearn.metrics import (
 )
 from nlp_extractor import enrichir_dataframe
 from questions_moteur import FEATURES_QUESTIONS, encoder_reponses
+from unified_data_store import DEFAULT_UNIFIED_DB_PATH, load_patients_dataframe
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration
@@ -31,6 +33,7 @@ from questions_moteur import FEATURES_QUESTIONS, encoder_reponses
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CHEMIN_DATA     = os.path.join(BASE_DIR, "data", "patients_50000.csv")
+CHEMIN_DB_UNIFIE = str(DEFAULT_UNIFIED_DB_PATH)
 CHEMIN_MODELE   = os.path.join(BASE_DIR, "models", "random_forest_esi.pkl")
 CHEMIN_SCALER   = os.path.join(BASE_DIR, "models", "scaler.pkl")
 CHEMIN_FEATURES = os.path.join(BASE_DIR, "models", "feature_names.pkl")
@@ -61,9 +64,29 @@ CIBLE = "esi_level"
 
 
 def charger_et_preparer_donnees(chemin: str) -> pd.DataFrame:
-    """Charge le CSV et enrichit avec les features NLP."""
-    print(f"[1/5] Chargement des données : {chemin}")
-    df = pd.read_csv(chemin)
+    """Charge les donnees depuis base unifiee (prioritaire) ou CSV puis enrichit NLP."""
+    source = Path(chemin)
+
+    if source.suffix.lower() == ".db" and source.exists():
+        print(f"[1/5] Chargement des donnees depuis base unifiee : {source}")
+        df = load_patients_dataframe(source)
+    elif source.exists():
+        print(f"[1/5] Chargement des donnees CSV : {source}")
+        df = pd.read_csv(source)
+    else:
+        db_default = Path(CHEMIN_DB_UNIFIE)
+        csv_default = Path(CHEMIN_DATA)
+        if db_default.exists():
+            print(f"[1/5] Chargement des donnees depuis base unifiee : {db_default}")
+            df = load_patients_dataframe(db_default)
+        elif csv_default.exists():
+            print(f"[1/5] Chargement des donnees CSV : {csv_default}")
+            df = pd.read_csv(csv_default)
+        else:
+            raise FileNotFoundError(
+                f"Aucune source de donnees trouvee: {db_default} ou {csv_default}"
+            )
+
     print(f"      → {len(df)} patients chargés, {df.shape[1]} colonnes")
 
     print("[2/5] Enrichissement NLP en cours...")
@@ -260,7 +283,7 @@ def construire_features(df: pd.DataFrame) -> tuple:
     return X, y, toutes_features
 
 
-def charger_donnees(chemin: str = CHEMIN_DATA) -> pd.DataFrame:
+def charger_donnees(chemin: str = CHEMIN_DB_UNIFIE) -> pd.DataFrame:
     """Alias requis pour compatibilite avec le contrat projet."""
     return charger_et_preparer_donnees(chemin)
 
@@ -486,7 +509,8 @@ def main():
     print("=" * 60)
 
     # 1. Chargement et préparation
-    df = charger_et_preparer_donnees(CHEMIN_DATA)
+    source = CHEMIN_DB_UNIFIE if os.path.exists(CHEMIN_DB_UNIFIE) else CHEMIN_DATA
+    df = charger_et_preparer_donnees(source)
 
     # 2. Construction des features
     print("[3/5] Construction de la matrice de features...")

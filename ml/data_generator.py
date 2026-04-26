@@ -17,6 +17,9 @@ import numpy as np
 import random
 import os
 
+from question_bank_generator import build_rows
+from unified_data_store import build_unified_database
+
 np.random.seed(42)
 random.seed(42)
 
@@ -569,8 +572,13 @@ def generer_patient(patient_id: str) -> dict:
     }
 
 
-def generer_dataset(n: int = 50000, chemin: str = "data/patients_50000.csv") -> pd.DataFrame:
-    """Génère et sauvegarde le dataset complet."""
+def generer_dataset(
+    n: int = 50000,
+    db_path: str = "data/healthgate_unified.db",
+    question_count: int = 50000,
+    chemin_csv: str | None = None,
+) -> pd.DataFrame:
+    """Génère le dataset et sauvegarde la base unifiee (CSV optionnel)."""
     os.makedirs("data", exist_ok=True)
     print(f"[HealthGate] Génération de {n} patients...")
 
@@ -597,13 +605,23 @@ def generer_dataset(n: int = 50000, chemin: str = "data/patients_50000.csv") -> 
               f"SpO2: {sub['spo2'].mean():.1f}% | "
               f"TA: {sub['bp_systolic'].mean():.0f} mmHg")
 
-    df.to_csv(chemin, index=False)
-    print(f"\n[OK] Dataset sauvegardé → {chemin}")
+    if chemin_csv:
+        df.to_csv(chemin_csv, index=False)
+        print(f"\n[OK] Dataset CSV sauvegarde → {chemin_csv}")
+
+    questions = build_rows(question_count, seed=42)
+    db_finale = build_unified_database(df, questions, db_path=db_path)
+    print(f"[OK] Base unifiee sauvegardee → {db_finale}")
     return df
 
 
 if __name__ == "__main__":
-    df = generer_dataset(n=50000, chemin="data/patients_50000.csv")
+    df = generer_dataset(
+        n=50000,
+        db_path="data/healthgate_unified.db",
+        question_count=50000,
+        chemin_csv=None,
+    )
     print("\n[APERÇU] 3 premiers patients :")
     cols = ["patient_id", "age", "esi_level", "diagnostic_probable",
             "temperature", "heart_rate", "spo2", "symptom_text"]
