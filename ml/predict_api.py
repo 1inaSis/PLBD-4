@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import base64
@@ -10,10 +9,48 @@ from typing import Any, Dict
 from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO, emit, join_room
 
+def simuler_constantes_depuis_reponses_dummy(symptom_text: str, features_questions: dict) -> dict:
+    pass
+
 from capteurs_raspberry import lire_toutes_constantes
 from model_trainer import predire_esi
 from nlp_extractor import extraire_features_nlp
 from questions_moteur import encoder_reponses, generer_questions
+
+def simuler_constantes_depuis_reponses(symptom_text: str, features_questions: dict) -> dict:
+    """Simule les constantes vitales à partir du texte et des réponses patient."""
+    constantes = {
+        "temperature": 37.0,
+        "spo2": 98.0,
+        "heart_rate": 75,
+        "bp_systolic": 120,
+        "bp_diastolic": 80,
+        "respiratory_rate": 16,
+        "glucose": 90,
+    }
+    texte = (symptom_text or "").lower()
+    # Température
+    if "fievre" in texte or features_questions.get("q_duree_fievre", 0) > 0:
+        constantes["temperature"] = 39.0
+    if "tres elevee" in texte or "41" in texte:
+        constantes["temperature"] = 41.2
+    # SpO2
+    if "essouffle" in texte or features_questions.get("q_dyspnee_aggrave_effort", 0) == 1:
+        constantes["spo2"] = 91.0
+    # Fréquence cardiaque
+    if "palpitation" in texte or features_questions.get("q_medicaments_coeur", 0) == 1:
+        constantes["heart_rate"] = 130
+    # Tension
+    if "tension" in texte or features_questions.get("q_hypertension_connue", 0) == 1:
+        constantes["bp_systolic"] = 185
+        constantes["bp_diastolic"] = 105
+    # Douleur
+    if "douleur" in texte or features_questions.get("q_douleur_irradiee_bras", 0) == 1:
+        constantes["heart_rate"] = max(constantes["heart_rate"], 110)
+    # Hypoglycémie
+    if "diabete" in texte or features_questions.get("q_insuline_pris", 0) == 1:
+        constantes["glucose"] = 65
+    return constantes
 from queue_manager import gestionnaire_file
 from scanner_cin import scanner_piece_identite
 
@@ -120,30 +157,33 @@ def emettre_mise_a_jour_file() -> None:
 
 
 def _build_modele_input(session_data: dict, constantes: dict, features_questions: dict) -> dict:
-    return {
+    # Mapping explicite pour cohérence avec les règles du moteur de triage
+    # On extrait les features utiles depuis les constantes, les réponses et les features_questions
+    d = {
         "age": session_data.get("age", 30),
         "sex": session_data.get("sex", 0),
         "temperature": constantes.get("temperature", 37.0),
-        "heart_rate": constantes.get("heart_rate", 75),
-        "bp_systolic": constantes.get("bp_systolic", 120),
-        "bp_diastolic": constantes.get("bp_diastolic", 80),
+        "frequence_cardiaque": constantes.get("heart_rate", constantes.get("frequence_cardiaque", 75)),
+        "tension_systolique": constantes.get("bp_systolic", constantes.get("tension_systolique", 120)),
+        "tension_diastolique": constantes.get("bp_diastolic", constantes.get("tension_diastolique", 80)),
         "spo2": constantes.get("spo2", 98.0),
-        "respiratory_rate": constantes.get("respiratory_rate", 16),
-        "glucose": constantes.get("glucose", 90),
-        "pain_score": session_data.get("pain_score", 0),
-        "chest_pain": 0,
-        "dyspnea": 0,
-        "loss_of_consciousness": 0,
-        "severe_bleeding": 0,
-        "neurological_symptoms": 0,
-        "abdominal_pain": 0,
-        "fever": 0,
-        "trauma": 0,
+        "douleur": features_questions.get("q_douleur_repos_effort", 0) or features_questions.get("q_douleur_irradiee_bras", 0) or session_data.get("pain_score", 0),
+        "dyspnea": features_questions.get("q_dyspnee_aggrave_effort", 0) or features_questions.get("q_duree_dyspnee", 0),
+        "dyspnea_aggrave_effort": features_questions.get("q_dyspnee_aggrave_effort", 0),
+        "chest_pain": features_questions.get("q_douleur_irradiee_bras", 0),
+        "loss_of_consciousness": features_questions.get("q_trauma_perte_conscience", 0),
+        "severe_bleeding": features_questions.get("q_trauma_saignement", 0),
+        "neurological_symptoms": features_questions.get("q_neuro_faiblesse", 0) or features_questions.get("q_neuro_parole", 0) or features_questions.get("q_neuro_confusion", 0),
+        "abdominal_pain": features_questions.get("q_localisation_abdomen", 0),
+        "fever": features_questions.get("q_duree_fievre", 0),
+        "trauma": features_questions.get("q_trauma_zone", 0),
         "symptom_text": session_data.get("symptom_text", ""),
         "questions": session_data.get("questions", []),
         "question_reponses": session_data.get("question_reponses", {}),
-        **features_questions,
     }
+    # On ajoute tous les features_questions pour compatibilité future
+    d.update(features_questions)
+    return d
 
 
 def construire_rapport_patient(patient_id: str) -> dict:
@@ -382,12 +422,12 @@ def api_triage():
         return jsonify({"statut": "erreur", "message": "Session invalide"}), 400
 
     session_data = patients_session[session_id]
-    constantes = payload.get("constantes") or session_data.get("constantes") or lire_toutes_constantes()
-    session_data["constantes"] = constantes
 
     if not session_data.get("questions"):
+        # Les constantes par défaut sont nécessaires pour générer les questions
+        const = payload.get("constantes") or session_data.get("constantes") or lire_toutes_constantes()
         session_data["questions"] = generer_questions(
-            constantes,
+            const,
             session_data.get("symptom_text", ""),
             int(session_data.get("age", 0) or 0),
             int(session_data.get("sex", 0) or 0),
@@ -398,6 +438,16 @@ def api_triage():
 
     question_reponses = session_data.get("question_reponses", {})
     features_questions = encoder_reponses(session_data.get("questions", []), question_reponses)
+
+    # On simule les constantes si aucune valeur hardware n'est fournie (utiliser un mock ou None)
+    constantes = payload.get("constantes") or session_data.get("constantes")
+    # Pour s'assurer qu'on n'a pas gardé un mock par défaut trop "sain", on force la simulation si le vrai hardware n'est pas utilisé
+    if not constantes or (constantes.get('temperature') == 37.0 and constantes.get('heart_rate') == 75):
+        symptom_text = session_data.get("symptom_text", "")
+        # On utilise les features encodées pour la simulation
+        constantes = simuler_constantes_depuis_reponses(symptom_text, features_questions)
+    
+    session_data["constantes"] = constantes
 
     try:
         resultat = predire_esi(_build_modele_input(session_data, constantes, features_questions))

@@ -1,4 +1,7 @@
 # tests/test_triage_engine.py
+from triage_engine import TriageEngine
+engine = TriageEngine()
+
 def test_niveau1_spo2_critique():
     assert engine.evaluer({'spo2': 85})['niveau'] == 1
 
