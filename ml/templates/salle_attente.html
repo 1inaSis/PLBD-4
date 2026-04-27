@@ -9,11 +9,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
   <style>
     /* ========== CONFIG ========== */
-    :root { --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px; --bg:#060d1a;--surface:#0f1740;--surface-soft:#16254f;--border:rgba(255,255,255,.14);--text:#f5f8ff;--text-soft:#a9b8d9;--accent:#00a8e8;--success:#00a651;--warning:#ffb800;--danger:#cc0000;--esi-1:#cc0000;--esi-2:#ff6600;--esi-3:#ffb800;--esi-4:#00a651;--esi-5:#0072bb; --font-ui:"Inter",sans-serif;--font-data:"JetBrains Mono",monospace;--radius:14px;--t:180ms ease; }
+    :root { --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px; --bg:#060d1a;--surface:#0f1740;--surface-soft:#1a2b5e;--border:rgba(255,255,255,.24);--text:#f5f8ff;--text-soft:#c7d4ee;--accent:#00a8e8;--success:#00a651;--warning:#ffb800;--danger:#cc0000;--esi-1:#cc0000;--esi-2:#ff6600;--esi-3:#ffb800;--esi-4:#00a651;--esi-5:#0072bb; --font-ui:"Inter",sans-serif;--font-data:"JetBrains Mono",monospace;--radius:14px;--t:180ms ease; }
     body.theme-dark{--bg:#03060f;--surface:#0a1535;--surface-soft:#11244a}
 
     /* ========== DESIGN SYSTEM ========== */
-    *{box-sizing:border-box}html{font-size:16px}body{margin:0;min-height:100vh;font-family:var(--font-ui);background:radial-gradient(circle at top,rgba(0,168,232,.15),transparent 35%),var(--bg);color:var(--text);padding:var(--space-5)}
+    *{box-sizing:border-box}html{font-size:18px}body{margin:0;min-height:100vh;font-family:var(--font-ui);background:radial-gradient(circle at top,rgba(0,168,232,.2),transparent 35%),var(--bg);color:var(--text);padding:var(--space-5)}
 
     /* ========== COMPONENTS ========== */
     .header,.card,.patient-card,.constante{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-soft)}
@@ -28,7 +28,7 @@
     .badge-esi.esi-1{background:var(--esi-1)} .badge-esi.esi-2{background:var(--esi-2)} .badge-esi.esi-3{background:var(--esi-3);color:#1d1d1d} .badge-esi.esi-4{background:var(--esi-4)} .badge-esi.esi-5{background:var(--esi-5)}
     .patient-card{padding:var(--space-4);display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:var(--space-4);transition:background var(--t),transform var(--t),border-color var(--t)}
     .patient-card.highlight{background:rgba(0,168,232,.15);transform:translateX(4px)}
-    .patient-card.critical{background:rgba(204,0,0,.16)}
+    .patient-card.critical{background:rgba(204,0,0,.2);border-color:rgba(255,120,120,.6)}
     .patient-card:active{transform:translateX(2px)}
     .patient-card.error{border-color:rgba(204,0,0,.5)}
     .patient-card.success{border-color:rgba(0,166,81,.5)}
@@ -46,20 +46,22 @@
     .status-indicator.loading{opacity:.8}
 
     .constante{padding:var(--space-4);display:grid;gap:var(--space-2)}
-    .constante .v{font:700 2rem var(--font-data)}
+    .constante .v{font:700 2.15rem var(--font-data)}
     .constante .l{color:var(--text-soft)}
 
     /* ========== LAYOUT ========== */
     .layout{max-width:1800px;margin:0 auto;display:grid;gap:var(--space-4)}
     .top-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-4)}
     .queue{display:grid;gap:var(--space-3)}
-    .board-title{font-size:2rem;margin:0}
-    .big-time{font:700 3.2rem var(--font-data)}
-    .alert{padding:var(--space-4);border-radius:var(--radius);border:1px solid rgba(204,0,0,.45);background:rgba(204,0,0,.18);display:flex;justify-content:space-between;gap:var(--space-4);align-items:center;animation:redPulse 1.5s infinite alternate}
+    .board-title{font-size:2.2rem;margin:0}
+    .big-time{font:700 3.3rem var(--font-data)}
+    .alert{padding:var(--space-4);border-radius:var(--radius);border:1px solid rgba(255,120,120,.7);background:rgba(204,0,0,.24);display:flex;justify-content:space-between;gap:var(--space-4);align-items:center;animation:redPulse 1.5s infinite alternate}
+    #queue .patient-card strong{font-size:1.5rem}
+    #queue .patient-card > div{font-size:1.08rem}
     @keyframes redPulse{from{box-shadow:0 0 0 0 rgba(204,0,0,.25)}to{box-shadow:0 0 0 14px rgba(204,0,0,0)}}
 
-    @media (max-width:1180px){.top-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.patient-card{grid-template-columns:1fr auto}}
-    @media (max-width:760px){body{padding:var(--space-3)}.top-grid{grid-template-columns:1fr}.big-time{font-size:2.2rem}}
+    @media (max-width:1180px){html{font-size:17px}.top-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.patient-card{grid-template-columns:1fr auto}}
+    @media (max-width:760px){html{font-size:16px}body{padding:var(--space-3)}.top-grid{grid-template-columns:1fr}.big-time{font-size:2.2rem}}
   </style>
 </head>
 <body>
