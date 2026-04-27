@@ -1,4 +1,3 @@
-# app.py — API REST Flask complète
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -19,8 +18,6 @@ def health():
 def triage():
     data = request.get_json()
     resultat = engine.evaluer(data)
-    
-    # Sauvegarder en base
     db = SessionLocal()
     patient = Patient(
         nom=data.get('nom', 'Anonyme'),
@@ -35,8 +32,6 @@ def triage():
     db.refresh(patient)
     resultat['patient_id'] = patient.id
     db.close()
-    
-    # Notifier tous les écrans connectés via WebSocket
     socketio.emit('nouveau_patient', resultat)
     return jsonify(resultat)
 

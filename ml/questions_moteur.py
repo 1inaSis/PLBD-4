@@ -1,15 +1,3 @@
-"""
-questions_moteur.py — Générateur de questions ciblées HealthGate
-Projet HealthGate | Centrale Casablanca | PLBD 4 | 2025-2026
-
-Ce module sélectionne 3 à 5 questions simples à poser au patient à partir :
-- des constantes vitales
-- du texte libre des symptômes
-- de l'âge
-- du sexe
-
-Les réponses sont ensuite encodées en features numériques réutilisables par le modèle.
-"""
 
 from __future__ import annotations
 
@@ -36,9 +24,6 @@ _QUESTION_USAGE_CACHE: dict | None = None
 MAX_USAGE_HISTORY = 150
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Features numériques attendues côté modèle
-# ─────────────────────────────────────────────────────────────────────────────
 
 FEATURES_QUESTIONS = [
     "q_douleur_irradiee_bras",

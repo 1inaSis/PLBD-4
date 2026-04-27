@@ -1,6 +1,3 @@
-"""
-predict_api.py - API Flask + Socket.IO du projet HealthGate
-"""
 
 from __future__ import annotations
 
@@ -27,7 +24,6 @@ app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
 app.config["SECRET_KEY"] = "healthgate-secret-2026"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
-# Etat memoire (prototype)
 patients_session: Dict[str, Dict[str, Any]] = {}
 
 MEDECINS = {

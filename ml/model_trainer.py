@@ -1,14 +1,3 @@
-"""
-model_trainer.py — Entraînement du modèle Random Forest pour HealthGate
-Projet HealthGate | Centrale Casablanca | PLBD 4 | 2025-2026
-
-Pipeline complet :
-1. Chargement et préparation des données patients
-2. Enrichissement NLP (symptom_text → features binaires)
-3. Entraînement d'un Random Forest pour prédire le niveau ESI (1 à 5)
-4. Évaluation complète (accuracy, rapport de classification, matrice de confusion)
-5. Sauvegarde du modèle (.pkl) pour utilisation par l'API Flask
-"""
 
 import os
 import pickle
@@ -27,9 +16,6 @@ from nlp_extractor import enrichir_dataframe
 from questions_moteur import FEATURES_QUESTIONS, encoder_reponses
 from unified_data_store import DEFAULT_UNIFIED_DB_PATH, load_patients_dataframe
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Configuration
-# ─────────────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CHEMIN_DATA     = os.path.join(BASE_DIR, "data", "patients_50000.csv")
@@ -39,7 +25,6 @@ CHEMIN_SCALER   = os.path.join(BASE_DIR, "models", "scaler.pkl")
 CHEMIN_FEATURES = os.path.join(BASE_DIR, "models", "feature_names.pkl")
 CHEMIN_DIAGNOSTIC_ENCODER = os.path.join(BASE_DIR, "models", "diagnostic_encoder.pkl")
 
-# Colonnes de features utilisées pour l'entraînement
 FEATURES_VITALES = [
     "age", "sex",
     "temperature", "heart_rate", "bp_systolic", "bp_diastolic",
