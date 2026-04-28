@@ -1,4 +1,4 @@
-﻿# 🏥 HealthGate – Système Intelligent de Triage et de Gestion de Flux Patient
+﻿# ðŸ¥ HealthGate â€“ SystÃ¨me Intelligent de Triage et de Gestion de Flux Patient
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
@@ -6,115 +6,112 @@
 ![Architecture](https://img.shields.io/badge/Architecture-Hybride-success.svg)
 ![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED.svg)
 
-> **Projet d'Ingénierie**
+> **Projet d'IngÃ©nierie**
 > 
-> Une solution cyber-physique intégrée combinant **Intelligence Artificielle (NLP & Machine Learning)**, **Edge Computing** et **Architecture Web** pour automatiser l'accueil, pré-diagnostiquer les urgences et optimiser le flux des patients en milieu hospitalier.
+> Une solution cyber-physique intÃ©grÃ©e combinant **Intelligence Artificielle (NLP & Machine Learning)**, **Edge Computing** et **Architecture Web** pour automatiser l'accueil, prÃ©-diagnostiquer les urgences et optimiser le flux des patients en milieu hospitalier.
 
-## 🌟 Présentation et Impact
+## ðŸŒŸ PrÃ©sentation et Impact
 
-La congestion des urgences est un enjeu critique de santé publique. **HealthGate** adresse cette problématique à travers un kiosque d'accueil autonome permettant :
-- **Identification instantanée** via la lecture et l'extraction de documents officiels (Scanner MRZ / OCR).
-- **Acquisition de données vitales** en temps réel grâce à l'intégration de capteurs biomédicaux (IoT).
-- **Pré-triage intelligent (IA)** analysant les symptômes déclarés (NLP) et les biométries pour inférer un niveau d'urgence médical (Score ESI de 1 à 5).
+La congestion des urgences est un enjeu critique de santÃ© publique. **HealthGate** adresse cette problÃ©matique Ã  travers un kiosque d'accueil autonome permettant :
+- **Identification instantanÃ©e** via la lecture et l'extraction de documents officiels (Scanner MRZ / OCR).
+- **Acquisition de donnÃ©es vitales** en temps rÃ©el grÃ¢ce Ã  l'intÃ©gration de capteurs biomÃ©dicaux (IoT).
+- **PrÃ©-triage intelligent (IA)** analysant les symptÃ´mes dÃ©clarÃ©s (NLP) pour infÃ©rer un niveau d'urgence mÃ©dical (Score ESI de 1 Ã  5).
 - **Routage et priorisation dynamiques** des files d'attente vers les terminaux du personnel soignant.
 
-## 🏗️ Architecture Système 
+## ðŸ›ï¸ Architecture SystÃ¨me (Globale)
 
-Le système repose sur une architecture modulaire (Microservices) garantissant une séparation claire entre les composants physiques et logiciels. Le projet est divisé en 5 modules principaux :
+Le systÃ¨me repose sur une architecture distribuÃ©e (Microservices orientÃ©e Ã©vÃ©nements) garantissant une sÃ©paration claire entre les terminaux physiques, l'orchestration et le Machine Learning.
 
-- 🖥️ **rontend/** : L'interface utilisateur de la borne et des écrans d'affichage développée en **React**.
-- ⚙️ **ackend/** : Le cerveau central en **Python** exposant des API REST et gérant la synchronisation WebSocket.
-- 🧠 **ml/** : Le moteur d'Intelligence Artificielle de prédiction d'urgence et ses modèles d'apprentissage.
-- 📸 **scanner/** : Le module de vision par ordinateur pour l'extraction OCR des pièces d'identité (MRZ).
-- 🔌 **hardware/** : Le code embarqué (Raspberry Pi, Capteurs, Écran HMI Nextion) pilotant la borne physique.
+### 1. Composants SpÃ©cifiques
 
-`mermaid
+Le projet est divisÃ© en 5 modules principaux fonctionnant en synergie :
+
+- ðŸ–¥ï¸ **`frontend/` (Vue Patient & Terminaux)** : L'interface utilisateur dÃ©veloppÃ©e en **React**.
+- âš™ï¸ **`backend/` (CÅ“ur Serveur & API REST/WebSockets)** : Le cerveau de routage en **Python (Flask)**.
+- ðŸ§  **`ml/` (Moteur Diagnostique IA)** : ModÃ¨le prÃ©dictif qui gÃ©nÃ¨re le score d'urgence (ESI) via **Scikit-Learn & NLTK (NLP)**. 
+- ðŸ“¸ **`scanner/` (Identification OCR/Vision)** : Module de vision par ordinateur pour extraction de piÃ¨ces d'identitÃ© via reconnaissance MRZ.
+- ðŸ”Œ **`hardware/` (Acquisition IOT Edge)** : Code embarquÃ© (Daemon Pi, Capteurs, Ã‰cran Nextion) pilotant la borne physique.
+
+### 2. Architecture des Flux et Diagramme
+
+Le parcours de donnÃ©es est le suivant :
+1. **Identification et BiomÃ©trie** : Le hardware et le scanner remontent les donnÃ©es au backend central via API.
+2. **Interaction Patient** : Le frontend (Kiosque) collecte les symptÃ´mes (texte / NLP) du patient.
+3. **InfÃ©rence ML (Triage)** : Le backend envoie ces donnÃ©es au modÃ¨le ML qui retourne un score calculÃ© ESI.
+4. **Mise Ã  Jour CentralisÃ©e** : Le systÃ¨me route le patient dans la base de donnÃ©es et synchronise les tableaux de bord temps rÃ©el (Files d'attente et Interface MÃ©decin).
+
+```mermaid
 graph TD
     subgraph Kiosque / Edge Computing
         A[Borne Interactive React] 
-        C[Capteurs Biomédicaux & IoT] 
-        D[Scanner d'Identité OCR]
+        C[Capteurs BiomÃ©dicaux & IoT] 
+        D[Scanner d'IdentitÃ© OCR]
     end
     
-    subgraph Cœur du Système
+    subgraph Infrastructure Centrale
         B(Backend Python / API & WebSockets)
-        E[Moteur de Triage IA & NLP]
-        DB[(Base de Données Unifiée)]
+        E[Moteur de Triage ESI & NLP]
+        DB[(Base de DonnÃ©es UnifiÃ©e)]
     end
     
-    subgraph Vues & Terminaux
-        F[Écran File d'Attente]
-        G[Dashboards Médicaux]
+    subgraph Vues & Terminaux Web
+        F[File d'Attente Dynamique]
+        G[Dashboards MÃ©decins]
     end
 
     A <-->|REST / WebSockets| B
     C -->|GPIO / I2C / API| B
-    D -->|HTTP REST| B
-    B <-->|Requêtes de prédiction| E
+    D -->|RequÃªtes HTTP| B
+    B <-->|RequÃªtes de prÃ©diction| E
     B <--> DB
-    B -->|Temps Réel| F
-    B -->|Temps Réel| G
-`
+    B -->|Temps RÃ©el| F
+    B -->|Temps RÃ©el| G
+```
 
-## 🛠️ Prérequis Techniques
+## ðŸ› ï¸ PrÃ©requis Techniques
 
-Pour déployer le système en environnement de développement ou de production :
-- **Python** (v3.10+) avec pip
-- **Node.js** (v16+) et 
-pm (pour le frontend React)
-- **Docker** et **Docker Compose** (pour un déploiement orchestré)
-- **Tesseract OCR** (installé sur la machine hôte pour le module de scan)
-- Périphériques matériels optionnels pour le workflow complet (Raspberry Pi, Capteurs).
+Pour dÃ©ployer le systÃ¨me en environnement :
+- **Python** (v3.10+) avec `pip`
+- **Node.js** (v16+) et `npm` (pour le frontend React)
+- **Docker** et **Docker Compose**
+- **Tesseract OCR** (module scan)
+- PÃ©riphÃ©riques matÃ©riels optionnels pour le workflow complet (Pi, Capteurs).
 
-## 🚀 Démarrage Rapide
+## ðŸš€ DÃ©marrage Rapide
 
-### Option 1 : Déploiement via Docker (Recommandé pour la prod)
-L'ensemble de la stack peut être monté facilement via Docker Compose :
-`ash
+### Option 1 : DÃ©ploiement via Docker (RecommandÃ©)
+L'ensemble de la stack peut Ãªtre montÃ© facilement via Docker Compose :
+```bash
 git clone https://github.com/votre-organisation/PLBD-4.git
 cd PLBD-4
 docker-compose up --build -d
-`
+```
 
-### Option 2 : Lancement Local (Développement)
+### Option 2 : Lancement Local (DÃ©veloppement)
 
 **1. Lancer le Backend & ML :**
-`ash
-# Dans un premier terminal
+```bash
 cd backend
 pip install -r requirements.txt
 python app.py
 
-# Dans un second terminal, lancer l'API ML
 cd ../ml
 pip install -r requirements.txt
 python predict_api.py
-`
+```
 
 **2. Lancer le Frontend (React) :**
-`ash
-# Dans un troisième terminal
-cd frontend
+```bash
+cd ../frontend
 npm install
 npm run dev
-`
+```
 
-## 🧪 Tests et Assurance Qualité
+## ðŸ§ª Tests QA
 
-Le projet intègre des suites de tests automatisés pour valider les composants critiques.
-
-`ash
-# Tests du backend et moteur de triage
+```bash
 pytest backend/tests/
-
-# Tests du moteur de prédiction ML
 cd ml && python -m unittest discover -s tests -p "test_*.py"
-
-# Tests du pipeline de scan de documents
 pytest scanner/tests/
-`
+```
 
-## 🛣️ Roadmap Évolutive
-1. **Unification Backend :** Consolidation finale du Backend transactionnel et de l'API ML prédictive.
-2. **Dashboard Analytics :** Ajout de statistiques avancées pour les administrateurs de l'hôpital.
-3. **Déploiement Continu :** Mise en place d'une pipeline CI/CD complète.
