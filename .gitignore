@@ -1,13 +1,33 @@
+﻿# Python
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
 
-.pytest_cache/
-.mypy_cache/
+# Modèles ML (trop lourds pour GitHub)
+ml/models/*.pkl
 
-.venv/
+# Dataset (trop lourd pour GitHub)
+ml/data/patients_50000.csv
+
+# Environnement
+.env
 venv/
+env/
 
-# Local runtime state
-ml/data/question_usage_state.json
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/

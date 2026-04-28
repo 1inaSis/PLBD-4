@@ -1,117 +1,253 @@
-﻿# ðŸ¥ HealthGate â€“ SystÃ¨me Intelligent de Triage et de Gestion de Flux Patient
+﻿# 🏥 HealthGate — Borne de Triage Médical Intelligent
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
-![React](https://img.shields.io/badge/React-18-61dafb.svg)
-![Architecture](https://img.shields.io/badge/Architecture-Hybride-success.svg)
-![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED.svg)
+> Système de triage automatisé pour les urgences africaines
+> Centrale Casablanca | Groupe PLBD 4 | 2025-2026
 
-> **Projet d'IngÃ©nierie**
-> 
-> Une solution cyber-physique intÃ©grÃ©e combinant **Intelligence Artificielle (NLP & Machine Learning)**, **Edge Computing** et **Architecture Web** pour automatiser l'accueil, prÃ©-diagnostiquer les urgences et optimiser le flux des patients en milieu hospitalier.
+---
 
-## ðŸŒŸ PrÃ©sentation et Impact
+## 📋 Description
 
-La congestion des urgences est un enjeu critique de santÃ© publique. **HealthGate** adresse cette problÃ©matique Ã  travers un kiosque d'accueil autonome permettant :
-- **Identification instantanÃ©e** via la lecture et l'extraction de documents officiels (Scanner MRZ / OCR).
-- **Acquisition de donnÃ©es vitales** en temps rÃ©el grÃ¢ce Ã  l'intÃ©gration de capteurs biomÃ©dicaux (IoT).
-- **PrÃ©-triage intelligent (IA)** analysant les symptÃ´mes dÃ©clarÃ©s (NLP) pour infÃ©rer un niveau d'urgence mÃ©dical (Score ESI de 1 Ã  5).
-- **Routage et priorisation dynamiques** des files d'attente vers les terminaux du personnel soignant.
+HealthGate est une borne de triage médical intelligent conçue pour
+les salles d'urgences africaines. Elle permet de trier automatiquement
+les patients dès leur arrivée, sans intervention humaine, en moins de
+2 minutes.
 
-## ðŸ›ï¸ Architecture SystÃ¨me (Globale)
+Le système prédit le niveau ESI (Emergency Severity Index) du patient
+sur une échelle de 1 à 5, puis le place dans une file d'attente
+dynamique qui se réajuste en temps réel.
 
-Le systÃ¨me repose sur une architecture distribuÃ©e (Microservices orientÃ©e Ã©vÃ©nements) garantissant une sÃ©paration claire entre les terminaux physiques, l'orchestration et le Machine Learning.
+---
 
-### 1. Composants SpÃ©cifiques
+## 🎯 Problème résolu
 
-Le projet est divisÃ© en 5 modules principaux fonctionnant en synergie :
+- Surcharge chronique des urgences africaines
+- Absence de système de triage automatisé
+- Processus administratif long (20 à 45 minutes)
+- Risque de détérioration faute de priorisation rapide
 
-- ðŸ–¥ï¸ **`frontend/` (Vue Patient & Terminaux)** : L'interface utilisateur dÃ©veloppÃ©e en **React**.
-- âš™ï¸ **`backend/` (CÅ“ur Serveur & API REST/WebSockets)** : Le cerveau de routage en **Python (Flask)**.
-- ðŸ§  **`ml/` (Moteur Diagnostique IA)** : ModÃ¨le prÃ©dictif qui gÃ©nÃ¨re le score d'urgence (ESI) via **Scikit-Learn & NLTK (NLP)**. 
-- ðŸ“¸ **`scanner/` (Identification OCR/Vision)** : Module de vision par ordinateur pour extraction de piÃ¨ces d'identitÃ© via reconnaissance MRZ.
-- ðŸ”Œ **`hardware/` (Acquisition IOT Edge)** : Code embarquÃ© (Daemon Pi, Capteurs, Ã‰cran Nextion) pilotant la borne physique.
+**Solution HealthGate : triage complet en moins de 2 minutes,
+sans intervention humaine.**
 
-### 2. Architecture des Flux et Diagramme
+---
 
-Le parcours de donnÃ©es est le suivant :
-1. **Identification et BiomÃ©trie** : Le hardware et le scanner remontent les donnÃ©es au backend central via API.
-2. **Interaction Patient** : Le frontend (Kiosque) collecte les symptÃ´mes (texte / NLP) du patient.
-3. **InfÃ©rence ML (Triage)** : Le backend envoie ces donnÃ©es au modÃ¨le ML qui retourne un score calculÃ© ESI.
-4. **Mise Ã  Jour CentralisÃ©e** : Le systÃ¨me route le patient dans la base de donnÃ©es et synchronise les tableaux de bord temps rÃ©el (Files d'attente et Interface MÃ©decin).
+## 🏗️ Architecture
 
-```mermaid
-graph TD
-    subgraph Kiosque / Edge Computing
-        A[Borne Interactive React] 
-        C[Capteurs BiomÃ©dicaux & IoT] 
-        D[Scanner d'IdentitÃ© OCR]
-    end
-    
-    subgraph Infrastructure Centrale
-        B(Backend Python / API & WebSockets)
-        E[Moteur de Triage ESI & NLP]
-        DB[(Base de DonnÃ©es UnifiÃ©e)]
-    end
-    
-    subgraph Vues & Terminaux Web
-        F[File d'Attente Dynamique]
-        G[Dashboards MÃ©decins]
-    end
+`
+RASPBERRY PI 5                    PC SERVEUR (Windows/Mac)
+──────────────────                ─────────────────────────
+Caméra (OCR carte)   ──WiFi──►   Flask + SocketIO :5000
+DS18B20 (temp)                        │
+MAX30102 (SpO2/FC)                    ├─ /           Borne patient
+Tensiomètre (UART)                    ├─ /salle      Salle d'attente TV
+                                      ├─ /medecin/M1 Dr. El Amrani
+                                      └─ /medecin/M2 Dr. Bensouda
+`
 
-    A <-->|REST / WebSockets| B
-    C -->|GPIO / I2C / API| B
-    D -->|RequÃªtes HTTP| B
-    B <-->|RequÃªtes de prÃ©diction| E
-    B <--> DB
-    B -->|Temps RÃ©el| F
-    B -->|Temps RÃ©el| G
-```
+---
 
-## ðŸ› ï¸ PrÃ©requis Techniques
+## 🔄 Flux complet d'un patient
 
-Pour dÃ©ployer le systÃ¨me en environnement :
-- **Python** (v3.10+) avec `pip`
-- **Node.js** (v16+) et `npm` (pour le frontend React)
-- **Docker** et **Docker Compose**
-- **Tesseract OCR** (module scan)
-- PÃ©riphÃ©riques matÃ©riels optionnels pour le workflow complet (Pi, Capteurs).
+`
+1. SCAN CARTE D'IDENTITÉ
+   Caméra → OCR Tesseract → nom, prénom, âge, sexe
 
-## ðŸš€ DÃ©marrage Rapide
+2. DESCRIPTION DES SYMPTÔMES
+   Texte libre en français → NLP extrait les features
 
-### Option 1 : DÃ©ploiement via Docker (RecommandÃ©)
-L'ensemble de la stack peut Ãªtre montÃ© facilement via Docker Compose :
-```bash
-git clone https://github.com/votre-organisation/PLBD-4.git
-cd PLBD-4
-docker-compose up --build -d
-```
+3. MESURE AUTOMATIQUE DES CONSTANTES
+   Capteurs → température + SpO2 + tension artérielle
 
-### Option 2 : Lancement Local (DÃ©veloppement)
+4. QUESTIONS CIBLÉES INTELLIGENTES
+   3 à 5 questions adaptées aux symptômes détectés
+   Jamais de question hors sujet
 
-**1. Lancer le Backend & ML :**
-```bash
-cd backend
+5. PRÉDICTION ESI (Random Forest)
+   Features : constantes + NLP + diagnostic + réponses questions
+   → ESI 1 (critique) à ESI 5 (non urgent)
+
+6. FILE D'ATTENTE APQ-h
+   Score dynamique → médecin assigné → ticket numéroté
+`
+
+---
+
+## 🚀 Installation
+
+### Prérequis
+- Python 3.10+
+- Git
+
+### 1. Cloner le projet
+`ash
+git clone https://github.com/1inaSis/PLBD-4.git
+cd PLBD-4/ml
+`
+
+### 2. Installer les dépendances
+`ash
 pip install -r requirements.txt
-python app.py
+`
 
-cd ../ml
-pip install -r requirements.txt
+### 3. Installer Tesseract OCR
+
+**Windows :**
+- Télécharger : https://github.com/UB-Mannheim/tesseract/wiki
+- Cocher French + Arabic pendant l'installation
+- Décommenter dans scanner_cin.py :
+`python
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+`
+
+**Mac :**
+`ash
+brew install tesseract tesseract-lang
+`
+
+---
+
+## ▶️ Démarrage rapide
+
+`ash
+# 1. Générer le dataset
+python data_generator.py
+
+# 2. Entraîner le modèle
+python model_trainer.py
+
+# 3. Lancer les tests
+python tests/test_predictions.py
+
+# 4. Lancer le serveur
 python predict_api.py
-```
+`
 
-**2. Lancer le Frontend (React) :**
-```bash
-cd ../frontend
-npm install
-npm run dev
-```
+---
 
-## ðŸ§ª Tests QA
+## 🌐 Interfaces web
 
-```bash
-pytest backend/tests/
-cd ml && python -m unittest discover -s tests -p "test_*.py"
-pytest scanner/tests/
-```
+| Interface | URL | Description |
+|-----------|-----|-------------|
+| Borne patient | http://localhost:5000/ | Interface tactile patient |
+| Salle d'attente | http://localhost:5000/salle | Écran TV temps réel |
+| Médecin 1 | http://localhost:5000/medecin/M1 | Dr. El Amrani |
+| Médecin 2 | http://localhost:5000/medecin/M2 | Dr. Bensouda |
 
+> **Sur le réseau local :** remplacer localhost par l'IP du PC serveur
+> Trouver votre IP : ipconfig (Windows) ou ifconfig (Mac)
+
+---
+
+## 🔌 Câblage Raspberry Pi
+
+| Capteur | Broche Pi | Protocole | Librairie Python |
+|---------|-----------|-----------|------------------|
+| DS18B20 (température) | GPIO 4 | 1-Wire | w1thermsensor |
+| MAX30102 (SpO2/FC) | GPIO 2+3 | I2C | max30102 |
+| Tensiomètre | USB | UART | pyserial |
+| Caméra | CSI | picamera2 | picamera2 |
+
+**Activation sur Raspberry Pi :**
+`ash
+pip install RPi.GPIO w1thermsensor max30102 pyserial picamera2
+sudo raspi-config  # Activer I2C et 1-Wire
+`
+
+---
+
+## 🧠 Modèle Machine Learning
+
+| Paramètre | Valeur |
+|-----------|--------|
+| Algorithme | Random Forest |
+| Nombre d'arbres | 300 |
+| Dataset | 50 000 patients |
+| Features | 29+ |
+| Cross-validation | 10-fold stratifiée |
+| Accuracy | À compléter après entraînement |
+
+### Features du modèle :
+- **Constantes vitales :** température, FC, TA, SpO2, FR, glycémie
+- **Symptômes binaires :** douleur thoracique, dyspnée, etc.
+- **Features NLP :** extraites du texte libre du patient
+- **Diagnostic probable :** encodé numériquement
+- **Réponses questions ciblées :** features q_*
+
+### Pathologies couvertes :
+Paludisme, Typhoïde, Tuberculose, Drépanocytose, Infarctus,
+AVC, Méningite, Appendicite, Éclampsie, Pneumonie, et 38 autres.
+
+---
+
+## 📊 API REST
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| POST | /api/scanner | Scan pièce d'identité |
+| POST | /api/symptomes | Enregistrer symptômes |
+| GET | /api/constantes | Lire capteurs |
+| POST | /api/questions | Générer questions |
+| POST | /api/triage | Prédire ESI + file |
+| GET | /api/file | État file d'attente |
+| POST | /api/prise_en_charge | Médecin prend en charge |
+| GET | /api/medecin/<id> | Patients du médecin |
+| GET | /api/sante | Vérification API |
+
+---
+
+## 🧪 Tests
+
+`ash
+python tests/test_predictions.py
+`
+
+Tests couverts :
+- Module NLP (extraction features)
+- Modèle Random Forest (prédiction ESI)
+- File d'attente APQ-h (ajout, tri, dégradation, alertes)
+- Questions ciblées (cohérence, types, nombre)
+- Intégration complète (pipeline bout en bout)
+
+---
+
+## 📁 Structure du projet
+
+`
+ml/
+├── data/
+│   └── patients_50000.csv
+├── models/
+│   ├── random_forest_esi.pkl
+│   ├── scaler.pkl
+│   ├── feature_names.pkl
+│   └── diagnostic_encoder.pkl
+├── templates/
+│   ├── borne.html
+│   ├── salle_attente.html
+│   └── medecin.html
+├── tests/
+│   └── test_predictions.py
+├── data_generator.py
+├── nlp_extractor.py
+├── model_trainer.py
+├── questions_moteur.py
+├── queue_manager.py
+├── predict_api.py
+├── scanner_cin.py
+├── capteurs_raspberry.py
+└── requirements.txt
+`
+
+
+
+## 🏫 Encadrement
+
+- **École :** Centrale Casablanca
+- **Année :** 2025-2026
+
+
+---
+
+## 📄 Licence
+
+Projet académique — Centrale Casablanca 2025-2026
+Tous droits réservés.
