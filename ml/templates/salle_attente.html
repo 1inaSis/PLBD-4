@@ -1,208 +1,262 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HealthGate - Salle d'attente</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Salle d'attente — HealthGate</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
   <style>
-    /* ========== CONFIG ========== */
-    :root { --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px; --bg:#060d1a;--surface:#0f1740;--surface-soft:#1a2b5e;--border:rgba(255,255,255,.24);--text:#f5f8ff;--text-soft:#c7d4ee;--accent:#00a8e8;--success:#00a651;--warning:#ffb800;--danger:#cc0000;--esi-1:#cc0000;--esi-2:#ff6600;--esi-3:#ffb800;--esi-4:#00a651;--esi-5:#0072bb; --font-ui:"Inter",sans-serif;--font-data:"JetBrains Mono",monospace;--radius:14px;--t:180ms ease; }
-    body.theme-dark{--bg:#03060f;--surface:#0a1535;--surface-soft:#11244a}
+    :root {
+      --vert:          #2D9B6F;
+      --marine:        #0B1F3A;
+      --bleu:          #1A6BC4;
+      --esi1:  #C8001E;
+      --esi2:  #E05A00;
+      --esi3:  #C49A00;
+      --esi4:  #2D9B6F;
+      --esi5:  #1A6BC4;
+      --font: 'Sora', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
 
-    /* ========== DESIGN SYSTEM ========== */
-    *{box-sizing:border-box}html{font-size:18px}body{margin:0;min-height:100vh;font-family:var(--font-ui);background:radial-gradient(circle at top,rgba(0,168,232,.2),transparent 35%),var(--bg);color:var(--text);padding:var(--space-5)}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(160deg, #0B1F3A 0%, #0D2640 60%, #0A1F30 100%);
+      color: #E8EFF8;
+      min-height: 100vh;
+      font-family: var(--font);
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
 
-    /* ========== COMPONENTS ========== */
-    .header,.card,.patient-card,.constante{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-soft)}
-    .header{padding:var(--space-5);display:grid;gap:var(--space-4)}
-    .brand-row{display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);flex-wrap:wrap}
-    .brand{display:flex;gap:var(--space-3);align-items:center;font-weight:800}.brand small{display:block;color:var(--text-soft);font-weight:500}
-    .status-indicator{display:inline-flex;align-items:center;gap:var(--space-2);padding:10px 14px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.06);font-weight:700}
-    .status-indicator-dot{width:10px;height:10px;border-radius:50%;background:var(--success)} .status-indicator.error .status-indicator-dot{background:var(--danger)}
-    .progress-bar{height:12px;border:1px solid var(--border);background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}.progress-bar>span{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--danger),var(--warning),var(--success))}
+    header {
+      padding: 30px 60px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .h-left { display: flex; align-items: center; gap: 20px; }
+    .h-left svg { width: 48px; height: 48px; fill: white; }
+    .h-title { font-size: 32px; font-weight: 700; letter-spacing: 2px; }
+    
+    .h-right { text-align: right; }
+    .time { font-family: var(--font-mono); font-size: 48px; font-weight: 700; }
+    .date { font-size: 20px; color: #A0B2C6; margin-top: 4px; }
 
-    .badge-esi{display:inline-flex;justify-content:center;min-width:100px;padding:12px 16px;border-radius:999px;color:#fff;font:800 1rem var(--font-ui)}
-    .badge-esi.esi-1{background:var(--esi-1)} .badge-esi.esi-2{background:var(--esi-2)} .badge-esi.esi-3{background:var(--esi-3);color:#1d1d1d} .badge-esi.esi-4{background:var(--esi-4)} .badge-esi.esi-5{background:var(--esi-5)}
-    .patient-card{padding:var(--space-4);display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:var(--space-4);transition:background var(--t),transform var(--t),border-color var(--t)}
-    .patient-card.highlight{background:rgba(0,168,232,.15);transform:translateX(4px)}
-    .patient-card.critical{background:rgba(204,0,0,.2);border-color:rgba(255,120,120,.6)}
-    .patient-card:active{transform:translateX(2px)}
-    .patient-card.error{border-color:rgba(204,0,0,.5)}
-    .patient-card.success{border-color:rgba(0,166,81,.5)}
+    .alerte-banner {
+      background: rgba(200, 0, 30, 0.9);
+      color: white;
+      text-align: center;
+      padding: 15px;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    .urgent { animation: clignoter 1.5s infinite; }
+    @keyframes clignoter { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-    .btn-primary,.btn-danger,.btn-ghost{min-height:56px;border-radius:12px;border:1px solid transparent;font:800 1rem var(--font-ui);cursor:pointer;transition:transform var(--t),filter var(--t)}
-    .btn-primary{background:#fff;color:#0a2342}.btn-danger{background:var(--danger);color:#fff}.btn-ghost{background:transparent;color:var(--text);border-color:var(--border)}
-    .btn-primary:hover,.btn-danger:hover,.btn-ghost:hover{transform:translateY(-1px)}
-    .btn-primary:active,.btn-danger:active,.btn-ghost:active{transform:translateY(0);filter:brightness(.98)}
-    .btn-primary:disabled,.btn-danger:disabled,.btn-ghost:disabled{opacity:.55;cursor:not-allowed;transform:none}
-    .btn-primary.loading,.btn-danger.loading,.btn-ghost.loading{opacity:.7;pointer-events:none}
-    .btn-primary.error,.btn-danger.error,.btn-ghost.error{box-shadow:0 0 0 2px rgba(204,0,0,.35)}
-    .btn-primary.success,.btn-danger.success,.btn-ghost.success{box-shadow:0 0 0 2px rgba(0,166,81,.35)}
+    .metrics-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 30px;
+      padding: 30px 60px;
+    }
+    .metric-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+    .m-val { font-family: var(--font-mono); font-size: 42px; font-weight: 700; margin-bottom: 8px; }
+    .m-label { font-size: 18px; color: #A0B2C6; text-transform: uppercase; letter-spacing: 1px; }
 
-    .status-indicator.success{border-color:rgba(0,166,81,.45)}
-    .status-indicator.loading{opacity:.8}
+    .table-container {
+      flex: 1;
+      padding: 0 60px 40px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      font-size: 20px;
+      color: #A0B2C6;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 20px;
+      text-align: left;
+      border-bottom: 2px solid rgba(255,255,255,0.1);
+    }
+    td {
+      padding: 20px;
+      font-size: 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      vertical-align: middle;
+      font-weight: 500;
+    }
+    tr { transition: background 0.3s; }
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+    
+    .esi-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 48px; height: 48px; border-radius: 50%; font-weight: 700;
+      border: 3px solid; font-family: var(--font-mono);
+    }
+    .esi-1 { color: #fff; background: var(--esi1); border-color: #900015; }
+    .esi-2 { color: #fff; background: var(--esi2); border-color: #993D00; }
+    .esi-3 { color: var(--esi3); border-color: var(--esi3); }
+    .esi-4 { color: var(--esi4); border-color: var(--esi4); }
+    .esi-5 { color: var(--esi5); border-color: var(--esi5); }
 
-    .constante{padding:var(--space-4);display:grid;gap:var(--space-2)}
-    .constante .v{font:700 2.15rem var(--font-data)}
-    .constante .l{color:var(--text-soft)}
+    .row-urgent { background: rgba(224, 90, 0, 0.15) !important; border-left: 4px solid var(--esi2); }
+    .row-critical { background: rgba(200, 0, 30, 0.2) !important; border-left: 4px solid var(--esi1); }
 
-    /* ========== LAYOUT ========== */
-    .layout{max-width:1800px;margin:0 auto;display:grid;gap:var(--space-4)}
-    .top-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-4)}
-    .queue{display:grid;gap:var(--space-3)}
-    .board-title{font-size:2.2rem;margin:0}
-    .big-time{font:700 3.3rem var(--font-data)}
-    .alert{padding:var(--space-4);border-radius:var(--radius);border:1px solid rgba(255,120,120,.7);background:rgba(204,0,0,.24);display:flex;justify-content:space-between;gap:var(--space-4);align-items:center;animation:redPulse 1.5s infinite alternate}
-    #queue .patient-card strong{font-size:1.5rem}
-    #queue .patient-card > div{font-size:1.08rem}
-    @keyframes redPulse{from{box-shadow:0 0 0 0 rgba(204,0,0,.25)}to{box-shadow:0 0 0 14px rgba(204,0,0,0)}}
+    .time-long { color: #FF99A8; font-weight: 700; }
+    .time-med { color: #FFD699; }
 
-    @media (max-width:1180px){html{font-size:17px}.top-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.patient-card{grid-template-columns:1fr auto}}
-    @media (max-width:760px){html{font-size:16px}body{padding:var(--space-3)}.top-grid{grid-template-columns:1fr}.big-time{font-size:2.2rem}}
+    footer {
+      background: rgba(0,0,0,0.4);
+      padding: 20px;
+      text-align: center;
+      font-size: 22px;
+      color: #A0B2C6;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    footer span { color: white; font-weight: 600; }
   </style>
 </head>
 <body>
-  <div class="layout">
-    <header class="header">
-      <div class="brand-row">
-        <div class="brand">
-          <svg viewBox="0 0 24 24" fill="none" width="36" height="36" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="7" fill="rgba(0,168,232,.2)"/><path d="M12 6v12M6 12h12" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/></svg>
-          <div>HealthGate<small>Salle d'attente urgences</small></div>
-        </div>
-        <div class="status-indicator" id="netState"><span class="status-indicator-dot"></span><span id="netText">Connecte</span></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap"><h1 class="board-title">File d'attente en temps reel</h1><div class="big-time" id="clock">--:--</div></div>
-      <div class="progress-bar"><span></span></div>
-    </header>
 
-    <section class="top-grid">
-      <article class="constante"><div class="l">Patients en attente</div><div class="v" id="countWaiting">0</div></article>
-      <article class="constante"><div class="l">Niveaux critiques ESI 1-2</div><div class="v" id="countCritical">0</div></article>
-      <article class="constante"><div class="l">Attente moyenne</div><div class="v" id="avgWait">0 min</div></article>
-      <article class="constante"><div class="l">Derniere mise a jour</div><div class="v" id="lastUpdate">-</div></article>
-    </section>
+  <header>
+    <div class="h-left">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-1.99.9-1.99 2L3 19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z"/></svg>
+      <div class="h-title">SALLE D'ATTENTE — URGENCES</div>
+    </div>
+    <div class="h-right">
+      <div class="time" id="clock">10:48</div>
+      <div class="date" id="date">Lundi 4 Mai 2026</div>
+    </div>
+  </header>
 
-    <section class="alert" id="criticalAlert"><div><strong>ALERTE CRITIQUE</strong><div id="alertText">Patient ESI 1 en attente</div></div><button class="btn-danger" type="button">Priorite equipe</button></section>
-
-    <section class="queue" id="queue"></section>
+  <div class="alerte-banner urgent" id="alerte-critical" style="display:none;">
+    🚨 PATIENT CRITIQUE — Prise en charge immédiate en cours
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
-  <script>
-    const state = { connected: false, file: [], alertes: [] };
+  <div class="metrics-bar">
+    <div class="metric-card">
+      <div class="m-val" id="m-total">14</div>
+      <div class="m-label">Patients en attente</div>
+    </div>
+    <div class="metric-card" style="border-color: var(--esi1);">
+      <div class="m-val" style="color: #FF99A8;" id="m-crit">1</div>
+      <div class="m-label">Cas critiques (ESI 1-2)</div>
+    </div>
+    <div class="metric-card">
+      <div class="m-val">34 <span style="font-size:20px;">min</span></div>
+      <div class="m-label">Attente moyenne</div>
+    </div>
+    <div class="metric-card">
+      <div class="m-val" style="color:var(--vert); font-size:32px; padding:6px 0;">En Ligne</div>
+      <div class="m-label" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+        <div style="width:10px; height:10px; background:var(--vert); border-radius:50%; box-shadow:0 0 8px var(--vert);"></div>
+        Système actif
+      </div>
+    </div>
+  </div>
 
-    const Q = document.getElementById('queue');
-    const CW = document.getElementById('countWaiting');
-    const CC = document.getElementById('countCritical');
-    const AW = document.getElementById('avgWait');
-    const LU = document.getElementById('lastUpdate');
-    const AT = document.getElementById('alertText');
-    const CLK = document.getElementById('clock');
-    const NET = document.getElementById('netText');
-    const NS = document.getElementById('netState');
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:80px;">N°</th>
+          <th style="width:100px; text-align:center;">ESI</th>
+          <th>Patient</th>
+          <th>Niveau</th>
+          <th>Attente</th>
+          <th>Depuis</th>
+        </tr>
+      </thead>
+      <tbody id="file-body">
+        <!-- Rendered via JS -->
+      </tbody>
+    </table>
+  </div>
 
-    function applyTheme() {
-      const h = new Date().getHours();
-      if ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) || h >= 19 || h <= 6) {
-        document.body.classList.add('theme-dark');
-      }
+  <footer>
+    ⚠️ En cas d'aggravation subite de votre état, <span>signalez-vous immédiatement</span> au personnel soignant.
+  </footer>
+
+<script>
+  // Clock update
+  function updateTime() {
+    const d = new Date();
+    document.getElementById('clock').textContent = d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    document.getElementById('date').textContent = d.toLocaleDateString('fr-FR', options).replace(/^\w/, c => c.toUpperCase());
+  }
+  setInterval(updateTime, 1000);
+  updateTime();
+
+  // Socket sync or Demo Data
+  const DEMO_PATIENTS = [
+    { id:"U-042", nom:"Mohamed A.", esi:2, niveau:"Très urgent", attente:12, heure:"10:36" },
+    { id:"U-043", nom:"Fatima B.",  esi:3, niveau:"Urgent",      attente:45, heure:"10:03" },
+    { id:"U-044", nom:"Youssef C.", esi:3, niveau:"Urgent",      attente:31, heure:"10:17" },
+    { id:"U-045", nom:"Amina T.",   esi:4, niveau:"Semi-urgent", attente:85, heure:"09:23" },
+    { id:"U-046", nom:"Karim M.",   esi:5, niveau:"Non urgent",  attente:115,heure:"08:53" },
+  ];
+
+  function renderTable(patients) {
+    const tbody = document.getElementById('file-body');
+    tbody.innerHTML = '';
+    let criticalCount = 0;
+
+    patients.forEach((p, idx) => {
+      let rowClass = "";
+      if (p.esi === 1) { rowClass = "row-critical"; criticalCount++; }
+      if (p.esi === 2) { rowClass = "row-urgent"; criticalCount++; }
+
+      let timeClass = "";
+      if(p.attente > 60) timeClass = "time-long";
+      else if(p.attente > 30) timeClass = "time-med";
+
+      let tr = document.createElement('tr');
+      tr.className = rowClass;
+      tr.innerHTML = `
+        <td style="color:#A0B2C6; font-family:var(--font-mono);">${idx + 1}</td>
+        <td style="text-align:center;"><div class="esi-badge esi-${p.esi}">${p.esi}</div></td>
+        <td style="font-weight:700; ${p.esi <= 2 ? 'color:white;' : ''}">${p.nom}</td>
+        <td style="color:#A0B2C6;">${p.niveau}</td>
+        <td class="${timeClass}" style="font-family:var(--font-mono); font-weight:700;">${p.attente} min</td>
+        <td style="color:#A0B2C6; font-family:var(--font-mono);">${p.heure}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('m-total').textContent = patients.length;
+    document.getElementById('m-crit').textContent = criticalCount;
+    if (criticalCount > 0) {
+      document.getElementById('alerte-critical').style.display = 'block';
+      let nomCrit = patients.find(p => p.esi === 1 || p.esi === 2).nom;
+      document.getElementById('alerte-critical').innerHTML = `🚨 PATIENT CRITIQUE — ${nomCrit} — ESI 2 — Attente : ${patients.find(p=>p.esi<=2).attente} min`;
+    } else {
+      document.getElementById('alerte-critical').style.display = 'none';
     }
+  }
 
-    function tick() {
-      const d = new Date();
-      const v = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-      CLK.textContent = v;
-      LU.textContent = v;
-    }
+  // Initial render
+  setTimeout(() => renderTable(DEMO_PATIENTS), 500);
 
-    function urgenceLabel(esi) {
-      if (esi <= 1) return 'Critique';
-      if (esi === 2) return 'Prioritaire';
-      if (esi === 3) return 'Urgent';
-      if (esi === 4) return 'Observation';
-      return 'Non critique';
-    }
-
-    function renderQueue(highlightId) {
-      Q.innerHTML = state.file
-        .map((p) => {
-          const esi = p.esi_actuel || p.esi_predit || 5;
-          const pid = p.patient_id || '-';
-          const wait = Number(p.temps_attente_min || 0).toFixed(0);
-          const nom = `${p.prenom || ''} ${p.nom || ''}`.trim() || 'Patient';
-          return `<article class="patient-card ${esi <= 2 ? 'critical' : ''} ${highlightId === pid ? 'highlight' : ''}"><div><strong style="font-size:1.4rem">${pid}</strong><div>${nom}</div></div><div class="badge-esi esi-${esi}">ESI ${esi}</div><div style="font-family:var(--font-data);font-size:1.6rem">${wait} min</div><div>${urgenceLabel(esi)}</div></article>`;
-        })
-        .join('');
-    }
-
-    function refreshStats() {
-      const total = state.file.length;
-      const critiques = state.file.filter((p) => (p.esi_actuel || p.esi_predit || 5) <= 2);
-      const waitAvg = total
-        ? Math.round(state.file.reduce((acc, p) => acc + Number(p.temps_attente_min || 0), 0) / total)
-        : 0;
-
-      CW.textContent = String(total);
-      CC.textContent = String(critiques.length);
-      AW.textContent = `${waitAvg} min`;
-
-      const c = critiques[0];
-      AT.textContent = c
-        ? `${c.patient_id} - ${`${c.prenom || ''} ${c.nom || ''}`.trim()} (${Number(c.temps_attente_min || 0).toFixed(0)} min)`
-        : 'Aucune alerte critique';
-    }
-
-    async function loadFile() {
-      try {
-        const res = await fetch('/api/file');
-        const json = await res.json();
-        if (!res.ok) return;
-        state.file = json.file || [];
-        state.alertes = json.alertes || [];
-        renderQueue();
-        refreshStats();
-      } catch (_) {
-        // ignore transient network errors in dashboard mode
-      }
-    }
-
-    function setNet(on) {
-      state.connected = on;
-      NET.textContent = on ? 'Connecte' : 'Hors ligne';
-      NS.className = on ? 'status-indicator' : 'status-indicator error';
-    }
-
-    function connectSocket() {
-      try {
-        const s = io();
-        s.on('connect', () => setNet(true));
-        s.on('disconnect', () => setNet(false));
-        s.on('file_mise_a_jour', (payload) => {
-          if (!payload) return;
-          state.file = payload.file || [];
-          state.alertes = payload.alertes || [];
-          renderQueue();
-          refreshStats();
-        });
-        s.on('alerte_critique', (payload) => {
-          if (!payload) return;
-          renderQueue(payload.patient_id);
-          refreshStats();
-        });
-      } catch (_) {
-        setNet(false);
-      }
-    }
-
-    applyTheme();
-    tick();
-    setInterval(tick, 1000);
-    loadFile();
-    setInterval(loadFile, 10000);
-    connectSocket();
-  </script>
+  let socket;
+  try {
+    socket = io();
+    socket.on('file_mise_a_jour', (data) => {
+      if(data && data.patients) renderTable(data.patients);
+    });
+  } catch(e) {
+    console.log("Socket.io inactif (mode démo)");
+  }
+</script>
 </body>
 </html>

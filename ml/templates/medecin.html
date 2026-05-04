@@ -1,305 +1,333 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HealthGate - Medecin</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tableau de Bord Médecin — HealthGate</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
   <style>
-    /* ========== CONFIG ========== */
-    :root{--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px;--bg:#edf3fa;--surface:#fff;--surface-soft:#f3f8fd;--border:#b9cbe0;--text:#0a1a2a;--text-soft:#3a5779;--primary:#0a2342;--accent:#00a8e8;--success:#00a651;--warning:#ffb800;--danger:#cc0000;--esi-1:#cc0000;--esi-2:#ff6600;--esi-3:#ffb800;--esi-4:#00a651;--esi-5:#0072bb;--font-ui:"Inter",sans-serif;--font-data:"JetBrains Mono",monospace;--radius:14px;--t:180ms ease}
-    body.theme-dark{--bg:#0b1424;--surface:#14203a;--surface-soft:#1b2d4f;--border:#38567c;--text:#eef6ff;--text-soft:#cad9ef;--primary:#5ca7ff;--accent:#35c6ff}
+    :root {
+      --vert:          #2D9B6F;
+      --vert-clair:    #E8F7F1;
+      --vert-fonce:    #1A6B4A;
+      --marine:        #0B1F3A;
+      --marine-2:      #132D52;
+      --bleu:          #1A6BC4;
+      --bleu-clair:    #E8F2FC;
+      --fond:          #F4F7FA;
+      --blanc:         #FFFFFF;
+      --texte:         #0B1F3A;
+      --texte-2:       #4A6080;
+      --bordure:       #D8E3EF;
 
-    /* ========== DESIGN SYSTEM ========== */
-    *{box-sizing:border-box}html{font-size:17px}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font-ui);padding:var(--space-4)}
+      --esi1:  #C8001E;
+      --esi2:  #E05A00;
+      --esi3:  #C49A00;
+      --esi4:  #2D9B6F;
+      --esi5:  #1A6BC4;
 
-    /* ========== COMPONENTS ========== */
-    .header,.card,.patient-card,.constante{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
-    .header{padding:var(--space-5);display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);flex-wrap:wrap;background:linear-gradient(180deg,rgba(0,168,232,.1),transparent)}
-    .status-indicator{display:inline-flex;align-items:center;gap:var(--space-2);padding:10px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface-soft);font-weight:700}
-    .status-indicator-dot{width:10px;height:10px;border-radius:50%;background:var(--success)} .status-indicator.error .status-indicator-dot{background:var(--danger)}
-    .badge-esi{display:inline-flex;min-width:104px;justify-content:center;padding:11px 16px;border-radius:999px;color:#fff;font-weight:800;font-size:1.03rem}.badge-esi.esi-1{background:var(--esi-1)}.badge-esi.esi-2{background:var(--esi-2)}.badge-esi.esi-3{background:var(--esi-3);color:#222}.badge-esi.esi-4{background:var(--esi-4)}.badge-esi.esi-5{background:var(--esi-5)}
-    .patient-card{padding:var(--space-4);display:grid;gap:var(--space-2);cursor:pointer;transition:border-color var(--t),transform var(--t),background var(--t)} .patient-card:hover,.patient-card.active{border-color:var(--accent);transform:translateY(-1px)}
-    .patient-card:active{transform:translateY(0)}
-    .patient-card.error{border-color:rgba(204,0,0,.5);background:rgba(204,0,0,.08)}
-    .patient-card.success{border-color:rgba(0,166,81,.5);background:rgba(0,166,81,.08)}
-    .constante{padding:var(--space-4);display:grid;gap:var(--space-2)} .constante .v{font:700 2.1rem var(--font-data)} .constante .l{color:var(--text-soft);font-weight:600} .constante .trend{font:700 1rem var(--font-data)}
-    .progress-bar{height:10px;border:1px solid var(--border);border-radius:999px;background:var(--surface-soft);overflow:hidden}.progress-bar>span{display:block;height:100%;width:0;transition:width var(--t)}
-    .btn-primary,.btn-danger,.btn-ghost{min-height:58px;border-radius:12px;border:1px solid transparent;font:800 1.03rem var(--font-ui);cursor:pointer;transition:transform var(--t),filter var(--t)}
-    .btn-primary{background:var(--success);color:#fff}.btn-danger{background:var(--danger);color:#fff}.btn-ghost{background:var(--surface);color:var(--text);border-color:var(--border)}
-    .btn-primary:hover,.btn-danger:hover,.btn-ghost:hover{transform:translateY(-1px)}
-    .btn-primary:active,.btn-danger:active,.btn-ghost:active{transform:translateY(0);filter:brightness(.98)}
-    .btn-primary:disabled,.btn-danger:disabled,.btn-ghost:disabled{opacity:.55;cursor:not-allowed;transform:none}
-    .btn-primary.loading,.btn-danger.loading,.btn-ghost.loading{opacity:.7;pointer-events:none}
-    .btn-primary.error,.btn-danger.error,.btn-ghost.error{box-shadow:0 0 0 2px rgba(204,0,0,.35)}
-    .btn-primary.success,.btn-danger.success,.btn-ghost.success{box-shadow:0 0 0 2px rgba(0,166,81,.35)}
+      --font: 'Sora', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --ombre:    0 2px 16px rgba(11,31,58,0.08);
+    }
 
-    .status-indicator.success{border-color:rgba(0,166,81,.45)}
-    .status-indicator.loading{opacity:.8}
-    .toast{position:fixed;right:16px;top:16px;min-width:300px;padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:0 10px 24px rgba(10,35,66,.16);display:none;z-index:30}
-    .toast.show{display:block}.toast.critical{border-color:rgba(204,0,0,.45);background:rgba(204,0,0,.12)}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background-color: var(--fond); color: var(--texte); overflow: hidden; height: 100vh; display: flex; }
 
-    /* ========== LAYOUT ========== */
-    .layout{max-width:1500px;margin:0 auto;display:grid;grid-template-columns:360px 1fr;gap:var(--space-4)}
-    .sidebar,.main{display:grid;gap:var(--space-4)}
-    .list{display:grid;gap:var(--space-3)}
-    .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3)}
-    .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3)}
-    .section-title{margin:0;font-size:1.28rem}
-    .mono{font-family:var(--font-data)}
-    @media (max-width:1180px){html{font-size:16px}.layout{grid-template-columns:1fr}.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media (max-width:760px){.grid3,.grid2{grid-template-columns:1fr}}
+    /* Layout 2 colonnes */
+    .col-left { width: 360px; background: white; border-right: 1px solid var(--bordure); display: flex; flex-direction: column; z-index: 10; }
+    .col-right { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: var(--fond); }
+
+    /* En-tête gauche */
+    .left-header { background: linear-gradient(135deg, var(--marine), var(--marine-2)); color: white; padding: 20px; box-shadow: var(--ombre); }
+    .doc-info { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+    .doc-name { font-weight: 600; font-size: 18px; }
+    .doc-spec { font-size: 13px; color: #A0B2C6; }
+    .status-badge { display: flex; align-items: center; gap: 6px; font-size: 13px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 12px; }
+    .dot { width: 8px; height: 8px; background: var(--vert); border-radius: 50%; box-shadow: 0 0 6px var(--vert); }
+
+    /* Liste patients */
+    .patient-list { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: #F8FAFC; }
+    .p-card { background: white; border: 1px solid var(--bordure); border-radius: 10px; padding: 15px; cursor: pointer; display: flex; gap: 15px; transition: all 0.2s; position: relative; }
+    .p-card:hover { border-color: var(--marine); box-shadow: var(--ombre); }
+    .p-card.active { border-color: var(--marine); background: var(--bleu-clair); box-shadow: var(--ombre); }
+    
+    .p-card.urgent { border-left: 4px solid var(--esi2); }
+    .p-card.critical { border-left: 4px solid var(--esi1); animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(200,0,30,0.4); } 70% { box-shadow: 0 0 0 10px rgba(200,0,30,0); } 100% { box-shadow: 0 0 0 0 rgba(200,0,30,0); } }
+
+    .p-badge { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; border: 2.5px solid; font-weight: 700; font-family: var(--font-mono); }
+    .b-1 { border-color: #900015; background: var(--esi1); color: white; }
+    .b-2 { border-color: #993D00; background: var(--esi2); color: white; }
+    .b-3 { border-color: var(--esi3); color: var(--esi3); }
+    .b-4 { border-color: var(--esi4); color: var(--esi4); }
+    
+    .p-info { flex: 1; min-width: 0; }
+    .p-nom { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .p-symp { font-size: 13px; color: var(--texte-2); margin: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .p-meta { font-size: 12px; color: #8A9BAE; font-family: var(--font-mono); }
+    .icon-alert { position: absolute; top: -8px; right: -8px; font-size: 20px; }
+
+    /* Dossier main */
+    .dossier-header { background: white; padding: 30px 40px; border-bottom: 1px solid var(--bordure); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 5; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+    .d-profil { display: flex; align-items: center; gap: 20px; }
+    .avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--marine); color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 600; }
+    .d-nom { font-size: 24px; font-weight: 700; }
+    .d-sub { font-size: 15px; color: var(--texte-2); margin-top: 5px; display: flex; gap: 15px; }
+    
+    .d-status { display: flex; align-items: center; gap: 30px; }
+    .d-box { text-align: right; }
+    .d-box-label { font-size: 12px; color: var(--texte-2); text-transform: uppercase; font-weight: 600; }
+    .d-box-val { font-size: 24px; font-family: var(--font-mono); font-weight: 700; margin-top: 4px; }
+    .btn-prise { background: linear-gradient(135deg, var(--vert), var(--vert-fonce)); color: white; border: none; padding: 0 30px; height: 52px; border-radius: 8px; font-weight: 600; font-family: var(--font); cursor: pointer; font-size: 16px; box-shadow: 0 4px 12px rgba(45,155,111,0.2); }
+
+    .dossier-body { padding: 40px; max-width: 1200px; margin: 0 auto; width: 100%; display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+    
+    .card { background: white; border-radius: 12px; border: 1px solid var(--bordure); padding: 24px; margin-bottom: 30px; box-shadow: var(--ombre); }
+    .c-title { font-size: 16px; font-weight: 700; color: var(--marine); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+    
+    /* Vitals */
+    .vitals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .vital-box { background: var(--fond); border: 1px solid var(--bordure); border-radius: 8px; padding: 15px; text-align: center; }
+    .v-val { font-family: var(--font-mono); font-size: 28px; font-weight: 700; }
+    .v-label { font-size: 13px; color: var(--texte-2); font-weight: 600; margin: 5px 0; }
+    .v-ref { font-size: 11px; color: #8A9BAE; }
+    .out-of-bounds { color: var(--esi1); }
+
+    /* Symptoms */
+    .citation { font-style: italic; font-size: 16px; padding: 15px; background: var(--bleu-clair); border-left: 4px solid var(--bleu); border-radius: 4px 8px 8px 4px; margin-bottom: 15px; color: var(--marine); }
+    .nlp-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag { padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+    .tag-blue { background: var(--bleu-clair); color: var(--bleu); }
+    .tag-red { background: #FFF0F2; color: var(--esi1); }
+
+    /* Questions */
+    .q-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .q-table td { padding: 12px; border-bottom: 1px solid var(--bordure); }
+    .td-oui { color: var(--vert-fonce); font-weight: 700; background: var(--vert-clair); text-align: center; width: 60px; border-radius: 6px; }
+    .td-non { color: var(--texte-2); text-align: center; width: 60px; }
+
+    /* IA Diag */
+    .ia-diag { border-color: var(--marine); background: linear-gradient(to bottom, #F8FAFC, white); }
+    .proba-bar { width: 100%; height: 8px; background: var(--bordure); border-radius: 4px; margin-top: 8px; overflow: hidden; }
+    .proba-fill { height: 100%; background: var(--marine); width: 85%; }
+    
+    .actions-box { margin-top: 30px; }
+    .btn-full { width: 100%; padding: 15px; border-radius: 8px; font-weight: 600; font-family: var(--font); cursor: pointer; border: none; font-size: 16px; margin-bottom: 10px; }
+    .btn-orange { background: #FFF8E5; color: #9E7C00; border: 1px solid #FFE082; }
+    textarea.notes { width: 100%; height: 120px; padding: 15px; border: 1px solid var(--bordure); border-radius: 8px; font-family: var(--font); margin-top: 15px; resize: none; background: var(--fond); }
   </style>
 </head>
 <body>
-  <header class="header">
-    <div><strong style="font-size:1.5rem">HealthGate Medecin</strong><div style="color:var(--text-soft)">Vue clinique prioritaire</div></div>
-    <div class="status-indicator" id="netState"><span class="status-indicator-dot"></span><span id="netText">Connecte</span></div>
-  </header>
 
-  <div class="layout">
-    <aside class="sidebar">
-      <section class="card" style="padding:16px">
-        <h2 class="section-title">Patients actifs</h2>
-        <input id="search" placeholder="Rechercher patient" style="min-height:48px;border:1px solid var(--border);border-radius:10px;padding:0 12px;background:var(--surface-soft);color:var(--text);font-size:1rem" />
-      </section>
-      <section class="list" id="patientList"></section>
-    </aside>
-
-    <main class="main">
-      <section class="card" style="padding:16px;display:grid;gap:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h2 class="section-title" id="patientName">-</h2><span class="badge-esi esi-3" id="patientEsi">ESI 3</span></div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap"><span class="mono" id="patientWait">Attente: -</span><span id="patientReason" style="color:var(--text-soft)">-</span></div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap"><button class="btn-primary" type="button" id="btnTaken">PRIS EN CHARGE</button><button class="btn-danger" type="button" id="btnAlert">SIGNALER</button><button class="btn-ghost" type="button">NOTES</button></div>
-      </section>
-
-      <section class="grid3" id="vitals"></section>
-
-      <section class="grid2">
-        <article class="card" style="padding:16px;display:grid;gap:10px">
-          <h3 class="section-title">Diagnostic IA</h3>
-          <div><strong id="diagLabel">Analyse en cours</strong><div id="diagExplain" style="color:var(--text-soft)">-</div></div>
-          <div class="progress-bar"><span id="diagConfBar" style="background:var(--accent)"></span></div>
-          <div class="mono" id="diagConfText">Confiance 0%</div>
-          <div id="diagWarn" style="color:var(--danger);font-weight:700;display:none">Confiance faible: verifier manuellement</div>
-        </article>
-        <article class="card" style="padding:16px;display:grid;gap:10px">
-          <h3 class="section-title">Questions ciblees</h3>
-          <table style="width:100%;border-collapse:collapse"><tr><td style="padding:10px;border-bottom:1px solid var(--border)">Douleur thoracique</td><td style="padding:10px;border-bottom:1px solid var(--border)">Oui</td></tr><tr><td style="padding:10px;border-bottom:1px solid var(--border)">Dyspnee repos</td><td style="padding:10px;border-bottom:1px solid var(--border)">Oui</td></tr><tr><td style="padding:10px">Perte conscience</td><td style="padding:10px">Non</td></tr></table>
-        </article>
-      </section>
-    </main>
+  <!-- COLONNE GAUCHE -->
+  <div class="col-left">
+    <div class="left-header">
+      <div class="doc-info">
+        <div>
+          <div class="doc-name">Dr. Alaoui H.</div>
+          <div class="doc-spec">Médecin Urgentiste — Box 2</div>
+        </div>
+        <div class="status-badge"><div class="dot"></div> En ligne</div>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px;">
+        <span>File d'attente globale</span>
+        <strong id="attente-count">14 patients</strong>
+      </div>
+    </div>
+    
+    <div class="patient-list" id="p-list">
+      <!-- Rempli par JavaScript -->
+    </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <!-- COLONNE DROITE -->
+  <div class="col-right">
+    <div class="dossier-header" id="d-header" style="opacity:0;">
+      <div class="d-profil">
+        <div class="avatar" id="d-ini">MA</div>
+        <div>
+          <div class="d-nom" id="d-nom">Mohamed ALAOUI</div>
+          <div class="d-sub">
+            <span>👨 52 ans</span>
+            <span>📍 ID: U-042</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="d-status">
+        <div class="d-box">
+          <div class="d-box-label">Niveau de tri</div>
+          <div class="d-box-val" style="color:var(--esi2);">2 — TRÈS URGENT</div>
+        </div>
+        <div class="d-box">
+          <div class="d-box-label">Attente</div>
+          <div class="d-box-val" style="color:var(--esi1);">22 min</div>
+        </div>
+        <button class="btn-prise">✓ PRIS EN CHARGE</button>
+      </div>
+    </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
-  <script>
-    const state = { selected: 0, connected: false, patients: [] };
-    const medecinId = location.pathname.split('/').pop() || 'M1';
+    <div class="dossier-body" id="d-body" style="opacity:0; transition:opacity 0.3s;">
+      
+      <!-- Colonne Data -->
+      <div>
+        <div class="card">
+          <div class="c-title">🩸 Constantes Vitales</div>
+          <div class="vitals-grid">
+            <div class="vital-box">
+              <div class="v-val">37.8°C</div>
+              <div class="v-label">Température</div>
+              <div class="v-ref">Nle: 36-38</div>
+            </div>
+            <div class="vital-box" style="background:#FFF0F2; border-color:#FFD6DC;">
+              <div class="v-val out-of-bounds">92% 🔴</div>
+              <div class="v-label">SpO2</div>
+              <div class="v-ref">Nle: ≥95</div>
+            </div>
+            <div class="vital-box">
+              <div class="v-val out-of-bounds" style="color:var(--esi2);">118 bpm 🟠</div>
+              <div class="v-label">Fréq. Cardiaque</div>
+              <div class="v-ref">Nle: 60-100</div>
+            </div>
+            <div class="vital-box">
+              <div class="v-val">130/85</div>
+              <div class="v-label">Tension (mmHg)</div>
+            </div>
+            <div class="vital-box">
+              <div class="v-val">105</div>
+              <div class="v-label">Glycémie (mg/dL)</div>
+            </div>
+            <div class="vital-box">
+              <div class="v-val">5/10</div>
+              <div class="v-label">Score Douleur</div>
+            </div>
+          </div>
+        </div>
 
-    const vitalKeys = [
-      ['Temp', 'temperature', 'C'],
-      ['SpO2', 'spo2', '%'],
-      ['FC', 'heart_rate', 'bpm'],
-      ['TA SYS', 'bp_systolic', 'mmHg'],
-      ['TA DIA', 'bp_diastolic', 'mmHg'],
-      ['Gly', 'glucose', 'mg/L'],
-    ];
+        <div class="card">
+          <div class="c-title">🗣️ Motif & Symptômes</div>
+          <div class="citation">"J'ai une forte douleur dans la poitrine qui serre depuis ce matin et j'ai du mal à respirer."</div>
+          <div class="nlp-tags">
+            <span class="tag tag-red">Douleur thoracique</span>
+            <span class="tag tag-red">Dyspnée</span>
+            <span class="tag tag-blue">Aigü</span>
+          </div>
+        </div>
 
-    const L = document.getElementById('patientList');
-    const N = document.getElementById('patientName');
-    const E = document.getElementById('patientEsi');
-    const W = document.getElementById('patientWait');
-    const R = document.getElementById('patientReason');
-    const V = document.getElementById('vitals');
-    const DL = document.getElementById('diagLabel');
-    const DX = document.getElementById('diagExplain');
-    const DB = document.getElementById('diagConfBar');
-    const DT = document.getElementById('diagConfText');
-    const DW = document.getElementById('diagWarn');
-    const T = document.getElementById('toast');
-    const NET = document.getElementById('netText');
-    const NS = document.getElementById('netState');
-    const search = document.getElementById('search');
-    const btnTaken = document.getElementById('btnTaken');
-    const btnAlert = document.getElementById('btnAlert');
+        <div class="card">
+          <div class="c-title">📋 Questionnaire Ciblé</div>
+          <table class="q-table">
+            <tr>
+              <td>La douleur irradie-t-elle vers le bras gauche ou la mâchoire ?</td>
+              <td class="td-oui">OUI</td>
+            </tr>
+            <tr>
+              <td>Avez-vous des sueurs froides ou des nausées ?</td>
+              <td class="td-oui">OUI</td>
+            </tr>
+            <tr>
+              <td>Avez-vous des antécédents cardiaques ?</td>
+              <td class="td-non">NON</td>
+            </tr>
+          </table>
+        </div>
+      </div>
 
-    function applyTheme() {
-      const h = new Date().getHours();
-      if ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) || h >= 19 || h <= 6) {
-        document.body.classList.add('theme-dark');
-      }
-    }
+      <!-- Colonne IA & Actions -->
+      <div>
+        <div class="card ia-diag">
+          <div class="c-title">🧠 Analyse IA (Engine V2)</div>
+          <div style="font-size:18px; font-weight:700; color:var(--marine); margin-bottom:15px;">Suspicion : Syndrome Coronarien Aigu</div>
+          
+          <div style="margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600;">
+              <span>Confiance modèle</span>
+              <span>88%</span>
+            </div>
+            <div class="proba-bar"><div class="proba-fill" style="width:88%"></div></div>
+          </div>
 
-    function showToast(msg, critical) {
-      T.textContent = msg;
-      T.className = critical ? 'toast show critical' : 'toast show';
-      if (!critical) {
-        setTimeout(() => {
-          T.className = 'toast';
-        }, 2600);
-      }
-    }
+          <div style="font-size:13px; color:var(--texte-2); margin-top:15px;">
+            Probabilités ESI associées :<br>
+            <div style="display:flex; margin-top:8px; gap:4px; height:24px;">
+              <div style="background:var(--esi1); width:15%; color:white; text-align:center; line-height:24px; border-radius:4px 0 0 4px; font-weight:700;">1</div>
+              <div style="background:var(--esi2); width:80%; color:white; text-align:center; line-height:24px; font-weight:700;">2</div>
+              <div style="background:var(--esi3); width:5%; border-radius:0 4px 4px 0;"></div>
+            </div>
+          </div>
+        </div>
 
-    function currentPatient() {
-      if (!state.patients.length) return null;
-      return state.patients[Math.min(state.selected, state.patients.length - 1)];
-    }
+        <div class="actions-box">
+          <button class="btn-prise btn-full">✅ DÉMARRER PRISE EN CHARGE</button>
+          <button class="btn-orange btn-full">⚠️ Signaler aggravation ESI</button>
+          
+          <textarea class="notes" placeholder="Notes rapides d'intervention..."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    function renderList() {
-      const q = (search.value || '').toLowerCase();
-      const filtered = state.patients.filter((p) => {
-        const txt = `${p.patient_id} ${p.nom || ''} ${p.prenom || ''} ${p.symptom_text || ''}`.toLowerCase();
-        return txt.includes(q);
-      });
+<script>
+  const patients = [
+    { id: "P1", nom: "Alaoui Mohamed", ini: "MA", esi: 2, symp: "Douleur thorax, dyspnée", attente: 22, pos: 1 },
+    { id: "P2", nom: "Benali Fatima", ini: "FB", esi: 3, symp: "Fièvre 39.5, toux", attente: 45, pos: 2 },
+    { id: "P3", nom: "El Fassi Youssef", ini: "EY", esi: 3, symp: "Douleur fosse iliaque DR", attente: 52, pos: 3 },
+    { id: "P4", nom: "Tazi Amina", ini: "TA", esi: 4, symp: "Entorse cheville", attente: 85, pos: 4 },
+  ];
 
-      L.innerHTML = filtered
-        .map((p, i) => {
-          const esi = Number(p.esi_predit || 5);
-          const name = `${p.prenom || ''} ${p.nom || ''}`.trim() || 'Patient';
-          return `<article class="patient-card ${i === state.selected ? 'active' : ''}" data-i="${i}"><div style="display:flex;justify-content:space-between;gap:10px"><strong>${p.patient_id} - ${name}</strong><span class="badge-esi esi-${esi}">ESI ${esi}</span></div><div style="color:var(--text-soft)">${p.symptom_text || '-'}</div><div class="mono">${Number(p.temps_attente_min || 0).toFixed(0)} min</div></article>`;
-        })
-        .join('');
+  function renderList() {
+    const list = document.getElementById('p-list');
+    list.innerHTML = '';
+    patients.forEach(p => {
+      let isUrgent = p.esi === 2 ? 'urgent' : '';
+      let isCrit = p.esi === 1 ? 'critical' : '';
+      let icon = p.esi <= 2 ? '<div class="icon-alert">🚨</div>' : '';
+      
+      let div = document.createElement('div');
+      div.className = `p-card ${isUrgent} ${isCrit}`;
+      div.onclick = () => selectPatient(p.id, div);
+      
+      div.innerHTML = `
+        ${icon}
+        <div class="p-badge b-${p.esi}">${p.esi}</div>
+        <div class="p-info">
+          <div class="p-nom">${p.nom}</div>
+          <div class="p-symp">${p.symp}</div>
+          <div class="p-meta">Pos.${p.pos} · Attente: <strong style="${p.esi<=2?'color:var(--esi1)':''}">${p.attente} min</strong></div>
+        </div>
+      `;
+      list.appendChild(div);
+    });
+  }
 
-      L.querySelectorAll('.patient-card').forEach((card) => {
-        card.onclick = () => {
-          state.selected = Number(card.dataset.i);
-          renderList();
-          renderPatient();
-        };
-      });
-    }
+  function selectPatient(id, el) {
+    document.querySelectorAll('.p-card').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    
+    // Animer l'apparition
+    const h = document.getElementById('d-header');
+    const b = document.getElementById('d-body');
+    h.style.opacity = 0; b.style.opacity = 0;
+    
+    setTimeout(() => {
+      h.style.opacity = 1; 
+      b.style.opacity = 1;
+      
+      const p = patients.find(x => x.id === id);
+      document.getElementById('d-ini').textContent = p.ini;
+      document.getElementById('d-nom').textContent = p.nom.toUpperCase();
+    }, 150);
+  }
 
-    function renderPatient() {
-      const p = currentPatient();
-      if (!p) {
-        N.textContent = 'Aucun patient';
-        E.className = 'badge-esi esi-5';
-        E.textContent = 'ESI -';
-        W.textContent = 'Attente: -';
-        R.textContent = '-';
-        V.innerHTML = '';
-        DL.textContent = '-';
-        DX.textContent = '-';
-        DB.style.width = '0%';
-        DT.textContent = 'Confiance 0%';
-        DW.style.display = 'none';
-        return;
-      }
+  renderList();
+  
+  // Simulation click first patient
+  setTimeout(() => {
+    document.querySelector('.p-card').click();
+  }, 300);
+</script>
 
-      const esi = Number(p.esi_predit || 5);
-      N.textContent = `${(p.prenom || '')} ${(p.nom || '')}`.trim();
-      E.className = `badge-esi esi-${esi}`;
-      E.textContent = `ESI ${esi}`;
-      W.textContent = `Attente: ${Number(p.temps_attente_min || 0).toFixed(0)} min`;
-      R.textContent = p.symptom_text || 'Symptomes non renseignes';
-
-      const constantes = p.constantes || {};
-      V.innerHTML = vitalKeys
-        .map(([label, key, unit]) => {
-          const val = constantes[key] != null ? constantes[key] : '-';
-          const n = Number(val);
-          const trend = label === 'SpO2' && n < 94 ? '↓' : label === 'FC' && n > 110 ? '↑' : '→';
-          const bar = label === 'SpO2' ? Math.min(100, n || 0) : label === 'Temp' ? Math.min(100, ((n || 0) / 40) * 100) : 70;
-          return `<article class="constante"><div class="l">${label}</div><div class="v">${val}${unit ? ` ${unit}` : ''}</div><div class="trend">Tendance ${trend}</div><div class="progress-bar"><span style="width:${bar}%;background:${label === 'SpO2' && n < 94 ? 'var(--danger)' : 'var(--accent)'}"></span></div></article>`;
-        })
-        .join('');
-
-      const conf = Number(p.confiance_modele || 0);
-      DL.textContent = p.diagnostic_probable || 'Evaluation clinique complementaire';
-      DX.textContent = `Priorite file: ${p.position_file || '?'}`;
-      DB.style.width = `${Math.max(0, Math.min(100, conf))}%`;
-      DT.textContent = `Confiance ${conf}%`;
-      DW.style.display = conf < 70 ? 'block' : 'none';
-    }
-
-    async function loadPatients() {
-      try {
-        const res = await fetch(`/api/medecin/${medecinId}`);
-        const json = await res.json();
-        if (!res.ok) return;
-        state.patients = json.patients || [];
-        state.selected = Math.min(state.selected, Math.max(0, state.patients.length - 1));
-        renderList();
-        renderPatient();
-      } catch (_) {
-        // ignore transient errors on polling
-      }
-    }
-
-    function setNet(on) {
-      state.connected = on;
-      NET.textContent = on ? 'Connecte' : 'Hors ligne';
-      NS.className = on ? 'status-indicator' : 'status-indicator error';
-    }
-
-    function connectSocket() {
-      try {
-        const s = io();
-        s.on('connect', () => {
-          setNet(true);
-          s.emit('rejoindre_medecin', { medecin_id: medecinId });
-        });
-        s.on('disconnect', () => setNet(false));
-        s.on('file_mise_a_jour', () => loadPatients());
-        s.on('alerte_critique', (payload) => {
-          if (!payload) return;
-          showToast(`Alerte critique: ${payload.patient_id} (ESI ${payload.esi})`, true);
-          loadPatients();
-        });
-      } catch (_) {
-        setNet(false);
-      }
-    }
-
-    async function priseEnCharge() {
-      const p = currentPatient();
-      if (!p) return;
-      try {
-        const res = await fetch('/api/prise_en_charge', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ patient_id: p.patient_id, medecin_id: medecinId }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.message || 'Erreur');
-        showToast('Patient marque comme pris en charge', false);
-        loadPatients();
-      } catch (err) {
-        showToast(`Echec prise en charge: ${err.message}`, true);
-      }
-    }
-
-    async function signalerAlerte() {
-      const p = currentPatient();
-      if (!p) return;
-      const newEsi = Math.max(1, Number(p.esi_predit || 3) - 1);
-      try {
-        const res = await fetch('/api/degradation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ patient_id: p.patient_id, nouvel_esi: newEsi, nouvelles_constantes: p.constantes || {} }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.message || 'Erreur');
-        showToast(`Degradation signalee: ESI ${newEsi}`, true);
-        loadPatients();
-      } catch (err) {
-        showToast(`Echec signalement: ${err.message}`, true);
-      }
-    }
-
-    search.oninput = renderList;
-    btnTaken.onclick = priseEnCharge;
-    btnAlert.onclick = signalerAlerte;
-
-    applyTheme();
-    loadPatients();
-    setInterval(loadPatients, 10000);
-    connectSocket();
-  </script>
 </body>
 </html>

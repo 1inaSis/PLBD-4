@@ -139,16 +139,16 @@ def page_borne():
         d["spo2"] = constantes.get("spo2", 98.0)
         
         # Additional features that might be generated directly
-        d["douleur"] = features_questions.get("q_douleur_repos_effort", 0) or features_questions.get("q_douleur_irradiee_bras", 0) or constantes.get("pain_score", 0)
-        d["dyspnea"] = features_questions.get("q_dyspnee_aggrave_effort", 0) or features_questions.get("q_duree_dyspnee", 0)
-        d["dyspnea_aggrave_effort"] = features_questions.get("q_dyspnee_aggrave_effort", 0)
-        d["chest_pain"] = features_questions.get("q_douleur_irradiee_bras", 0)
-        d["loss_of_consciousness"] = features_questions.get("q_trauma_perte_conscience", 0)
-        d["severe_bleeding"] = features_questions.get("q_trauma_saignement", 0)
-        d["neurological_symptoms"] = features_questions.get("q_neuro_faiblesse", 0) or features_questions.get("q_neuro_parole", 0) or features_questions.get("q_neuro_confusion", 0)
-        d["abdominal_pain"] = features_questions.get("q_localisation_abdomen", 0)
-        d["fever"] = features_questions.get("q_duree_fievre", 0)
-        d["trauma"] = features_questions.get("q_trauma_zone", 0)
+        d["douleur"] = 1 if (features_questions.get("q_douleur_repos_effort") or features_questions.get("q_douleur_irradiee_bras") or constantes.get("pain_score", 0)) else 0
+        d["dyspnea"] = 1 if (features_questions.get("q_dyspnee_aggrave_effort") or features_questions.get("q_duree_dyspnee")) else 0
+        d["dyspnea_aggrave_effort"] = 1 if features_questions.get("q_dyspnee_aggrave_effort") else 0
+        d["chest_pain"] = 1 if features_questions.get("q_douleur_irradiee_bras") else 0
+        d["loss_of_consciousness"] = 1 if features_questions.get("q_trauma_perte_conscience") else 0
+        d["severe_bleeding"] = 1 if features_questions.get("q_trauma_saignement") else 0
+        d["neurological_symptoms"] = 1 if (features_questions.get("q_neuro_faiblesse") or features_questions.get("q_neuro_parole") or features_questions.get("q_neuro_confusion")) else 0
+        d["abdominal_pain"] = 1 if features_questions.get("q_localisation_abdomen") else 0
+        d["fever"] = 1 if features_questions.get("q_duree_fievre") else 0
+        d["trauma"] = 1 if features_questions.get("q_trauma_zone") else 0
 
         with st.spinner("Analyse de votre état par l'IA..."):
             try:

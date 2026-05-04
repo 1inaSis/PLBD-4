@@ -1,508 +1,496 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HealthGate - Borne Patient</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HealthGate — Borne de Triage</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
   <style>
-    /* ========== CONFIG ========== */
     :root {
-      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
-      --bg: #edf3fa; --surface: #ffffff; --surface-soft: #f4f8fd; --border: #b8c9dc; --text: #071524; --text-soft: #2f4a6d;
-      --primary: #0a2342; --accent: #00a8e8; --success: #00a651; --warning: #ffb800; --danger: #cc0000;
-      --esi-1: #cc0000; --esi-2: #ff6600; --esi-3: #ffb800; --esi-4: #00a651; --esi-5: #0072bb;
-      --font-ui: "Inter", sans-serif; --font-data: "JetBrains Mono", monospace; --radius: 14px; --shadow: 0 14px 34px rgba(10,35,66,.12); --t: 180ms ease;
+      --vert:          #2D9B6F;
+      --vert-clair:    #E8F7F1;
+      --vert-fonce:    #1A6B4A;
+      --marine:        #0B1F3A;
+      --marine-2:      #132D52;
+      --bleu:          #1A6BC4;
+      --bleu-clair:    #E8F2FC;
+      --fond:          #F4F7FA;
+      --blanc:         #FFFFFF;
+      --texte:         #0B1F3A;
+      --texte-2:       #4A6080;
+      --bordure:       #D8E3EF;
+
+      --esi1:  #C8001E;
+      --esi2:  #E05A00;
+      --esi3:  #C49A00;
+      --esi4:  #2D9B6F;
+      --esi5:  #1A6BC4;
+
+      --font: 'Sora', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      --ombre:    0 2px 16px rgba(11,31,58,0.08);
+      --ombre-md: 0 8px 32px rgba(11,31,58,0.12);
+      --r: 12px;
     }
-    body.theme-dark { --bg:#0b1424; --surface:#14203a; --surface-soft:#1b2d4f; --border:#38567c; --text:#f2f8ff; --text-soft:#d0def3; --primary:#5ca7ff; --accent:#35c6ff; }
 
-    /* ========== DESIGN SYSTEM ========== */
-    *{box-sizing:border-box} html{font-size:17px}
-    body{margin:0;min-height:100vh;font-family:var(--font-ui);background:radial-gradient(circle at top,rgba(0,168,232,.2),transparent 36%),var(--bg);color:var(--text);padding:var(--space-4);display:flex;justify-content:center;line-height:1.5}
-    .app{width:min(920px,100%);background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background-color: var(--fond); color: var(--texte); overflow-x: hidden; }
 
-    /* ========== COMPONENTS ========== */
-    .header{padding:var(--space-5);border-bottom:1px solid var(--border);display:grid;gap:var(--space-4);background:linear-gradient(180deg,rgba(0,168,232,.14),transparent)}
-    .brand-row{display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);flex-wrap:wrap}
-    .brand{display:flex;gap:var(--space-3);align-items:center;font-weight:800} .brand small{display:block;color:var(--text-soft);font-weight:500}
-    .status-indicator{display:inline-flex;align-items:center;gap:var(--space-2);border-radius:999px;padding:10px 14px;border:1px solid var(--border);background:var(--surface-soft);font-size:.95rem;font-weight:700}
-    .status-indicator-dot{width:10px;height:10px;border-radius:50%;background:var(--success);animation:pulse 1.8s infinite}
-    .status-indicator.error .status-indicator-dot{background:var(--danger)}
-    @keyframes pulse{0%{transform:scale(.95)}50%{transform:scale(1.1)}100%{transform:scale(.95)}}
+    header {
+      background: linear-gradient(135deg, #0B1F3A 0%, #132D52 100%);
+      height: 68px;
+      padding: 0 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.2);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      color: white;
+    }
 
-    .progress-meta{display:flex;justify-content:space-between;color:var(--text-soft);font-weight:700;font-size:1rem}
-    .progress-bar{height:14px;border:1px solid var(--border);border-radius:999px;background:var(--surface-soft);overflow:hidden}
-    .progress-bar>span{display:block;height:100%;width:16%;background:var(--accent);transition:width var(--t)}
+    .header-left { display: flex; align-items: center; gap: 15px; }
+    .header-left svg { width: 32px; height: 32px; fill: white; }
+    .header-title { font-weight: 600; font-size: 20px; }
 
-    .card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-soft);padding:var(--space-5);display:grid;gap:var(--space-4)}
-    .card h1,.card h2{margin:0;font-size:1.7rem;line-height:1.2}
-    .card p{margin:0;color:var(--text-soft);font-size:1.05rem;font-weight:600}
-    .step-panel{display:none;padding:var(--space-5)} .step-panel.active{display:block}
+    .header-right { display: flex; align-items: center; gap: 20px; font-family: var(--font-mono); }
+    .status-indicator { display: flex; align-items: center; gap: 8px; font-family: var(--font); font-size: 14px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #2D9B6F; box-shadow: 0 0 8px rgba(45,155,111,0.6); }
 
-    .badge-esi{display:inline-flex;min-width:92px;justify-content:center;padding:10px 14px;border-radius:999px;color:#fff;font-weight:800}
-    .badge-esi.esi-1{background:var(--esi-1)} .badge-esi.esi-2{background:var(--esi-2)} .badge-esi.esi-3{background:var(--esi-3);color:#222}
-    .badge-esi.esi-4{background:var(--esi-4)} .badge-esi.esi-5{background:var(--esi-5)}
+    .progress-container { background: white; border-bottom: 1px solid var(--bordure); padding: 15px 40px; }
+    .progress-bar { display: flex; justify-content: space-between; max-width: 1000px; margin: 0 auto; position: relative; }
+    .progress-bar::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: var(--bordure); z-index: 1; transform: translateY(-50%); }
+    .step { position: relative; z-index: 2; background: white; padding: 0 10px; display: flex; align-items: center; gap: 8px; color: var(--texte-2); font-weight: 500; }
+    .step span { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--bordure); font-weight: 600; font-size: 14px; background: white; }
+    .step.active { color: var(--marine); font-weight: 700; }
+    .step.active span { border-color: var(--marine); background: var(--marine); color: white; }
+    .step.done span { border-color: var(--vert); background: var(--vert); color: white; }
 
-    .patient-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:var(--space-4);display:grid;gap:var(--space-2)}
+    main { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+    .step-section { display: none; animation: fadeIn 0.4s ease-out; }
+    .step-section.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-    .btn-primary,.btn-danger,.btn-ghost{min-height:64px;border-radius:12px;font:800 1.08rem var(--font-ui);cursor:pointer;transition:transform var(--t),filter var(--t),box-shadow var(--t);border:1px solid transparent}
-    .btn-primary{background:var(--primary);color:#fff}.btn-danger{background:var(--danger);color:#fff}.btn-ghost{background:var(--surface);color:var(--text);border-color:var(--border)}
-    .btn-primary:hover,.btn-danger:hover,.btn-ghost:hover{transform:translateY(-1px)} .btn-primary:active,.btn-danger:active,.btn-ghost:active{filter:brightness(.98)}
-    .btn-primary:disabled,.btn-danger:disabled,.btn-ghost:disabled{opacity:.55;cursor:not-allowed;transform:none}
-    .btn-primary.loading,.btn-danger.loading,.btn-ghost.loading{pointer-events:none;opacity:.7}
-    .btn-primary.error,.btn-danger.error,.btn-ghost.error{box-shadow:0 0 0 2px rgba(204,0,0,.35)} .btn-primary.success,.btn-danger.success,.btn-ghost.success{box-shadow:0 0 0 2px rgba(0,166,81,.35)}
+    .card { background: var(--blanc); border: 1px solid var(--bordure); border-radius: var(--r); box-shadow: var(--ombre); padding: 32px; }
+    h2 { font-size: 28px; color: var(--marine); margin-bottom: 8px; }
+    .subtitle { color: var(--texte-2); font-size: 16px; margin-bottom: 30px; }
 
-    .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3)}
-    .icon-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3)}
-    .icon-btn{min-height:96px;border:1px solid var(--border);border-radius:12px;background:var(--surface);display:grid;grid-template-columns:36px 1fr;gap:var(--space-3);align-items:center;padding:0 var(--space-3);font:700 1.06rem var(--font-ui);cursor:pointer;transition:border-color var(--t),background var(--t)}
-    .icon-btn svg{width:30px;height:30px}
-    .icon-btn:hover,.icon-btn.active{border-color:var(--accent);background:rgba(0,168,232,.12)}
+    .form-group { margin-bottom: 24px; }
+    .form-label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 18px; }
+    .form-input { width: 100%; padding: 18px; border: 1px solid var(--bordure); border-radius: 8px; font-family: var(--font); font-size: 18px; transition: border 0.3s; }
+    .form-input:focus { border-color: var(--marine); outline: none; box-shadow: 0 0 0 3px rgba(11,31,58,0.1); }
+    textarea.form-input { min-height: 150px; resize: none; }
 
-    .constante{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:var(--space-4);display:grid;gap:var(--space-3)}
-    .constante header{display:flex;justify-content:space-between;align-items:center} .constante-value{font:700 2.25rem var(--font-data)} .constante-trend{font:700 1rem var(--font-data);color:var(--text-soft)}
-    .meter{height:10px;border:1px solid var(--border);border-radius:999px;background:var(--surface-soft);overflow:hidden}.meter>span{display:block;height:100%;width:0;background:var(--accent);transition:width var(--t)}
+    .btn-primary { background: linear-gradient(135deg, var(--vert), var(--vert-fonce)); color: white; border: none; border-radius: 8px; padding: 18px 36px; font-family: var(--font); font-weight: 600; font-size: 20px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(45,155,111,0.3); width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .btn-primary:active { transform: translateY(2px); box-shadow: none; }
+    .btn-secondary { background: white; color: var(--marine); border: 1px solid var(--bordure); border-radius: 8px; padding: 18px 36px; font-family: var(--font); font-weight: 600; font-size: 20px; cursor: pointer; width: 100%; transition: all 0.2s; }
+    .btn-secondary:hover { background: var(--fond); }
 
-    .feedback{min-height:56px;border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:12px 14px;display:flex;align-items:center;font-weight:800;color:var(--text-soft)}
-    .feedback.success{border-color:rgba(0,166,81,.35);color:var(--success)} .feedback.error{border-color:rgba(204,0,0,.35);color:var(--danger)}
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .gender-card { border: 2px solid var(--bordure); border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s; font-size: 20px; font-weight: 600; }
+    .gender-card:hover { border-color: var(--bleu); background: var(--bleu-clair); }
+    .gender-card.selected { border-color: var(--marine); background: linear-gradient(135deg, var(--marine) 0%, var(--marine-2) 100%); color: white; }
 
-    .fullscreen-esi{position:fixed;inset:0;display:none;place-items:center;color:#fff;z-index:50;text-align:center;animation:screenPulse 1.6s infinite;text-shadow:0 4px 18px rgba(0,0,0,.5)}
-    .fullscreen-esi.visible{display:grid} @keyframes screenPulse{0%{filter:saturate(.95)}50%{filter:saturate(1.1)}100%{filter:saturate(.95)}}
+    .note { text-align: center; color: var(--texte-2); font-size: 14px; margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
-    .ticket{border:1px dashed var(--border);background:linear-gradient(180deg,#fff,#f6fbff);border-radius:12px;padding:var(--space-4);display:grid;gap:var(--space-3);font-family:var(--font-data)}
-    .ticket-top{display:flex;justify-content:space-between;align-items:center}
-    .qr{width:96px;height:96px;border-radius:10px;border:1px solid #20304f;background:repeating-linear-gradient(45deg,#0a2342 0 5px,#fff 5px 10px)}
-    textarea{width:100%;min-height:160px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:var(--space-3);font-size:1.05rem;font-weight:600}
-    .answer-zone{display:grid;gap:var(--space-3)}
-    .answer-input{width:100%;min-height:58px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:0 var(--space-3);font-size:1.05rem}
-    .answer-input.text{min-height:110px;padding:var(--space-3);resize:vertical}
-    .ecg{height:56px;border:1px solid var(--border);border-radius:12px;background:var(--surface);position:relative;overflow:hidden}
-    .ecg::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,168,232,.25),transparent);animation:scan 2.2s linear infinite}
-    @keyframes scan{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+    /* Step 2 options */
+    .option-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+    .tab { flex: 1; text-align: center; padding: 15px; border-radius: 8px; background: var(--fond); cursor: pointer; font-weight: 600; border: 1px solid var(--bordure); }
+    .tab.active { background: var(--marine); color: white; border-color: var(--marine); }
 
-    /* ========== LAYOUT ========== */
-    @media (max-width:760px){html{font-size:16px}.row,.icon-grid{grid-template-columns:1fr}.header,.step-panel{padding:var(--space-4)}.card h1,.card h2{font-size:1.45rem}}
+    .corps-container { display: flex; gap: 30px; }
+    .svg-container { flex: 1; display: flex; justify-content: center; padding: 20px; background: var(--fond); border-radius: var(--r); }
+    .zones-list { flex: 1; padding: 20px; }
+    .corps-zone { fill: var(--bleu-clair); stroke: var(--bleu); stroke-width: 1.5; cursor: pointer; transition: fill 0.2s; }
+    .corps-zone:hover { fill: #C8E0F8; }
+    .corps-zone.active { fill: var(--esi1); stroke: #900015; }
+
+    .tag-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .symptom-tag { background: #FFF0F2; color: var(--esi1); padding: 8px 16px; border-radius: 20px; font-size: 16px; font-weight: 600; border: 1px solid #FFD6DC; animation: fadeIn 0.2s ease-out; }
+
+    /* Constantes */
+    .constantes-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+    .constante { background: var(--fond); border: 1px solid var(--bordure); border-radius: 10px; padding: 20px; text-align: center; }
+    .constante-titre { color: var(--texte-2); font-size: 16px; margin: 10px 0; font-weight: 500; }
+    .constante-val { font-family: var(--font-mono); font-size: 32px; font-weight: 600; }
+    .constante-statut { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; padding: 4px 10px; border-radius: 4px; margin-top: 10px; }
+    .val-normale { color: var(--esi4); } .statut-normale { background: var(--vert-clair); color: var(--vert-fonce); }
+    .val-alerte { color: var(--esi3); } .statut-alerte { background: #FFF8E5; color: #9E7C00; }
+    .val-critique { color: var(--esi1); } .statut-critique { background: #FFF0F2; color: var(--esi1); }
+    .urgent { animation: clignoter 0.8s infinite; }
+    @keyframes clignoter { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+    /* Questions */
+    .question-box { text-align: center; padding: 40px 20px; }
+    .question-text { font-size: 28px; font-weight: 600; color: var(--marine); margin-bottom: 40px; line-height: 1.4; }
+    .btn-oui { background: var(--vert); color: white; border: none; }
+    .btn-non { background: #FFF0F2; color: var(--esi1); border: 1px solid #FFD6DC; }
+
+    /* Resultat & Ticket */
+    .result-box { text-align: center; }
+    .esi-badge { display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; font-weight: 700; font-size: 36px; border: 4px solid; color: white; margin-bottom: 20px; }
+    .esi-1 { background: var(--esi1); border-color: #900015; }
+    .esi-2 { background: var(--esi2); border-color: #993D00; }
+    .esi-3 { background: var(--esi3); border-color: #8A6D00; }
+    .esi-4 { background: var(--esi4); border-color: var(--vert-fonce); }
+    .esi-5 { background: var(--esi5); border-color: var(--marine); }
+
+    .ticket { border: 2px dashed var(--bordure); border-radius: var(--r); padding: 40px; max-width: 500px; margin: 0 auto; background: var(--fond); }
+    .ticket-num { font-family: var(--font-mono); font-size: 64px; font-weight: 700; color: var(--marine); margin: 20px 0; }
+    .ticket-info { display: flex; justify-content: space-between; border-top: 1px dashed var(--bordure); padding-top: 20px; margin-top: 20px; font-size: 18px; }
   </style>
 </head>
 <body>
-  <div class="app">
-    <div class="header">
-      <div class="brand-row">
-        <div class="brand">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="7" fill="rgba(0,168,232,.14)"/><path d="M12 6v12M6 12h12" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/></svg>
-          <div>HealthGate<small>Borne de triage medical</small></div>
-        </div>
-        <div class="status-indicator" id="netState"><span class="status-indicator-dot"></span><span id="netText">Connecte</span></div>
-      </div>
-      <div class="progress-meta"><span id="clock">--:--</span><span id="stepText">Etape 1/6</span></div>
-      <div class="progress-bar"><span id="globalProgress"></span></div>
-    </div>
 
-    <section class="step-panel active" data-step="1"><div class="card"><h1>Scan de la carte patient</h1><p>Placez votre carte devant la camera.</p><div class="ecg"></div><div class="feedback" id="scanFeedback">Pret pour capture</div><div class="progress-bar"><span id="scanProgress"></span></div><div class="row"><button type="button" class="btn-primary" id="btnScan">Photographier</button><button type="button" class="btn-ghost" id="btnSkipCard">Continuer sans carte</button></div></div></section>
-    <section class="step-panel" data-step="2"><div class="card"><h2>Vos symptomes</h2><p>Touchez les icones puis completez si besoin.</p><div class="icon-grid" id="symptomGrid"></div><textarea id="symptomText" placeholder="Ex: douleur thoracique, essoufflement..."></textarea><div class="row"><button type="button" class="btn-ghost" data-go="1">Retour</button><button type="button" class="btn-primary" id="btnSymptNext">Suivant</button></div></div></section>
-    <section class="step-panel" data-step="3"><div class="card"><h2>Mesure des constantes</h2><p>Restez immobile pendant la lecture capteurs.</p><div class="row"><article class="constante"><header><strong>Temperature</strong><span class="constante-trend" id="trendTemp">--</span></header><div class="constante-value" id="valTemp">--</div><div class="meter"><span id="barTemp"></span></div></article><article class="constante"><header><strong>SpO2</strong><span class="constante-trend" id="trendSpo2">--</span></header><div class="constante-value" id="valSpo2">--</div><div class="meter"><span id="barSpo2"></span></div></article><article class="constante"><header><strong>Tension</strong><span class="constante-trend" id="trendBp">--</span></header><div class="constante-value" id="valBp">--</div><div class="meter"><span id="barBp"></span></div></article></div><div class="feedback" id="sensorFeedback">Mesure en cours...</div><div class="row"><button type="button" class="btn-ghost" data-go="2">Retour</button><button type="button" class="btn-primary" id="btnToQuestions">Questions</button></div></div></section>
-    <section class="step-panel" data-step="4"><div class="card"><h2 id="qTitle">Question 1/5</h2><p id="qText">Avez-vous une douleur thoracique forte ?</p><div class="answer-zone" id="qAnswerZone"></div><div class="feedback" id="qFeedback">Choisissez une reponse</div><div class="row"><button type="button" class="btn-ghost" id="btnQuestionBack">Retour</button><button type="button" class="btn-primary" id="btnNextQ">Suivant</button></div></div></section>
-    <section class="step-panel" data-step="5"><div class="card"><h2>Resultat du triage</h2><div class="badge-esi esi-3" id="resultBadge">ESI 3</div><p id="resultText">Prise en charge en environ 30 min</p><div class="row"><button type="button" class="btn-ghost" data-go="4">Retour</button><button type="button" class="btn-primary" data-go="6">Voir ticket</button></div></div></section>
-    <section class="step-panel" data-step="6"><div class="card"><h2>Ticket patient</h2><div class="ticket"><div class="ticket-top"><div><div>Ticket</div><div style="font-size:2rem;font-weight:700" id="ticketNo">A-031</div></div><div class="qr" aria-label="QR Code"></div></div><div>ESI: <strong id="ticketEsi">3</strong></div><div>Heure: <strong id="ticketTime">--:--</strong></div><div>Position: <strong id="ticketPos">3eme patient</strong></div></div><div class="row"><button type="button" class="btn-ghost" data-go="5">Retour</button><button type="button" class="btn-danger" id="btnReset">Terminer</button></div></div></section>
+  <header>
+    <div class="header-left">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-1.99.9-1.99 2L3 19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z"/></svg>
+      <div class="header-title">HealthGate — Borne de Triage</div>
+    </div>
+    <div class="header-right">
+      <div class="status-indicator">
+        <div class="status-dot" id="connexion-dot"></div>
+        <span id="connexion-label">Connecté</span>
+      </div>
+      <div id="clock">10:45:00</div>
+    </div>
+  </header>
+
+  <div class="progress-container">
+    <div class="progress-bar">
+      <div class="step active" id="prog-1"><span>1</span>Identité</div>
+      <div class="step" id="prog-2"><span>2</span>Symptômes</div>
+      <div class="step" id="prog-3"><span>3</span>Constantes</div>
+      <div class="step" id="prog-4"><span>4</span>Questions</div>
+      <div class="step" id="prog-5"><span>5</span>Résultat</div>
+      <div class="step" id="prog-6"><span>6</span>Ticket</div>
+    </div>
   </div>
 
-  <div class="fullscreen-esi" id="esiScreen"><div><div class="badge-esi esi-1" id="esiScreenBadge">ESI 1</div><h2 id="esiScreenText">Prise en charge immediate</h2></div></div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
-  <script>
-    const state = {
-      step: 1,
-      connected: false,
-      symptoms: [],
-      sessionId: null,
-      patientId: null,
-      constantes: {},
-      questions: [],
-      questionIndex: 0,
-      reponses: {},
-      triageResult: null,
-    };
-
-    const symptomOptions = [
-      { k: "douleur thoracique", svg: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-8-4.5-8-11c0-3.3 2.7-6 6-6 1.8 0 3.4.9 4.4 2.2C14.6 4.9 16.2 4 18 4c3.3 0 6 2.7 6 6 0 6.5-8 11-8 11z" stroke="var(--accent)" stroke-width="2" fill="rgba(0,168,232,0.1)"/></svg>' },
-      { k: "dyspnee", svg: '<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="5" stroke="var(--accent)" stroke-width="2" fill="rgba(0,168,232,0.1)"/></svg>' },
-      { k: "fievre", svg: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v10" stroke="var(--warning)" stroke-width="2"/><rect x="9" y="11" width="6" height="9" rx="3" stroke="var(--warning)" fill="rgba(255,184,0,0.12)"/></svg>' },
-      { k: "saignement", svg: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3c-3 4-5 7-5 10a5 5 0 0010 0c0-3-2-6-5-10z" stroke="var(--danger)" stroke-width="2" fill="rgba(204,0,0,0.12)"/></svg>' },
-    ];
-
-    const E = {
-      panels: [...document.querySelectorAll('.step-panel')],
-      progress: document.getElementById('globalProgress'),
-      stepText: document.getElementById('stepText'),
-      clock: document.getElementById('clock'),
-      netText: document.getElementById('netText'),
-      netState: document.getElementById('netState'),
-      scanFeedback: document.getElementById('scanFeedback'),
-      scanProgress: document.getElementById('scanProgress'),
-      symptomGrid: document.getElementById('symptomGrid'),
-      symptomText: document.getElementById('symptomText'),
-      valTemp: document.getElementById('valTemp'),
-      valSpo2: document.getElementById('valSpo2'),
-      valBp: document.getElementById('valBp'),
-      barTemp: document.getElementById('barTemp'),
-      barSpo2: document.getElementById('barSpo2'),
-      barBp: document.getElementById('barBp'),
-      trendTemp: document.getElementById('trendTemp'),
-      trendSpo2: document.getElementById('trendSpo2'),
-      trendBp: document.getElementById('trendBp'),
-      sensorFeedback: document.getElementById('sensorFeedback'),
-      qTitle: document.getElementById('qTitle'),
-      qText: document.getElementById('qText'),
-      qAnswerZone: document.getElementById('qAnswerZone'),
-      qFeedback: document.getElementById('qFeedback'),
-      resultBadge: document.getElementById('resultBadge'),
-      resultText: document.getElementById('resultText'),
-      esiScreen: document.getElementById('esiScreen'),
-      esiScreenBadge: document.getElementById('esiScreenBadge'),
-      esiScreenText: document.getElementById('esiScreenText'),
-      ticketNo: document.getElementById('ticketNo'),
-      ticketEsi: document.getElementById('ticketEsi'),
-      ticketTime: document.getElementById('ticketTime'),
-      ticketPos: document.getElementById('ticketPos'),
-    };
-
-    const btnScan = document.getElementById('btnScan');
-    const btnSkipCard = document.getElementById('btnSkipCard');
-    const btnNextQ = document.getElementById('btnNextQ');
-    const btnReset = document.getElementById('btnReset');
-
-    function applyTheme() {
-      const forceDark = localStorage.getItem('healthgate_theme') === 'dark';
-      if (forceDark) {
-        document.body.classList.add('theme-dark');
-      }
-    }
-
-    function tick() {
-      const d = new Date();
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      E.clock.textContent = `${hh}:${mm}`;
-      E.ticketTime.textContent = `${hh}:${mm}`;
-    }
-
-    function setStep(step) {
-      state.step = step;
-      E.panels.forEach((p) => p.classList.toggle('active', Number(p.dataset.step) === step));
-      E.progress.style.width = `${((step - 1) / 5) * 100}%`;
-      E.stepText.textContent = `Etape ${step}/6`;
-      if (step === 4) {
-        renderQuestion();
-      }
-    }
-
-    function setFeedback(el, message, ok) {
-      el.className = ok === null ? 'feedback' : ok ? 'feedback success' : 'feedback error';
-      el.textContent = message;
-    }
-
-    async function api(path, opts = {}) {
-      const res = await fetch(path, {
-        method: opts.method || 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        body: opts.body ? JSON.stringify(opts.body) : undefined,
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.message || 'Erreur API');
-      }
-      return json;
-    }
-
-    function renderSymptoms() {
-      E.symptomGrid.innerHTML = symptomOptions
-        .map((s) => `<button type="button" class="icon-btn" data-s="${s.k}">${s.svg}<span>${s.k}</span></button>`)
-        .join('');
-
-      E.symptomGrid.querySelectorAll('.icon-btn').forEach((b) => {
-        b.onclick = () => {
-          b.classList.toggle('active');
-          const key = b.dataset.s;
-          if (state.symptoms.includes(key)) {
-            state.symptoms = state.symptoms.filter((v) => v !== key);
-          } else {
-            state.symptoms.push(key);
-          }
-          if (!E.symptomText.value.trim()) {
-            E.symptomText.value = state.symptoms.join(', ');
-          }
-        };
-      });
-    }
-
-    async function startScan() {
-      btnScan.classList.add('loading');
-      setFeedback(E.scanFeedback, 'Lecture de la carte en cours...', null);
-      E.scanProgress.style.width = '35%';
-
-      try {
-        const data = await api('/api/scanner', { method: 'POST', body: {} });
-        state.sessionId = data.session_id;
-        state.patientId = data.session_id;
-        E.scanProgress.style.width = '100%';
-        setFeedback(E.scanFeedback, `Carte lue: ${data.prenom || ''} ${data.nom || ''}`.trim(), true);
-        setStep(2);
-      } catch (err) {
-        setFeedback(E.scanFeedback, `Erreur scan: ${err.message}`, false);
-      } finally {
-        btnScan.classList.remove('loading');
-      }
-    }
-
-    function skipScan() {
-      state.sessionId = `MANUEL-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-      state.patientId = state.sessionId;
-      setFeedback(E.scanFeedback, 'Mode manuel active', true);
-      setStep(2);
-    }
-
-    async function saveSymptomesAndContinue() {
-      const symptomText = E.symptomText.value.trim();
-      if (!symptomText) {
-        alert('Veuillez renseigner les symptomes.');
-        return;
-      }
-      try {
-        await api('/api/symptomes', {
-          method: 'POST',
-          body: { session_id: state.sessionId, symptom_text: symptomText },
-        });
-        setStep(3);
-        await loadConstantesAndQuestions();
-      } catch (err) {
-        alert(`Erreur symptomes: ${err.message}`);
-      }
-    }
-
-    function applyConstantes(constantes) {
-      const t = Number(constantes.temperature || 37);
-      const spo2 = Number(constantes.spo2 || 98);
-      const sys = Number(constantes.bp_systolic || 120);
-      const dia = Number(constantes.bp_diastolic || 80);
-
-      E.valTemp.textContent = `${t.toFixed(1)} C`;
-      E.valSpo2.textContent = `${spo2.toFixed(0)}%`;
-      E.valBp.textContent = `${sys}/${dia}`;
-      E.barTemp.style.width = `${Math.min(100, (t / 40) * 100)}%`;
-      E.barSpo2.style.width = `${Math.min(100, spo2)}%`;
-      E.barBp.style.width = `${Math.min(100, (sys / 180) * 100)}%`;
-      E.trendTemp.textContent = t > 37.8 ? '↑' : '→';
-      E.trendSpo2.textContent = spo2 < 94 ? '↓' : '→';
-      E.trendBp.textContent = sys > 140 ? '↑' : '→';
-    }
-
-    async function loadConstantesAndQuestions() {
-      try {
-        setFeedback(E.sensorFeedback, 'Mesure capteurs en cours...', null);
-        const c = await api('/api/constantes');
-        state.constantes = c.constantes || {};
-        applyConstantes(state.constantes);
-        setFeedback(E.sensorFeedback, 'Constantes mesurees', true);
-
-        const q = await api('/api/questions', {
-          method: 'POST',
-          body: { session_id: state.sessionId, constantes: state.constantes },
-        });
-        state.questions = q.questions_proposees || [];
-        state.questionIndex = 0;
-      } catch (err) {
-        setFeedback(E.sensorFeedback, `Erreur capteurs/questions: ${err.message}`, false);
-      }
-    }
-
-    function renderQuestion() {
-      if (!state.questions.length) {
-        E.qTitle.textContent = 'Aucune question';
-        E.qText.textContent = 'Passage direct au triage.';
-        E.qAnswerZone.innerHTML = '';
-        return;
-      }
-      const q = state.questions[state.questionIndex];
-      E.qTitle.textContent = `Question ${state.questionIndex + 1}/${state.questions.length}`;
-      E.qText.textContent = q.texte || 'Question';
-      setFeedback(E.qFeedback, 'Choisissez une reponse', null);
-
-      const stored = state.reponses[q.id];
-
-      if (q.type === 'oui_non') {
-        E.qAnswerZone.innerHTML = `
-          <div class="row" role="group" aria-label="Reponse oui non">
-            <button type="button" class="btn-primary" id="btnAnsOui">OUI</button>
-            <button type="button" class="btn-ghost" id="btnAnsNon">NON</button>
+  <main>
+    <!-- ETAPE 1: Identite -->
+    <section class="step-section active" id="step-1">
+      <div class="card">
+        <h2>Bienvenue aux Urgences</h2>
+        <p class="subtitle">Veuillez renseigner votre identité</p>
+        
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Nom</label>
+            <input type="text" class="form-input" id="inp-nom" placeholder="Votre nom de famille">
           </div>
-        `;
-        const btnOui = document.getElementById('btnAnsOui');
-        const btnNon = document.getElementById('btnAnsNon');
-        btnOui.onclick = () => saveAnswer('Oui');
-        btnNon.onclick = () => saveAnswer('Non');
-        if (stored != null) {
-          if (String(stored).toLowerCase().includes('oui')) {
-            btnOui.classList.add('success');
-          } else {
-            btnNon.classList.add('success');
-          }
-        }
-        return;
-      }
+          <div class="form-group">
+            <label class="form-label">Prénom</label>
+            <input type="text" class="form-input" id="inp-prenom" placeholder="Votre prénom">
+          </div>
+        </div>
 
-      if (q.type === 'choix') {
-        const choix = Array.isArray(q.choix) ? q.choix : [];
-        E.qAnswerZone.innerHTML = `<div class="answer-zone" role="group" aria-label="Choix de reponse">${choix.map((c, idx) => `<button type="button" class="btn-ghost" data-choix="${idx}">${c}</button>`).join('')}</div>`;
-        E.qAnswerZone.querySelectorAll('[data-choix]').forEach((btn) => {
-          btn.onclick = () => saveAnswer(choix[Number(btn.dataset.choix)] || '');
-        });
-        return;
-      }
+        <div class="form-group">
+          <label class="form-label">Âge</label>
+          <input type="number" class="form-input" id="inp-age" placeholder="Ex: 45">
+        </div>
 
-      E.qAnswerZone.innerHTML = '';
-      setFeedback(E.qFeedback, 'Type de question non supporte, reponse binaire appliquee.', false);
-    }
+        <div class="form-group">
+          <label class="form-label">Sexe</label>
+          <div class="grid-2">
+            <div class="gender-card" onclick="selectGender('H', this)">👨 Homme</div>
+            <div class="gender-card" onclick="selectGender('F', this)">👩 Femme</div>
+          </div>
+        </div>
 
-    function saveAnswer(value) {
-      const q = state.questions[state.questionIndex];
-      if (!q) return;
-      state.reponses[q.id] = value;
-      setFeedback(E.qFeedback, `Reponse: ${value}`, true);
-    }
+        <button class="btn-primary" onclick="nextStep(2)">Confirmer l'identité →</button>
+        <div class="note">ℹ L'outil de scan automatique de la carte d'identité ou du passeport sera disponible lors de la prochaine mise à jour</div>
+      </div>
+    </section>
 
-    function capturerReponseCouranteDepuisUI() {
-      const q = state.questions[state.questionIndex];
-      if (!q) return;
-      if (q.type === 'oui_non' || q.type === 'choix') return;
-    }
+    <!-- ETAPE 2: Symptomes -->
+    <section class="step-section" id="step-2">
+      <div class="card">
+        <h2>Vos Symptômes</h2>
+        <p class="subtitle">Où avez-vous mal ou quel est votre problème ?</p>
 
-    async function nextQuestionOrTriage() {
-      const q = state.questions[state.questionIndex];
-      capturerReponseCouranteDepuisUI();
-      if (q && state.reponses[q.id] == null) {
-        setFeedback(E.qFeedback, 'Reponse requise', false);
-        return;
-      }
+        <div class="option-tabs">
+          <div class="tab active" onclick="switchSymptomTab('write')">Écrire</div>
+          <div class="tab" onclick="switchSymptomTab('body')">Cliquer sur le corps</div>
+        </div>
 
-      if (state.questionIndex < state.questions.length - 1) {
-        state.questionIndex += 1;
-        renderQuestion();
-        return;
-      }
+        <div id="symp-write">
+          <textarea class="form-input" id="inp-symp" placeholder="Décrivez vos symptômes ici (ex: J'ai très mal à la poitrine depuis ce matin...)"></textarea>
+        </div>
 
-      await submitTriage();
-    }
+        <div id="symp-body" style="display:none;" class="corps-container">
+          <div class="svg-container">
+             <svg viewBox="0 0 200 480" style="width:220px">
+              <!-- Tête -->
+              <ellipse cx="100" cy="45" rx="28" ry="34" class="corps-zone" data-zone="tete" data-label="Tête" onclick="toggleZone(this)"/>
+              <!-- Cou -->
+              <rect x="90" y="76" width="20" height="18" class="corps-zone" data-zone="cou" data-label="Cou / Gorge" onclick="toggleZone(this)"/>
+              <!-- Épaules -->
+              <ellipse cx="52" cy="108" rx="24" ry="14" class="corps-zone" data-zone="epaule-g" data-label="Épaule gauche" onclick="toggleZone(this)"/>
+              <ellipse cx="148" cy="108" rx="24" ry="14" class="corps-zone" data-zone="epaule-d" data-label="Épaule droite" onclick="toggleZone(this)"/>
+              <!-- Torse/Poitrine -->
+              <rect x="68" y="94" width="64" height="72" rx="8" class="corps-zone" data-zone="poitrine" data-label="Poitrine / Cœur" onclick="toggleZone(this)"/>
+              <!-- Bras gauche -->
+              <rect x="28" y="120" width="20" height="72" rx="6" class="corps-zone" data-zone="bras-g" data-label="Bras gauche" onclick="toggleZone(this)"/>
+              <!-- Bras droit -->
+              <rect x="152" y="120" width="20" height="72" rx="6" class="corps-zone" data-zone="bras-d" data-label="Bras droit" onclick="toggleZone(this)"/>
+              <!-- Abdomen -->
+              <rect x="70" y="166" width="60" height="52" rx="6" class="corps-zone" data-zone="ventre" data-label="Abdomen / Ventre" onclick="toggleZone(this)"/>
+              <!-- Bassin -->
+              <rect x="64" y="218" width="72" height="36" rx="8" class="corps-zone" data-zone="bassin" data-label="Bassin / Bas-ventre" onclick="toggleZone(this)"/>
+              <!-- Jambe gauche -->
+              <rect x="70" y="254" width="24" height="100" rx="6" class="corps-zone" data-zone="jambe-g" data-label="Jambe gauche" onclick="toggleZone(this)"/>
+              <!-- Jambe droite -->
+              <rect x="106" y="254" width="24" height="100" rx="6" class="corps-zone" data-zone="jambe-d" data-label="Jambe droite" onclick="toggleZone(this)"/>
+              <!-- Pied gauche -->
+              <ellipse cx="82" cy="366" rx="20" ry="10" class="corps-zone" data-zone="pied-g" data-label="Pied gauche" onclick="toggleZone(this)"/>
+              <!-- Pied droit -->
+              <ellipse cx="118" cy="366" rx="20" ry="10" class="corps-zone" data-zone="pied-d" data-label="Pied droit" onclick="toggleZone(this)"/>
+            </svg>
+          </div>
+          <div class="zones-list">
+            <h3>Zones sélectionnées :</h3>
+            <div class="tag-list" id="selected-zones">Aucune zone sélectionnée.</div>
+          </div>
+        </div>
 
-    function applyResultView(result) {
-      const esi = Number(result.esi_predit || 5);
-      const cls = `esi-${esi}`;
-      E.resultBadge.className = `badge-esi ${cls}`;
-      E.resultBadge.textContent = `ESI ${esi}`;
-      E.resultText.textContent = `${result.niveau_urgence || ''} | Attente estimee: ${result.attente_estimee || '?'}`;
-      E.ticketNo.textContent = result.patient_id || '---';
-      E.ticketEsi.textContent = String(esi);
-      E.ticketPos.textContent = `${result.position_file || '?'}eme patient`;
+        <button class="btn-primary" style="margin-top:20px;" onclick="nextStep(3)">Continuer →</button>
+      </div>
+    </section>
 
-      if (esi <= 2) {
-        E.esiScreen.className = 'fullscreen-esi visible';
-        E.esiScreen.style.background = esi === 1 ? 'rgba(204,0,0,.92)' : 'rgba(255,102,0,.92)';
-        E.esiScreenBadge.className = `badge-esi ${cls}`;
-        E.esiScreenText.textContent = esi === 1 ? 'Prise en charge immediate' : 'Triage prioritaire';
-        setTimeout(() => {
-          E.esiScreen.className = 'fullscreen-esi';
-        }, 2200);
-      }
-    }
+    <!-- ETAPE 3: Constantes -->
+    <section class="step-section" id="step-3">
+      <div class="card">
+        <h2>Mesure des constantes vitales</h2>
+        <p class="subtitle">Saisissez les valeurs mesurées ou laissez vide si non mesuré.</p>
 
-    async function submitTriage() {
-      try {
-        await api('/api/questions/reponses', {
-          method: 'POST',
-          body: { session_id: state.sessionId, reponses: state.reponses },
-        });
+        <div class="constantes-grid">
+          <div class="constante">
+            <div class="constante-emoji" style="font-size:24px">🌡️</div>
+            <div class="constante-val val-normale" contenteditable="true" oninput="evalVit('temp', this)">37.5</div>
+            <div class="constante-titre">Température (°C)</div>
+            <div class="constante-statut statut-normale" id="st-temp">🟢 NORMALE</div>
+          </div>
+          <div class="constante">
+            <div class="constante-emoji" style="font-size:24px">💧</div>
+            <div class="constante-val val-normale" contenteditable="true" oninput="evalVit('spo2', this)">98</div>
+            <div class="constante-titre">SpO2 (%)</div>
+            <div class="constante-statut statut-normale" id="st-spo2">🟢 NORMALE</div>
+          </div>
+          <div class="constante">
+            <div class="constante-emoji" style="font-size:24px">❤️</div>
+            <div class="constante-val val-normale" contenteditable="true" oninput="evalVit('fc', this)">78</div>
+            <div class="constante-titre">Fréq. cardiaque (bpm)</div>
+            <div class="constante-statut statut-normale" id="st-fc">🟢 NORMALE</div>
+          </div>
+          <div class="constante">
+            <div class="constante-emoji" style="font-size:24px">🩺</div>
+            <div class="constante-val val-normale" contenteditable="true">120/80</div>
+            <div class="constante-titre">Tension (mmHg)</div>
+            <div class="constante-statut statut-normale">🟢 NORMALE</div>
+          </div>
+          <div class="constante">
+            <div class="constante-emoji" style="font-size:24px">🍬</div>
+            <div class="constante-val val-normale" contenteditable="true">90</div>
+            <div class="constante-titre">Glycémie (mg/dL)</div>
+            <div class="constante-statut statut-normale">🟢 NORMALE</div>
+          </div>
+          <div class="constante">
+            <div class="constante-emoji" style="font-size:24px">😣</div>
+            <div class="constante-val val-normale" contenteditable="true">3</div>
+            <div class="constante-titre">Douleur (0-10)</div>
+            <div class="constante-statut statut-normale">🟢 FAIBLE</div>
+          </div>
+        </div>
 
-        const result = await api('/api/triage', {
-          method: 'POST',
-          body: {
-            session_id: state.sessionId,
-            constantes: state.constantes,
-            question_reponses: state.reponses,
-          },
-        });
+        <button class="btn-primary" onclick="nextStep(4)">Valider les constantes →</button>
+      </div>
+    </section>
 
-        state.triageResult = result;
-        state.patientId = result.patient_id || state.patientId;
-        applyResultView(result);
-        setStep(5);
-      } catch (err) {
-        alert(`Erreur triage: ${err.message}`);
-      }
-    }
+    <!-- ETAPE 4: Questions -->
+    <section class="step-section" id="step-4">
+      <div class="card question-box">
+        <div style="color:var(--texte-2); margin-bottom:10px;">Question 1 sur 2</div>
+        <div class="question-text" id="q-text">Sentez-vous une oppression forte au niveau de la poitrine ?</div>
+        
+        <div class="grid-2">
+          <button class="btn-secondary btn-oui" onclick="nextQuestion()">OUI</button>
+          <button class="btn-secondary btn-non" onclick="nextQuestion()">NON</button>
+        </div>
+      </div>
+    </section>
 
-    function resetFlow() {
-      state.step = 1;
-      state.sessionId = null;
-      state.patientId = null;
-      state.constantes = {};
-      state.questions = [];
-      state.questionIndex = 0;
-      state.reponses = {};
-      state.triageResult = null;
-      state.symptoms = [];
-      E.scanProgress.style.width = '0%';
-      setFeedback(E.scanFeedback, 'Pret pour capture', null);
-      E.symptomText.value = '';
-      renderSymptoms();
-      setStep(1);
-    }
+    <!-- ETAPE 5: Résultat -->
+    <section class="step-section" id="step-5">
+      <div class="card result-box">
+        <div id="urgent-banner" style="display:none; background:var(--esi1); color:white; padding:10px; border-radius:8px; margin-bottom:20px; font-weight:700;" class="urgent">
+          ALERTE ROUGE : PRISE EN CHARGE IMMÉDIATE
+        </div>
+        
+        <h2>Évaluation terminée</h2>
+        <p class="subtitle">Niveau de tri estimé</p>
 
-    function setNet(on) {
-      state.connected = on;
-      E.netText.textContent = on ? 'Connecte' : 'Hors ligne';
-      E.netState.className = on ? 'status-indicator' : 'status-indicator error';
-    }
+        <div class="esi-badge esi-2" id="res-esi-badge">2</div>
+        <h3 id="res-esi-text" style="color:var(--esi2); font-size:24px; margin-bottom:20px;">TRÈS URGENT</h3>
 
-    function connectSocket() {
-      try {
-        const s = io();
-        s.on('connect', () => {
-          setNet(true);
-          s.emit('rejoindre_borne', { patient_id: state.sessionId || 'ANON' });
-        });
-        s.on('disconnect', () => setNet(false));
-        s.on('triage_complete', (payload) => {
-          if (!payload) return;
-          applyResultView(payload);
-        });
-      } catch (_) {
-        setNet(false);
-      }
-    }
+        <div style="margin:20px 0; font-size:18px;">
+          👨‍⚕️ Médecin assigné : <strong>Dr. Fassi (Urgences)</strong><br><br>
+          ⏱️ Attente estimée : <strong><span id="res-time">8</span> min</strong>
+        </div>
 
-    btnScan.onclick = startScan;
-    btnSkipCard.onclick = skipScan;
-    btnNextQ.onclick = nextQuestionOrTriage;
-    btnReset.onclick = resetFlow;
+        <button class="btn-primary" onclick="nextStep(6)" style="max-width:300px; margin:0 auto;">Obtenir mon ticket →</button>
+      </div>
+    </section>
 
-    document.querySelectorAll('[data-answer]').forEach((b) => {
-      b.onclick = () => saveAnswer(b.dataset.answer);
+    <!-- ETAPE 6: Ticket -->
+    <section class="step-section" id="step-6">
+      <div class="card">
+        <div class="ticket">
+          <div style="text-align:center;">
+            <svg viewBox="0 0 24 24" style="width:40px; fill:var(--marine);"><path d="M19 3H5c-1.1 0-1.99.9-1.99 2L3 19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z"/></svg>
+            <div style="font-weight:700; margin-top:5px; color:var(--marine);">HEALTHGATE</div>
+          </div>
+          
+          <div style="text-align:center; margin-top:20px;">
+            <div style="color:var(--texte-2); font-size:14px;">Numéro d'appel</div>
+            <div class="ticket-num">U-042</div>
+            <div class="esi-badge esi-2" style="width:40px; height:40px; font-size:18px; border-width:2px;">2</div>
+            <div style="font-weight:700; color:var(--esi2);">Très Urgent</div>
+          </div>
+
+          <div class="ticket-info">
+            <div><strong>Patient :</strong> <span id="t-nom">Alaoui M.</span></div>
+            <div><strong>Heure :</strong> <span id="t-heure">10:48</span></div>
+          </div>
+
+          <div class="note" style="margin-top:30px;">
+            Un écran dans la salle d'attente affiche votre position en temps réel.
+          </div>
+        </div>
+        <button class="btn-secondary" onclick="resetForm()" style="max-width:300px; margin:30px auto 0; display:block;">Nouveau patient</button>
+      </div>
+    </section>
+
+  </main>
+
+<script>
+  // Clock
+  setInterval(() => {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  }, 1000);
+
+  // Websocket mock
+  let socket;
+  try {
+    socket = io();
+    socket.on('connect', () => {
+      document.getElementById('connexion-dot').style.background = '#2D9B6F';
+      document.getElementById('connexion-label').textContent = 'Connecté';
+    });
+    socket.on('disconnect', () => {
+      document.getElementById('connexion-dot').style.background = '#C8001E';
+      document.getElementById('connexion-label').textContent = 'Déconnecté';
+    });
+  } catch(e) {
+    console.log("Socket.io inactif (mode démo)");
+  }
+
+  // Navigation Steps
+  function nextStep(step) {
+    document.querySelectorAll('.step-section').forEach(s => s.classList.remove('active'));
+    document.getElementById('step-' + step).classList.add('active');
+    
+    document.querySelectorAll('.step').forEach((s, idx) => {
+      s.classList.remove('active');
+      if (idx < step - 1) s.classList.add('done');
+      if (idx === step - 1) s.classList.add('active');
     });
 
-    document.querySelectorAll('[data-go="1"]').forEach((b) => (b.onclick = () => setStep(1)));
-    document.querySelectorAll('[data-go="2"]').forEach((b) => (b.onclick = () => setStep(2)));
-    document.querySelectorAll('[data-go="5"]').forEach((b) => (b.onclick = () => setStep(5)));
-    document.querySelectorAll('[data-go="6"]').forEach((b) => (b.onclick = () => setStep(6)));
+    if(step === 6) {
+      document.getElementById('t-nom').textContent = document.getElementById('inp-nom').value || 'Patient';
+      let d = new Date();
+      document.getElementById('t-heure').textContent = d.getHours()+':'+(d.getMinutes()<10?'0':'')+d.getMinutes();
+    }
+  }
 
-    document.getElementById('btnSymptNext').onclick = saveSymptomesAndContinue;
-    document.getElementById('btnToQuestions').onclick = () => setStep(4);
-    document.getElementById('btnQuestionBack').onclick = () => setStep(3);
+  let currGender = '';
+  function selectGender(g, el) {
+    currGender = g;
+    document.querySelectorAll('.gender-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+  }
 
-    applyTheme();
-    renderSymptoms();
-    tick();
-    setInterval(tick, 1000);
-    connectSocket();
-  </script>
+  function switchSymptomTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    if (tab === 'write') {
+      document.getElementById('symp-write').style.display = 'block';
+      document.getElementById('symp-body').style.display = 'none';
+    } else {
+      document.getElementById('symp-write').style.display = 'none';
+      document.getElementById('symp-body').style.display = 'flex';
+    }
+  }
+
+  let selectedZones = [];
+  function toggleZone(el) {
+    el.classList.toggle('active');
+    let label = el.getAttribute('data-label');
+    if(el.classList.contains('active')) {
+      selectedZones.push(label);
+    } else {
+      selectedZones = selectedZones.filter(z => z !== label);
+    }
+    let container = document.getElementById('selected-zones');
+    if(selectedZones.length === 0) {
+      container.innerHTML = "Aucune zone sélectionnée.";
+    } else {
+      container.innerHTML = selectedZones.map(z => `<div class="symptom-tag">${z}</div>`).join('');
+    }
+  }
+
+  function evalVit(type, el) {
+    let val = parseFloat(el.innerText || "0");
+    let target = el;
+    let st = document.getElementById('st-'+type);
+    
+    target.className = "constante-val";
+    st.className = "constante-statut";
+    
+    if (type === 'temp') {
+      if (val < 35.5 || val > 40) { target.classList.add('val-critique'); st.classList.add('statut-critique'); st.innerHTML = '🔴 CRITIQUE'; }
+      else if (val > 38.5) { target.classList.add('val-alerte'); st.classList.add('statut-alerte'); st.innerHTML = '🟠 ALERTE'; }
+      else { target.classList.add('val-normale'); st.classList.add('statut-normale'); st.innerHTML = '🟢 NORMALE'; }
+    }
+    if (type === 'spo2') {
+      if (val < 88) { target.classList.add('val-critique'); st.classList.add('statut-critique'); st.innerHTML = '🔴 CRITIQUE'; }
+      else if (val < 94) { target.classList.add('val-alerte'); st.classList.add('statut-alerte'); st.innerHTML = '🟠 ALERTE'; }
+      else { target.classList.add('val-normale'); st.classList.add('statut-normale'); st.innerHTML = '🟢 NORMALE'; }
+    }
+    if (type === 'fc') {
+      if (val < 45 || val > 130) { target.classList.add('val-critique'); st.classList.add('statut-critique'); st.innerHTML = '🔴 CRITIQUE'; }
+      else if (val < 55 || val > 110) { target.classList.add('val-alerte'); st.classList.add('statut-alerte'); st.innerHTML = '🟠 ALERTE'; }
+      else { target.classList.add('val-normale'); st.classList.add('statut-normale'); st.innerHTML = '🟢 NORMALE'; }
+    }
+  }
+
+  let qNum = 1;
+  function nextQuestion() {
+    if(qNum === 1) {
+      qNum++;
+      document.querySelector('.question-box div').textContent = "Question 2 sur 2";
+      document.getElementById('q-text').textContent = "Avez-vous des difficultés à respirer même au repos ?";
+    } else {
+      nextStep(5);
+    }
+  }
+
+  function resetForm() {
+    location.reload();
+  }
+</script>
 </body>
 </html>
