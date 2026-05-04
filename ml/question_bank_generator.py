@@ -200,6 +200,41 @@ def build_question_text(rng: random.Random, feature_name: str) -> str:
     ender = rng.choice(ENDERS)
     return f"{starter} {base}{ender}".strip()
 
+import requests
+
+def build_question_text_ai(feature_name: str, scenario: str) -> str:
+    """
+    Exemple de l'approche API: L'IA génère la question au lieu de la piocher au hasard.
+    ⚠️ Attention: Sur 50 000 lignes, cela fera 50 000 appels payants et lents.
+    """
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer sk-VOTRE_CLE_API"
+    }
+    
+    # 1. On donne du contexte médical à l'IA
+    system_prompt = "Tu es un médecin urgentiste. Rédige une question courte et professionnelle pour un patient."
+    user_prompt = f"Génère une question pour vérifier le symptôme/facteur '{feature_name}' dans le contexte d'un(e) {scenario}."
+
+    data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.4
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=5)
+        if response.status_code == 200:
+            return response.json()['choices'][0]['message']['content'].strip()
+        else:
+            return f"Question par défaut pour {feature_name} (Erreur API)"
+    except Exception as e:
+        return f"Question par défaut pour {feature_name} (Erreur réseau)"
+
 
 def build_rows(count: int, seed: int = 42):
     rng = random.Random(seed)

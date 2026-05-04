@@ -1,141 +1,120 @@
-from __future__ import annotations
+"""
+predict_api.py — Serveur principal HealthGate
+Projet HealthGate | Centrale Casablanca | PLBD 4 | 2025-2026
 
-import base64
+Endpoints :
+  POST /api/scanner          → Scanner pièce d'identité
+  POST /api/symptomes        → Enregistrer symptômes
+  GET  /api/constantes       → Lire capteurs (déclenché côté Pi)
+  POST /api/triage           → Prédire ESI + ajouter file
+  GET  /api/file             → État file d'attente
+  POST /api/prise_en_charge  → Médecin prend en charge un patient
+  GET  /api/medecin/<id>     → Patients du médecin <id>
+  POST /api/degradation      → Signaler dégradation
+
+WebSocket events (temps réel) :
+  file_mise_a_jour    → envoyé à tous quand la file change
+  alerte_critique     → envoyé aux médecins pour ESI 1/2
+"""
+
+import os
 import uuid
+import json
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict
-
-from flask import Flask, jsonify, render_template, request
-from flask_socketio import SocketIO, emit, join_room
-
-def simuler_constantes_depuis_reponses_dummy(symptom_text: str, features_questions: dict) -> dict:
-    pass
-
-from capteurs_raspberry import lire_toutes_constantes
+from flask import Flask, request, jsonify, render_template
+from flask_socketio import SocketIO, emit
 from model_trainer import predire_esi
-from nlp_extractor import extraire_features_nlp
-from questions_moteur import encoder_reponses, generer_questions
-
-def simuler_constantes_depuis_reponses(symptom_text: str, features_questions: dict) -> dict:
-    """Simule les constantes vitales à partir du texte et des réponses patient."""
-    constantes = {
-        "temperature": 37.0,
-        "spo2": 98.0,
-        "heart_rate": 75,
-        "bp_systolic": 120,
-        "bp_diastolic": 80,
-        "respiratory_rate": 16,
-        "glucose": 90,
-    }
-    texte = (symptom_text or "").lower()
-    # Température
-    if "fievre" in texte or features_questions.get("q_duree_fievre", 0) > 0:
-        constantes["temperature"] = 39.0
-    if "tres elevee" in texte or "41" in texte:
-        constantes["temperature"] = 41.2
-    # SpO2
-    if "essouffle" in texte or features_questions.get("q_dyspnee_aggrave_effort", 0) == 1:
-        constantes["spo2"] = 91.0
-    # Fréquence cardiaque
-    if "palpitation" in texte or features_questions.get("q_medicaments_coeur", 0) == 1:
-        constantes["heart_rate"] = 130
-    # Tension
-    if "tension" in texte or features_questions.get("q_hypertension_connue", 0) == 1:
-        constantes["bp_systolic"] = 185
-        constantes["bp_diastolic"] = 105
-    # Douleur
-    if "douleur" in texte or features_questions.get("q_douleur_irradiee_bras", 0) == 1:
-        constantes["heart_rate"] = max(constantes["heart_rate"], 110)
-    # Hypoglycémie
-    if "diabete" in texte or features_questions.get("q_insuline_pris", 0) == 1:
-        constantes["glucose"] = 65
-    return constantes
 from queue_manager import gestionnaire_file
+from nlp_extractor import extraire_features_nlp
 from scanner_cin import scanner_piece_identite
+from capteurs_raspberry import lire_toutes_constantes
 
-BASE_DIR = Path(__file__).resolve().parent
-START_TIME = datetime.now()
+# ─────────────────────────────────────────────────────────────────────────────
+# Initialisation Flask + SocketIO
+# ─────────────────────────────────────────────────────────────────────────────
+app = Flask(__name__, template_folder='.')
+app.config['SECRET_KEY'] = 'healthgate-secret-2026'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
-app.config["SECRET_KEY"] = "healthgate-secret-2026"
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+# Démarrer la mise à jour automatique de la file
+gestionnaire_file.demarrer_mise_a_jour_auto(intervalle=60)
 
-patients_session: Dict[str, Dict[str, Any]] = {}
+# ─────────────────────────────────────────────────────────────────────────────
+# Base de données en mémoire (simple pour prototype)
+# ─────────────────────────────────────────────────────────────────────────────
 
+# Patients en cours de saisie (avant triage complet)
+patients_session = {}
+
+# Médecins disponibles
 MEDECINS = {
     "M1": {
-        "id": "M1",
-        "nom": "Dr. El Amrani",
-        "specialite": "Urgences adultes",
-        "patients": [],
+        "id":        "M1",
+        "nom":       "Dr. El Amrani",
+        "specialite": "Médecine générale — Urgences adultes",
+        "patients":  [],
     },
     "M2": {
-        "id": "M2",
-        "nom": "Dr. Bensouda",
-        "specialite": "Pediatrie / geriatrie",
-        "patients": [],
+        "id":        "M2",
+        "nom":       "Dr. Bensouda",
+        "specialite": "Médecine générale — Pédiatrie & gériatrie",
+        "patients":  [],
     },
 }
 
-
-def _libelle_urgence(esi: int) -> str:
-    labels = {
-        1: "CRITIQUE - immediat",
-        2: "TRES URGENT - < 15 min",
-        3: "URGENT - ~30 min",
-        4: "SEMI URGENT - ~1h",
-        5: "NON URGENT",
-    }
-    return labels.get(esi, "INCONNU")
+# Historique des patients pris en charge
+historique_patients = []
 
 
-def _to_sex(raw_value: Any) -> int:
-    if isinstance(raw_value, (int, float)):
-        return int(raw_value)
-
-    value = str(raw_value or "").strip().lower()
-    if value in {"m", "male", "masculin", "homme"}:
-        return 1
-    if value in {"f", "female", "feminin", "femme"}:
-        return 0
-    return 0
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Fonctions utilitaires
+# ─────────────────────────────────────────────────────────────────────────────
 
 def attribuer_medecin(age: int) -> str:
-    m1_count = len(MEDECINS["M1"]["patients"])
-    m2_count = len(MEDECINS["M2"]["patients"])
+    """
+    Attribue un médecin selon :
+    1. Le médecin avec le moins de patients actifs
+    2. En cas d'égalité : Dr. Bensouda pour enfants (<15) et seniors (>65)
+    """
+    nb_m1 = len(MEDECINS["M1"]["patients"])
+    nb_m2 = len(MEDECINS["M2"]["patients"])
 
-    if m1_count == m2_count:
+    if nb_m1 == nb_m2:
+        # Égalité → spécialité
         if age < 15 or age > 65:
-            return "M2"
+            return "M2"  # Bensouda : pédiatrie/gériatrie
         return "M1"
 
-    return "M1" if m1_count < m2_count else "M2"
+    return "M1" if nb_m1 < nb_m2 else "M2"
+
+
+def emettre_mise_a_jour_file():
+    """Envoie l'état de la file à tous les clients connectés."""
+    etat = construire_etat_global()
+    socketio.emit('file_mise_a_jour', etat)
 
 
 def construire_etat_global() -> dict:
+    """Construit l'état complet pour diffusion WebSocket."""
     file_triee = gestionnaire_file.get_file_triee()
-    alertes = gestionnaire_file.get_alertes_actives()
 
     return {
-        "horodatage": datetime.now().strftime("%H:%M:%S"),
-        "nb_patients": len(file_triee),
+        "horodatage":   datetime.now().strftime("%H:%M:%S"),
+        "nb_patients":  len(file_triee),
         "file": [
             {
-                **patient.to_dict(),
-                "position": i + 1,
-                "nom": patients_session.get(patient.patient_id, {}).get("nom", "Patient"),
-                "prenom": patients_session.get(patient.patient_id, {}).get("prenom", ""),
-                "medecin_id": patients_session.get(patient.patient_id, {}).get("medecin_id", ""),
+                **p.to_dict(),
+                "position":    i + 1,
+                "medecin_id":  patients_session.get(p.patient_id, {}).get("medecin_id", ""),
+                "nom":         patients_session.get(p.patient_id, {}).get("nom", "Patient"),
+                "prenom":      patients_session.get(p.patient_id, {}).get("prenom", ""),
+                "symptom_text": patients_session.get(p.patient_id, {}).get("symptom_text", ""),
             }
-            for i, patient in enumerate(file_triee)
+            for i, p in enumerate(file_triee)
         ],
         "medecins": {
             mid: {
-                "id": info["id"],
-                "nom": info["nom"],
-                "specialite": info["specialite"],
+                **info,
                 "nb_patients": len(info["patients"]),
             }
             for mid, info in MEDECINS.items()
@@ -143,555 +122,442 @@ def construire_etat_global() -> dict:
         "alertes": [
             {
                 **p.to_dict(),
-                "nom": patients_session.get(p.patient_id, {}).get("nom", "Patient"),
+                "nom":    patients_session.get(p.patient_id, {}).get("nom", "Patient"),
                 "prenom": patients_session.get(p.patient_id, {}).get("prenom", ""),
             }
-            for p in alertes
+            for p in gestionnaire_file.get_alertes_actives()
         ],
     }
 
 
-def emettre_mise_a_jour_file() -> None:
-    etat = construire_etat_global()
-    socketio.emit("file_mise_a_jour", etat)
-
-
-def _build_modele_input(session_data: dict, constantes: dict, features_questions: dict) -> dict:
-    # Mapping explicite pour cohérence avec les règles du moteur de triage
-    # On extrait les features utiles depuis les constantes, les réponses et les features_questions
-    d = {
-        "age": session_data.get("age", 30),
-        "sex": session_data.get("sex", 0),
-        "temperature": constantes.get("temperature", 37.0),
-        "frequence_cardiaque": constantes.get("heart_rate", constantes.get("frequence_cardiaque", 75)),
-        "tension_systolique": constantes.get("bp_systolic", constantes.get("tension_systolique", 120)),
-        "tension_diastolique": constantes.get("bp_diastolic", constantes.get("tension_diastolique", 80)),
-        "spo2": constantes.get("spo2", 98.0),
-        "douleur": features_questions.get("q_douleur_repos_effort", 0) or features_questions.get("q_douleur_irradiee_bras", 0) or session_data.get("pain_score", 0),
-        "dyspnea": features_questions.get("q_dyspnee_aggrave_effort", 0) or features_questions.get("q_duree_dyspnee", 0),
-        "dyspnea_aggrave_effort": features_questions.get("q_dyspnee_aggrave_effort", 0),
-        "chest_pain": features_questions.get("q_douleur_irradiee_bras", 0),
-        "loss_of_consciousness": features_questions.get("q_trauma_perte_conscience", 0),
-        "severe_bleeding": features_questions.get("q_trauma_saignement", 0),
-        "neurological_symptoms": features_questions.get("q_neuro_faiblesse", 0) or features_questions.get("q_neuro_parole", 0) or features_questions.get("q_neuro_confusion", 0),
-        "abdominal_pain": features_questions.get("q_localisation_abdomen", 0),
-        "fever": features_questions.get("q_duree_fievre", 0),
-        "trauma": features_questions.get("q_trauma_zone", 0),
-        "symptom_text": session_data.get("symptom_text", ""),
-        "questions": session_data.get("questions", []),
-        "question_reponses": session_data.get("question_reponses", {}),
-    }
-    # On ajoute tous les features_questions pour compatibilité future
-    d.update(features_questions)
-    return d
-
-
 def construire_rapport_patient(patient_id: str) -> dict:
-    session_data = patients_session.get(patient_id, {})
-    entry = gestionnaire_file.file.get(patient_id)
-    nlp = extraire_features_nlp(session_data.get("symptom_text", ""))
+    """Génère le rapport médical d'un patient."""
+    session     = patients_session.get(patient_id, {})
+    en_file     = gestionnaire_file.file.get(patient_id)
+    constantes  = session.get("constantes", {})
+    features_nlp = extraire_features_nlp(session.get("symptom_text", ""))
 
-    return {
-        "patient_id": patient_id,
-        "nom": session_data.get("nom", "Inconnu"),
-        "prenom": session_data.get("prenom", "Inconnu"),
-        "age": session_data.get("age", "?"),
-        "sexe": "Homme" if session_data.get("sex", 0) == 1 else "Femme",
-        "symptom_text": session_data.get("symptom_text", ""),
-        "constantes": session_data.get("constantes", {}),
-        "esi_predit": session_data.get("esi_predit", "?"),
-        "niveau_urgence": session_data.get("niveau_urgence", "?"),
-        "confiance_modele": session_data.get("confiance", 0),
-        "diagnostic_probable": session_data.get("diagnostic_probable", "Evaluation clinique complementaire"),
-        "score_priorite": round(entry.score, 2) if entry else "?",
-        "temps_attente_min": round(entry.temps_attente_minutes(), 1) if entry else "?",
-        "features_nlp_actives": {k: v for k, v in nlp.items() if v > 0},
-        "medecin_assigne": MEDECINS.get(session_data.get("medecin_id", ""), {}).get("nom", "?"),
+    rapport = {
+        "patient_id":      patient_id,
+        "nom":             session.get("nom", "Inconnu"),
+        "prenom":          session.get("prenom", "Inconnu"),
+        "age":             session.get("age", "?"),
+        "sexe":            "Homme" if session.get("sex", -1) == 1 else "Femme",
+        "heure_arrivee":   session.get("heure_arrivee", "?"),
+        "symptom_text":    session.get("symptom_text", ""),
+        "constantes":      constantes,
+        "esi_predit":      session.get("esi_predit", "?"),
+        "niveau_urgence":  session.get("niveau_urgence", "?"),
+        "confiance_modele": session.get("confiance", "?"),
+        "features_nlp_actives": {
+            k: v for k, v in features_nlp.items() if v > 0
+        },
+        "score_priorite":  round(en_file.score, 1) if en_file else "?",
+        "temps_attente_min": round(en_file.temps_attente_minutes(), 1) if en_file else "?",
+        "medecin_assigne": MEDECINS.get(session.get("medecin_id", ""), {}).get("nom", "?"),
         "horodatage_rapport": datetime.now().strftime("%d/%m/%Y %H:%M"),
     }
 
+    return rapport
 
-@app.route("/")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Routes pages HTML
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/')
 def index():
-    return render_template("borne.html")
+    return render_template('borne.html')
 
-
-@app.route("/salle")
+@app.route('/salle')
 def salle_attente():
-    return render_template("salle_attente.html")
+    return render_template('salle_attente.html')
 
-
-@app.route("/medecin/<medecin_id>")
-def interface_medecin(medecin_id: str):
+@app.route('/medecin/<medecin_id>')
+def interface_medecin(medecin_id):
     if medecin_id not in MEDECINS:
-        return "Medecin non trouve", 404
-    return render_template("medecin.html", medecin=MEDECINS[medecin_id])
+        return "Médecin non trouvé", 404
+    medecin = MEDECINS[medecin_id]
+    return render_template('medecin.html', medecin=medecin)
 
-
-@app.route("/admin")
+@app.route('/admin')
 def admin():
-    return jsonify({"statut": "succes", "message": "Interface admin non implementee"})
+    return render_template('admin.html')
 
 
-@app.route("/api/sante", methods=["GET"])
-def api_sante():
-    uptime_seconds = int((datetime.now() - START_TIME).total_seconds())
-    return jsonify(
-        {
-            "statut": "ok",
-            "service": "healthgate-api",
-            "uptime_seconds": uptime_seconds,
-            "modele_charge": True,
-            "queue_patients": len(gestionnaire_file.file),
-        }
-    )
+# ─────────────────────────────────────────────────────────────────────────────
+# API — Étape 1 : Scanner la pièce d'identité
+# ─────────────────────────────────────────────────────────────────────────────
 
-
-@app.route("/api/scanner", methods=["POST"])
+@app.route('/api/scanner', methods=['POST'])
 def api_scanner():
-    payload = request.get_json(silent=True) or {}
-    image_b64 = payload.get("image_base64")
+    """
+    Scanne la pièce d'identité.
+    Accepte : image base64 ou déclenche la caméra si aucune image.
+    """
+    donnees = request.get_json() or {}
+    image_b64 = donnees.get('image_base64')
 
     if image_b64:
-        try:
-            source = base64.b64decode(image_b64)
-        except Exception:
-            return jsonify({"statut": "erreur", "message": "image_base64 invalide"}), 400
+        import base64
+        resultat = scanner_piece_identite(
+            source=base64.b64decode(image_b64.encode())
+        )
     else:
-        source = 0
+        # Déclencher la caméra (Raspberry Pi)
+        resultat = scanner_piece_identite(source=0)
 
-    scan = scanner_piece_identite(source=source)
+    # Créer une session pour ce patient
     session_id = str(uuid.uuid4())[:8].upper()
-
     patients_session[session_id] = {
-        "session_id": session_id,
-        "nom": scan.get("nom", "Inconnu"),
-        "prenom": scan.get("prenom", "Inconnu"),
-        "age": int(scan.get("age", 30) or 30),
-        "sex": _to_sex(scan.get("sexe", 0)),
+        "session_id":   session_id,
+        "nom":          resultat.get("nom", "Inconnu"),
+        "prenom":       resultat.get("prenom", "Inconnu"),
+        "age":          resultat.get("age", 30),
+        "sex":          resultat.get("sexe", -1),
         "heure_arrivee": datetime.now().strftime("%H:%M"),
-        "etape": "scan_ok",
+        "etape":        "scan_ok",
     }
 
-    return jsonify({"statut": "succes", "session_id": session_id, **scan})
+    return jsonify({
+        "statut":     "succès",
+        "session_id": session_id,
+        **resultat,
+    })
 
 
-@app.route("/api/symptomes", methods=["POST"])
+# ─────────────────────────────────────────────────────────────────────────────
+# API — Étape 2 : Enregistrer les symptômes
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/symptomes', methods=['POST'])
 def api_symptomes():
-    payload = request.get_json(silent=True) or {}
-    session_id = payload.get("session_id")
-    symptom_text = str(payload.get("symptom_text", "")).strip()
+    """Enregistre la phrase de symptômes du patient."""
+    donnees = request.get_json()
+    if not donnees:
+        return jsonify({"statut": "erreur", "message": "Corps JSON manquant"}), 400
 
-    if not session_id:
-        return jsonify({"statut": "erreur", "message": "Session invalide"}), 400
-
-    # Compatibilite borne: autorise la creation d'une session manuelle si l'utilisateur
-    # poursuit sans scan carte.
-    if session_id not in patients_session and str(session_id).startswith("MANUEL-"):
-        patients_session[session_id] = {
-            "session_id": session_id,
-            "nom": "Inconnu",
-            "prenom": "Inconnu",
-            "age": 30,
-            "sex": 0,
-            "heure_arrivee": datetime.now().strftime("%H:%M"),
-            "etape": "scan_ok",
-        }
-
-    if session_id not in patients_session:
-        return jsonify({"statut": "erreur", "message": "Session invalide"}), 400
-
-    if not symptom_text:
-        return jsonify({"statut": "erreur", "message": "symptom_text requis"}), 400
-
-    patients_session[session_id]["symptom_text"] = symptom_text
-    patients_session[session_id]["etape"] = "symptomes_ok"
-
-    urgence = extraire_features_nlp(symptom_text).get("nlp_urgence_critique", 0) == 1
-    return jsonify({"statut": "succes", "session_id": session_id, "urgence_detectee": urgence})
-
-
-@app.route("/api/constantes", methods=["GET"])
-def api_constantes():
-    constantes = lire_toutes_constantes()
-    return jsonify({"statut": "succes", "constantes": constantes})
-
-
-@app.route("/api/constantes_from_pi", methods=["POST"])
-def api_constantes_from_pi():
-    payload = request.get_json(silent=True) or {}
-    patient_id = payload.get("patient_id")
-    if not patient_id or patient_id not in patients_session:
-        return jsonify({"statut": "erreur", "message": "Patient non trouve"}), 404
-
-    constantes = {
-        "temperature": payload.get("temperature", 37.0),
-        "spo2": payload.get("spo2", 98.0),
-        "heart_rate": payload.get("heart_rate", 75),
-        "bp_systolic": payload.get("bp_systolic", 120),
-        "bp_diastolic": payload.get("bp_diastolic", 80),
-        "respiratory_rate": payload.get("respiratory_rate", 16),
-        "glucose": payload.get("glucose", 90),
-    }
-
-    patients_session[patient_id]["constantes"] = constantes
-    socketio.emit(
-        "constantes_recu",
-        {
-            "patient_id": patient_id,
-            "constantes": constantes,
-            "horodatage": datetime.now().strftime("%H:%M:%S"),
-        },
-        room=f"borne_{patient_id}",
-    )
-
-    return jsonify({"statut": "succes", "message": "Constantes recues"})
-
-
-@app.route("/api/questions", methods=["POST"])
-def api_questions():
-    payload = request.get_json(silent=True) or {}
-    patient_id = payload.get("patient_id") or payload.get("session_id")
-
-    if not patient_id or patient_id not in patients_session:
-        return jsonify({"statut": "erreur", "message": "Patient non trouve"}), 404
-
-    session_data = patients_session[patient_id]
-    constantes = payload.get("constantes") or session_data.get("constantes", {})
-    session_data["constantes"] = constantes
-
-    questions = generer_questions(
-        constantes,
-        session_data.get("symptom_text", ""),
-        int(session_data.get("age", 0) or 0),
-        int(session_data.get("sex", 0) or 0),
-    )
-
-    session_data["questions"] = questions
-    session_data["etape"] = "questions_ok"
-
-    socketio.emit(
-        "question_suivante",
-        {
-            "patient_id": patient_id,
-            "questions": questions,
-            "question_courante": questions[0] if questions else None,
-            "nb_questions": len(questions),
-        },
-        room=f"borne_{patient_id}",
-    )
-
-    return jsonify({"statut": "succes", "patient_id": patient_id, "questions_proposees": questions})
-
-
-@app.route("/api/questions_adaptatif", methods=["POST"])
-def api_questions_adaptatif():
-    return api_questions()
-
-
-@app.route("/api/questions/reponses", methods=["POST"])
-def api_questions_reponses():
-    payload = request.get_json(silent=True) or {}
-    patient_id = payload.get("patient_id") or payload.get("session_id")
-    reponses = payload.get("reponses") or payload.get("question_reponses") or {}
-
-    if not patient_id or patient_id not in patients_session:
-        return jsonify({"statut": "erreur", "message": "Patient non trouve"}), 404
-
-    session_data = patients_session[patient_id]
-    questions = session_data.get("questions", [])
-    session_data["question_reponses"] = reponses
-    encoded = encoder_reponses(questions, reponses)
-
-    return jsonify(
-        {
-            "statut": "succes",
-            "patient_id": patient_id,
-            "question_reponses": reponses,
-            "features_questions": encoded,
-        }
-    )
-
-
-@app.route("/api/triage", methods=["POST"])
-def api_triage():
-    payload = request.get_json(silent=True) or {}
-    session_id = payload.get("session_id")
+    session_id   = donnees.get("session_id")
+    symptom_text = donnees.get("symptom_text", "").strip()
 
     if not session_id or session_id not in patients_session:
         return jsonify({"statut": "erreur", "message": "Session invalide"}), 400
 
-    session_data = patients_session[session_id]
+    if not symptom_text:
+        return jsonify({"statut": "erreur", "message": "Veuillez décrire vos symptômes"}), 400
 
-    if not session_data.get("questions"):
-        # Les constantes par défaut sont nécessaires pour générer les questions
-        const = payload.get("constantes") or session_data.get("constantes") or lire_toutes_constantes()
-        session_data["questions"] = generer_questions(
-            const,
-            session_data.get("symptom_text", ""),
-            int(session_data.get("age", 0) or 0),
-            int(session_data.get("sex", 0) or 0),
-        )
+    patients_session[session_id]["symptom_text"] = symptom_text
+    patients_session[session_id]["etape"] = "symptomes_ok"
 
-    if payload.get("question_reponses"):
-        session_data["question_reponses"] = payload["question_reponses"]
+    # Pré-analyse NLP pour feedback immédiat
+    features_nlp = extraire_features_nlp(symptom_text)
+    urgence_detectee = features_nlp.get("nlp_urgence_critique", 0) == 1
 
-    question_reponses = session_data.get("question_reponses", {})
-    features_questions = encoder_reponses(session_data.get("questions", []), question_reponses)
+    return jsonify({
+        "statut":            "succès",
+        "session_id":        session_id,
+        "urgence_detectee":  urgence_detectee,
+        "message":           "Symptômes enregistrés. Mesure des constantes en cours...",
+    })
 
-    # On simule les constantes si aucune valeur hardware n'est fournie (utiliser un mock ou None)
-    constantes = payload.get("constantes") or session_data.get("constantes")
-    # Pour s'assurer qu'on n'a pas gardé un mock par défaut trop "sain", on force la simulation si le vrai hardware n'est pas utilisé
-    if not constantes or (constantes.get('temperature') == 37.0 and constantes.get('heart_rate') == 75):
-        symptom_text = session_data.get("symptom_text", "")
-        # On utilise les features encodées pour la simulation
-        constantes = simuler_constantes_depuis_reponses(symptom_text, features_questions)
-    
-    session_data["constantes"] = constantes
 
+# ─────────────────────────────────────────────────────────────────────────────
+# API — Étape 3 : Lire les constantes vitales
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/constantes', methods=['GET'])
+def api_constantes():
+    """
+    Déclenche la lecture des capteurs et retourne les constantes vitales.
+    Appelé automatiquement après la saisie des symptômes.
+    """
+    constantes = lire_toutes_constantes()
+    return jsonify({
+        "statut":    "succès",
+        "constantes": constantes,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API — Étape 4 : Triage complet
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/triage', methods=['POST'])
+def api_triage():
+    """
+    Lance le triage complet :
+    1. Récupère les données de session
+    2. Lit les constantes vitales (capteurs)
+    3. Prédit le niveau ESI
+    4. Ajoute le patient dans la file APQ-h
+    5. Attribue un médecin
+    6. Émet la mise à jour WebSocket
+    """
+    donnees = request.get_json()
+    if not donnees:
+        return jsonify({"statut": "erreur", "message": "Corps JSON manquant"}), 400
+
+    session_id = donnees.get("session_id")
+    if not session_id or session_id not in patients_session:
+        return jsonify({"statut": "erreur", "message": "Session invalide"}), 400
+
+    session = patients_session[session_id]
+
+    # Récupérer les constantes (envoyées par le Pi ou relire les capteurs)
+    constantes_brutes = donnees.get("constantes") or lire_toutes_constantes()
+
+    # Construire le vecteur de données pour le modèle
+    donnees_modele = {
+        "age":              session.get("age", 30),
+        "sex":              session.get("sex", 0),
+        "temperature":      constantes_brutes.get("temperature", 37.0),
+        "heart_rate":       constantes_brutes.get("heart_rate", 75),
+        "bp_systolic":      constantes_brutes.get("bp_systolic", 120),
+        "bp_diastolic":     constantes_brutes.get("bp_diastolic", 80),
+        "spo2":             constantes_brutes.get("spo2", 98.0),
+        "respiratory_rate": constantes_brutes.get("respiratory_rate", 16),
+        "glucose":          constantes_brutes.get("glucose", 90),
+        "pain_score":       0,
+        "chest_pain":       0, "dyspnea": 0,
+        "loss_of_consciousness": 0, "severe_bleeding": 0,
+        "neurological_symptoms": 0, "abdominal_pain": 0,
+        "fever": 0, "trauma": 0,
+        "symptom_text":     session.get("symptom_text", ""),
+    }
+
+    # Prédiction ESI
     try:
-        resultat = predire_esi(_build_modele_input(session_data, constantes, features_questions))
-    except Exception as exc:
-        return jsonify({"statut": "erreur", "message": f"Erreur modele: {exc}"}), 500
+        resultat = predire_esi(donnees_modele)
+    except Exception as e:
+        return jsonify({"statut": "erreur", "message": f"Erreur modèle : {str(e)}"}), 500
 
-    esi = int(resultat["esi_predit"])
-    medecin_id = attribuer_medecin(int(session_data.get("age", 30) or 30))
+    esi_predit = resultat["esi_predit"]
+
+    # Attribution médecin (moins chargé)
+    medecin_id = attribuer_medecin(session.get("age", 30))
+
+    # ID patient unique
     patient_id = f"PT-{session_id}"
 
-    session_data.update(
-        {
-            "patient_id": patient_id,
-            "esi_predit": esi,
-            "niveau_urgence": _libelle_urgence(esi),
-            "confiance": resultat.get("confiance", 0),
-            "diagnostic_probable": resultat.get("diagnostic_probable", "Evaluation clinique complementaire"),
-            "diagnostic_encode": resultat.get("diagnostic_encode", 0),
-            "medecin_id": medecin_id,
-            "etape": "triage_ok",
-        }
+    # Sauvegarder dans la session
+    session.update({
+        "patient_id":    patient_id,
+        "constantes":    constantes_brutes,
+        "esi_predit":    esi_predit,
+        "niveau_urgence": _libelle_urgence(esi_predit),
+        "confiance":     resultat["confiance"],
+        "medecin_id":    medecin_id,
+        "etape":         "triage_ok",
+    })
+
+    # Ajouter dans la file APQ-h
+    gestionnaire_file.ajouter_patient(
+        patient_id=patient_id,
+        esi_predit=esi_predit,
+        age=session.get("age", 30),
+        constantes={
+            "temperature": constantes_brutes.get("temperature"),
+            "spo2":        constantes_brutes.get("spo2"),
+            "heart_rate":  constantes_brutes.get("heart_rate"),
+        },
     )
-    patients_session[patient_id] = session_data
 
-    if patient_id not in MEDECINS[medecin_id]["patients"]:
-        MEDECINS[medecin_id]["patients"].append(patient_id)
+    # Ajouter le patient dans la liste du médecin
+    MEDECINS[medecin_id]["patients"].append(patient_id)
 
-    if patient_id not in gestionnaire_file.file:
-        gestionnaire_file.ajouter_patient(
-            patient_id=patient_id,
-            esi_predit=esi,
-            age=int(session_data.get("age", 30) or 30),
-            constantes={
-                "temperature": constantes.get("temperature"),
-                "spo2": constantes.get("spo2"),
-                "heart_rate": constantes.get("heart_rate"),
-            },
-        )
-
+    # Position dans la file
     position = gestionnaire_file.get_position_patient(patient_id)
+
+    # Délais estimés par ESI
     attentes = {1: "< 1 min", 2: "< 15 min", 3: "~30 min", 4: "~1h", 5: "~2h"}
 
+    # Rapport pour le médecin
+    rapport = construire_rapport_patient(patient_id)
+
+    # Alerte si ESI critique
+    if esi_predit <= 2:
+        socketio.emit('alerte_critique', {
+            "patient_id": patient_id,
+            "nom":        session.get("nom"),
+            "prenom":     session.get("prenom"),
+            "esi":        esi_predit,
+            "medecin_id": medecin_id,
+            "rapport":    rapport,
+        }, room=f"medecin_{medecin_id}")
+
+    # Diffuser la mise à jour à tous
     emettre_mise_a_jour_file()
 
-    if esi <= 2:
-        payload_alerte = {
-            "patient_id": patient_id,
-            "nom": session_data.get("nom", "Patient"),
-            "prenom": session_data.get("prenom", ""),
-            "esi": esi,
-            "medecin_id": medecin_id,
-            "rapport": construire_rapport_patient(patient_id),
-        }
-        socketio.emit("alerte_critique", payload_alerte, room="medecins")
-        socketio.emit("alerte_critique", payload_alerte, room=f"medecin_{medecin_id}")
-
-    socketio.emit(
-        "triage_complete",
-        {
-            "patient_id": patient_id,
-            "esi_predit": esi,
-            "niveau_urgence": _libelle_urgence(esi),
-            "position_file": position,
-            "attente_estimee": attentes.get(esi, "?"),
-        },
-        room=f"borne_{session_id}",
-    )
-
-    return jsonify(
-        {
-            "statut": "succes",
-            "patient_id": patient_id,
-            "esi_predit": esi,
-            "niveau_urgence": _libelle_urgence(esi),
-            "confiance": resultat.get("confiance", 0),
-            "diagnostic_probable": resultat.get("diagnostic_probable"),
-            "position_file": position,
-            "attente_estimee": attentes.get(esi, "?"),
-            "medecin_assigne": MEDECINS[medecin_id]["nom"],
-            "rapport": construire_rapport_patient(patient_id),
-        }
-    )
+    return jsonify({
+        "statut":         "succès",
+        "patient_id":     patient_id,
+        "esi_predit":     esi_predit,
+        "niveau_urgence": _libelle_urgence(esi_predit),
+        "confiance":      resultat["confiance"],
+        "position_file":  position,
+        "attente_estimee": attentes.get(esi_predit, "?"),
+        "medecin_assigne": MEDECINS[medecin_id]["nom"],
+        "rapport":        rapport,
+    })
 
 
-@app.route("/api/file", methods=["GET"])
+# ─────────────────────────────────────────────────────────────────────────────
+# API — File d'attente
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/file', methods=['GET'])
 def api_file():
-    return jsonify({"statut": "succes", **construire_etat_global()})
+    """Retourne l'état complet de la file."""
+    return jsonify({"statut": "succès", **construire_etat_global()})
 
 
-@app.route("/api/queue/<patient_id>", methods=["GET"])
-def api_queue_patient(patient_id: str):
-    position = gestionnaire_file.get_position_patient(patient_id)
-    patient = gestionnaire_file.file.get(patient_id)
-
-    if patient is None:
-        return jsonify({"statut": "erreur", "message": "Patient non trouve"}), 404
-
-    return jsonify(
-        {
-            "statut": "succes",
-            "patient_id": patient_id,
-            "position": position,
-            "esi_actuel": patient.esi_actuel,
-            "score_priorite": round(patient.score, 2),
-            "temps_attente_min": round(patient.temps_attente_minutes(), 1),
-            "alerte_active": patient.alerte_active,
-        }
-    )
-
-
-@app.route("/api/rapport/<patient_id>", methods=["GET"])
-def api_rapport(patient_id: str):
+@app.route('/api/rapport/<patient_id>', methods=['GET'])
+def api_rapport(patient_id):
+    """Retourne le rapport médical d'un patient."""
     if patient_id not in patients_session:
-        return jsonify({"statut": "erreur", "message": "Patient non trouve"}), 404
-    return jsonify({"statut": "succes", "rapport": construire_rapport_patient(patient_id)})
+        return jsonify({"statut": "erreur", "message": "Patient non trouvé"}), 404
+    return jsonify({"statut": "succès", "rapport": construire_rapport_patient(patient_id)})
 
 
-@app.route("/api/prise_en_charge", methods=["POST"])
+# ─────────────────────────────────────────────────────────────────────────────
+# API — Actions médecin
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/prise_en_charge', methods=['POST'])
 def api_prise_en_charge():
-    payload = request.get_json(silent=True) or {}
-    patient_id = payload.get("patient_id")
-    medecin_id = payload.get("medecin_id")
+    """
+    Le médecin marque un patient comme pris en charge.
+    Le patient est retiré de la file et de la liste du médecin.
+    """
+    donnees    = request.get_json()
+    patient_id = donnees.get("patient_id")
+    medecin_id = donnees.get("medecin_id")
 
     if not patient_id or not medecin_id:
         return jsonify({"statut": "erreur", "message": "patient_id et medecin_id requis"}), 400
-    if medecin_id not in MEDECINS:
-        return jsonify({"statut": "erreur", "message": "Medecin non trouve"}), 404
 
-    gestionnaire_file.retirer_patient(patient_id)
+    if medecin_id not in MEDECINS:
+        return jsonify({"statut": "erreur", "message": "Médecin non trouvé"}), 404
+
+    # Retirer de la file
+    patient = gestionnaire_file.retirer_patient(patient_id)
+
+    # Retirer de la liste du médecin
     if patient_id in MEDECINS[medecin_id]["patients"]:
         MEDECINS[medecin_id]["patients"].remove(patient_id)
 
+    # Archiver dans l'historique
+    session = patients_session.get(patient_id, {})
+    historique_patients.append({
+        **session,
+        "pris_en_charge_par": MEDECINS[medecin_id]["nom"],
+        "heure_prise_en_charge": datetime.now().strftime("%H:%M"),
+        "temps_attente_reel": round(patient.temps_attente_minutes(), 1) if patient else "?",
+    })
+
+    # Diffuser la mise à jour
     emettre_mise_a_jour_file()
-    return jsonify({"statut": "succes", "message": f"Patient {patient_id} pris en charge"})
+
+    return jsonify({
+        "statut":  "succès",
+        "message": f"Patient {patient_id} pris en charge par {MEDECINS[medecin_id]['nom']}",
+    })
 
 
-@app.route("/api/medecin/<medecin_id>", methods=["GET"])
-def api_medecin(medecin_id: str):
+@app.route('/api/medecin/<medecin_id>', methods=['GET'])
+def api_patients_medecin(medecin_id):
+    """Retourne les patients assignés à un médecin avec leurs rapports."""
     if medecin_id not in MEDECINS:
-        return jsonify({"statut": "erreur", "message": "Medecin non trouve"}), 404
+        return jsonify({"statut": "erreur", "message": "Médecin non trouvé"}), 404
 
-    patients = []
-    for pid in MEDECINS[medecin_id]["patients"]:
+    patients_ids = MEDECINS[medecin_id]["patients"]
+    rapports = []
+
+    for pid in patients_ids:
         if pid in patients_session:
             rapport = construire_rapport_patient(pid)
+            en_file = gestionnaire_file.file.get(pid)
             rapport["position_file"] = gestionnaire_file.get_position_patient(pid)
-            patients.append(rapport)
+            rapport["temps_attente_actuel"] = round(
+                en_file.temps_attente_minutes(), 1
+            ) if en_file else "?"
+            rapports.append(rapport)
 
-    patients.sort(key=lambda item: int(item.get("esi_predit", 5) or 5))
-    return jsonify(
-        {
-            "statut": "succes",
-            "medecin": MEDECINS[medecin_id],
-            "nb_patients": len(patients),
-            "patients": patients,
-        }
+    # Trier par priorité ESI
+    rapports.sort(key=lambda r: r.get("esi_predit", 5))
+
+    return jsonify({
+        "statut":    "succès",
+        "medecin":   MEDECINS[medecin_id],
+        "nb_patients": len(rapports),
+        "patients":  rapports,
+    })
+
+
+@app.route('/api/degradation', methods=['POST'])
+def api_degradation():
+    """Signale une dégradation clinique d'un patient."""
+    donnees    = request.get_json()
+    patient_id = donnees.get("patient_id")
+    nouvel_esi = donnees.get("nouvel_esi")
+
+    succes = gestionnaire_file.signaler_degradation(
+        patient_id, {}, int(nouvel_esi)
     )
 
+    if succes:
+        emettre_mise_a_jour_file()
+        return jsonify({"statut": "succès", "message": "Dégradation enregistrée"})
 
-@app.route("/api/degradation", methods=["POST"])
-def api_degradation():
-    payload = request.get_json(silent=True) or {}
-    patient_id = payload.get("patient_id")
-    nouvel_esi = int(payload.get("nouvel_esi", 0) or 0)
-    constantes = payload.get("nouvelles_constantes") or {}
-
-    if not patient_id or not (1 <= nouvel_esi <= 5):
-        return jsonify({"statut": "erreur", "message": "patient_id et nouvel_esi valides requis"}), 400
-
-    success = gestionnaire_file.signaler_degradation(patient_id, constantes, nouvel_esi)
-    if not success:
-        return jsonify({"statut": "erreur", "message": "Patient non trouve"}), 404
-
-    if patient_id in patients_session:
-        patients_session[patient_id]["esi_predit"] = nouvel_esi
-        patients_session[patient_id]["niveau_urgence"] = _libelle_urgence(nouvel_esi)
-
-    emettre_mise_a_jour_file()
-    return jsonify({"statut": "succes", "message": "Degradation enregistree"})
+    return jsonify({"statut": "erreur", "message": "Patient non trouvé"}), 404
 
 
-@app.route("/api/alertes", methods=["GET"])
-def api_alertes():
-    alertes = []
-    for patient in gestionnaire_file.get_alertes_actives():
-        info = patients_session.get(patient.patient_id, {})
-        alertes.append(
-            {
-                "patient_id": patient.patient_id,
-                "esi_actuel": patient.esi_actuel,
-                "score_priorite": round(patient.score, 2),
-                "temps_attente_min": round(patient.temps_attente_minutes(), 1),
-                "nom": info.get("nom", "Patient"),
-                "prenom": info.get("prenom", ""),
-            }
-        )
+# ─────────────────────────────────────────────────────────────────────────────
+# WebSocket — connexion des clients
+# ─────────────────────────────────────────────────────────────────────────────
 
-    return jsonify({"statut": "succes", "nb_alertes": len(alertes), "alertes": alertes})
+@socketio.on('connect')
+def on_connect():
+    """Envoie l'état actuel à un client qui se connecte."""
+    emit('file_mise_a_jour', construire_etat_global())
 
 
-@app.route("/api/alertes/<patient_id>/lue", methods=["POST"])
-def api_alerte_lue(patient_id: str):
-    success = gestionnaire_file.marquer_alerte_lue(patient_id)
-    if not success:
-        return jsonify({"statut": "erreur", "message": "Patient non trouve"}), 404
-
-    emettre_mise_a_jour_file()
-    return jsonify({"statut": "succes", "message": "Alerte marquee comme lue"})
-
-
-@socketio.on("connect")
-def ws_connect():
-    emit("connection_response", {"data": "Connecte au serveur HealthGate"})
-    emit("file_mise_a_jour", construire_etat_global())
-
-
-@socketio.on("rejoindre_borne")
-def ws_rejoindre_borne(data):
-    payload = data or {}
-    patient_id = payload.get("patient_id")
-    if patient_id:
-        join_room(f"borne_{patient_id}")
-    emit("borne_connectee", {"patient_id": patient_id})
-
-
-@socketio.on("rejoindre_medecin")
-def ws_rejoindre_medecin(data):
-    payload = data or {}
-    medecin_id = payload.get("medecin_id")
-    join_room("medecins")
-    if medecin_id and medecin_id in MEDECINS:
+@socketio.on('rejoindre_medecin')
+def on_rejoindre_medecin(data):
+    """Un médecin rejoint sa salle dédiée pour les alertes."""
+    from flask_socketio import join_room
+    medecin_id = data.get('medecin_id')
+    if medecin_id in MEDECINS:
         join_room(f"medecin_{medecin_id}")
-    emit("file_mise_a_jour", construire_etat_global())
+        emit('file_mise_a_jour', construire_etat_global())
 
 
-if __name__ == "__main__":
-    gestionnaire_file.demarrer_mise_a_jour_auto(intervalle=60)
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _libelle_urgence(esi: int) -> str:
+    libelles = {
+        1: "CRITIQUE — Immédiat",
+        2: "TRÈS URGENT — 15 min",
+        3: "URGENT — 30 min",
+        4: "SEMI-URGENT — 1h",
+        5: "NON URGENT",
+    }
+    return libelles.get(esi, "?")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lancement
+# ─────────────────────────────────────────────────────────────────────────────
+if __name__ == '__main__':
     print("=" * 60)
-    print("HEALTHGATE - Serveur principal")
+    print("HEALTHGATE — Serveur principal")
     print("=" * 60)
-    print("Borne patient   : http://localhost:5000/")
-    print("Salle attente   : http://localhost:5000/salle")
-    print("Medecin M1      : http://localhost:5000/medecin/M1")
-    print("Medecin M2      : http://localhost:5000/medecin/M2")
-    print("Sante API       : http://localhost:5000/api/sante")
+    print("  Borne patient     : http://localhost:5000/")
+    print("  Salle d'attente   : http://localhost:5000/salle")
+    print("  Médecin 1         : http://localhost:5000/medecin/M1")
+    print("  Médecin 2         : http://localhost:5000/medecin/M2")
+    print("  Admin             : http://localhost:5000/admin")
     print("=" * 60)
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)

@@ -1,0 +1,213 @@
+:root {
+	color-scheme: dark;
+	font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	background:
+		radial-gradient(circle at top, rgba(45, 212, 191, 0.18), transparent 30%),
+		linear-gradient(180deg, #07111f 0%, #0b1728 45%, #111b2d 100%);
+	color: #f8fafc;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	min-height: 100%;
+	margin: 0;
+}
+
+body {
+	min-height: 100vh;
+	background: inherit;
+}
+
+button,
+input,
+textarea {
+	font: inherit;
+}
+
+.app-shell {
+	min-height: 100vh;
+	padding: 32px;
+	display: grid;
+	gap: 24px;
+}
+
+.hero-card,
+.workflow-card {
+	background: rgba(15, 23, 42, 0.72);
+	border: 1px solid rgba(148, 163, 184, 0.18);
+	border-radius: 28px;
+	backdrop-filter: blur(18px);
+	box-shadow: 0 24px 80px rgba(2, 8, 23, 0.4);
+}
+
+.hero-card {
+	display: grid;
+	grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+	gap: 24px;
+	padding: 32px;
+}
+
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-radius: 999px;
+	background: rgba(45, 212, 191, 0.12);
+	color: #5eead4;
+	font-size: 0.85rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+	margin: 0;
+}
+
+h1 {
+	max-width: 12ch;
+	margin-top: 18px;
+	font-size: clamp(2.8rem, 6vw, 5.6rem);
+	line-height: 0.95;
+}
+
+.hero-copy p {
+	max-width: 58ch;
+	margin-top: 18px;
+	color: #cbd5e1;
+	font-size: 1.05rem;
+	line-height: 1.7;
+}
+
+.stats-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 16px;
+	margin-top: 28px;
+}
+
+.stat-card,
+.panel-card,
+.workflow-step {
+	border: 1px solid rgba(148, 163, 184, 0.14);
+	background: rgba(15, 23, 42, 0.7);
+}
+
+.stat-card {
+	padding: 18px;
+	border-radius: 20px;
+}
+
+.stat-card strong {
+	display: block;
+	font-size: 1.5rem;
+}
+
+.stat-card span {
+	color: #94a3b8;
+}
+
+.panel-card {
+	border-radius: 24px;
+	padding: 22px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	min-height: 100%;
+}
+
+.panel-header {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	color: #cbd5e1;
+	font-weight: 600;
+}
+
+.status-dot {
+	width: 12px;
+	height: 12px;
+	border-radius: 999px;
+	background: #34d399;
+	box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.14);
+}
+
+.queue-preview {
+	display: grid;
+	gap: 16px;
+	margin-top: 24px;
+}
+
+.queue-preview strong {
+	display: block;
+	margin-top: 4px;
+	font-size: 1.35rem;
+}
+
+.queue-label {
+	color: #94a3b8;
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+.workflow-card {
+	padding: 28px 32px 32px;
+}
+
+.workflow-card h2 {
+	font-size: 1.2rem;
+	margin-bottom: 18px;
+}
+
+.workflow-list {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 16px;
+}
+
+.workflow-step {
+	border-radius: 20px;
+	padding: 18px;
+}
+
+.workflow-step span {
+	display: inline-flex;
+	width: 34px;
+	height: 34px;
+	border-radius: 999px;
+	align-items: center;
+	justify-content: center;
+	background: rgba(96, 165, 250, 0.16);
+	color: #93c5fd;
+	font-weight: 700;
+}
+
+.workflow-step p {
+	margin-top: 14px;
+	color: #e2e8f0;
+	line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+	.hero-card,
+	.workflow-list,
+	.stats-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.app-shell {
+		padding: 16px;
+	}
+
+	.hero-card {
+		padding: 22px;
+	}
+}

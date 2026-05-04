@@ -29,5 +29,8 @@ Thumbs.db
 .vscode/settings.json
 .idea/
 
+# Frontend dependencies
+frontend/node_modules/
+
 # Jupyter
 .ipynb_checkpoints/
