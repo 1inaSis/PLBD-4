@@ -231,18 +231,25 @@ ml/
 ├── capteurs_raspberry.py
 └── requirements.txt
 `
-
-
+---
 
 ## 🏫 Encadrement
 
-- **École :** Centrale Casablanca
-- **Année :** 2025-2026
+| | |
+|--|--|
+| **École** | Centrale Casablanca |
+| **Groupe** | PLBD 4 |
+| **Année** | 2025-2026 |
 
 
 ---
 
-## ?? Licence
+## 📄 Licence
 
-Projet académique — Centrale Casablanca 2025-2026
-Tous droits réservés.
+Projet académique — Centrale Casablanca 2025-2026. Tous droits réservés.
+
+---
+
+<div align="center">
+Fait avec ❤️ pour améliorer les urgences africaines
+</div>

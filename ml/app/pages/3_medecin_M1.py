@@ -3,14 +3,22 @@ import sys
 import os
 # Ajouter le dossier courant (ml/app) au sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.styles import injecter_css_medical
+# removed
 from utils.state import obtenir_patients_medecin, obtenir_rapport, retirer_patient
 
 def prise_en_charge(pid):
     retirer_patient(pid)
 
 def page_medecin(medecin_id: str, nom_medecin: str):
-    injecter_css_medical()
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from app.utils.styles import injecter_css, afficher_header, afficher_sidebar
+
+    injecter_css()
+    afficher_sidebar()
+    afficher_header("HealthGate")
+
 
     # En-tête médecin
     col_info, col_statut = st.columns([3, 1])
@@ -155,8 +163,21 @@ def afficher_rapport_medical(rapport: dict, medecin_id: str):
         </div>
         """, unsafe_allow_html=True)
     with col_conf:
-        st.metric("Confiance modèle", f"{rapport.get('confiance','—')}%")
-        st.metric("Position file", f"#{rapport.get('position_file','—')}")
+        v_conf = f"{rapport.get('confiance', '—')}%"
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-val">{v_conf}</div>
+            <div class="metric-label">Confiance modèle</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        v_pos = f"#{rapport.get('position_file', '—')}"
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-val">{v_pos}</div>
+            <div class="metric-label">Position file</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Bouton prise en charge
     st.markdown("---")
@@ -214,5 +235,4 @@ def afficher_constante(col, valeur, unite, label, est_critique, est_alerte):
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    st.set_page_config(layout="wide", page_title="Dr. El Amrani — HealthGate")
     page_medecin("m1", "Dr. El Amrani")

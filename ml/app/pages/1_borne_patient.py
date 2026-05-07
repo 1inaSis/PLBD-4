@@ -8,10 +8,8 @@ from components.constantes_form import formulaire_constantes
 from components.questions_ui import afficher_questions
 from utils.state import ajouter_patient
 from model_trainer import predire_esi
-from utils.styles import injecter_css_medical
+# removed
 
-def afficher_header(titre):
-    st.markdown(f"<h2>{titre}</h2>", unsafe_allow_html=True)
 
 def afficher_progression(etape, etapes):
     st.progress(etape / len(etapes))
@@ -20,8 +18,14 @@ def afficher_resultat_triage():
     st.success("Triage complété. Veuillez patienter dans la salle d'attente.")
 
 def page_borne():
-    injecter_css_medical()
-    afficher_header("🏥 HealthGate — Borne de Triage")
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from app.utils.styles import injecter_css, afficher_header, afficher_sidebar
+
+    injecter_css()
+    afficher_sidebar()
+    afficher_header("HealthGate")
 
     # Initialiser l'état
     if "etape" not in st.session_state:

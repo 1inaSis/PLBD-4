@@ -70,7 +70,7 @@ def afficher_questions(constantes: dict, symptom_text: str, age: int, sex: int):
                         st.rerun()
                         
         else: # type == "texte_libre" ou par defaut
-            rep = st.text_input("Votre rÃ©ponse :", key=f"txt_{idx}")
+            rep = st.text_input("Votre réponse :", key=f"txt_{idx}")
             if st.button("Valider", key=f"val_{idx}", type="primary"):
                 st.session_state.reponses_temporaires[feature_name] = rep
                 st.session_state.index_question += 1

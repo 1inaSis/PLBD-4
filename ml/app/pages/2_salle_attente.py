@@ -4,12 +4,19 @@ import sys
 import os
 # Ajouter le dossier courant (ml/app) au sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.styles import injecter_css_medical
+# removed
 from utils.state import obtenir_file_attente, calculer_attente_moyenne
 
 def page_salle_attente():
-    st.set_page_config(layout="wide", page_title="Salle d'attente — HealthGate")
-    injecter_css_medical()
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from app.utils.styles import injecter_css, afficher_header, afficher_sidebar
+
+    injecter_css()
+    afficher_sidebar()
+    afficher_header("HealthGate")
+
 
     # CSS spécifique fond sombre
     st.markdown("""
@@ -36,10 +43,34 @@ def page_salle_attente():
     critiques = [p for p in file if p["esi_actuel"] <= 2]
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Patients en attente", len(file))
-    col2.metric("🚨 Niveaux critiques", len(critiques))
-    col3.metric("Attente moyenne", f"{calculer_attente_moyenne(file)} min")
-    col4.metric("Mise à jour", time.strftime('%H:%M:%S'))
+    v1 = len(file)
+    col1.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-val">{v1}</div>
+        <div class="metric-label">Patients en attente</div>
+    </div>
+    """, unsafe_allow_html=True)
+    v2 = len(critiques)
+    col2.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-val">{v2}</div>
+        <div class="metric-label">🚨 Niveaux critiques</div>
+    </div>
+    """, unsafe_allow_html=True)
+    v3 = f"{calculer_attente_moyenne(file)} min"
+    col3.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-val">{v3}</div>
+        <div class="metric-label">Attente moyenne</div>
+    </div>
+    """, unsafe_allow_html=True)
+    v4 = time.strftime('%H:%M:%S')
+    col4.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-val">{v4}</div>
+        <div class="metric-label">Mise à jour</div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Alertes clignotantes pour ESI 1 et 2
     for patient in critiques:
