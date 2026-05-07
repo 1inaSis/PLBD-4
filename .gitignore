@@ -1,36 +1,14 @@
-﻿# Python
-__pycache__/
-*.py[cod]
+﻿__pycache__/
+*.pyc
 *.pyo
-*.pyd
-.Python
-*.egg
-*.egg-info/
-dist/
-build/
-
-# Modèles ML (trop lourds pour GitHub)
-ml/models/*.pkl
-
-# Dataset (trop lourd pour GitHub)
-ml/data/patients_50000.csv
-
-# Environnement
-.env
-venv/
-env/
-
-# OS
 .DS_Store
 Thumbs.db
 *.log
-
-# IDE
-.vscode/settings.json
-.idea/
-
-# Frontend dependencies
-frontend/node_modules/
-
-# Jupyter
-.ipynb_checkpoints/
+*.tmp
+.env
+venv/
+env/
+ml/models/*.pkl
+ml/data/patients_50000.csv
+ml/data/patients_1000.csv
+.streamlit/secrets.toml
