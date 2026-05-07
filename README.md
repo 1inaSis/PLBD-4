@@ -1,11 +1,11 @@
-# ?? HealthGate � Borne de Triage M�dical Intelligent
+  HealthGate une Borne de Triage Médical Intelligent
 
 > Système de triage automatisé pour les urgences africaines
 > Centrale Casablanca | Groupe PLBD 4 | 2025-2026
 
 ---
 
-## ?? Description
+  Description
 
 HealthGate est une borne de triage médical intelligent conçue pour
 les salles d'urgences africaines. Elle permet de trier automatiquement
@@ -18,7 +18,7 @@ dynamique qui se réajuste en temps réel.
 
 ---
 
-## ?? Probl�me r�solu
+  Problème résolu
 
 - Surcharge chronique des urgences africaines
 - Absence de système de triage automatisé
@@ -29,7 +29,7 @@ dynamique qui se réajuste en temps réel.
 
 ---
 
-## 🏗️ Architecture
+ 🏗️ Architecture
 
 `
 RASPBERRY PI 5                    PC SERVEUR (Windows/Mac)
@@ -44,7 +44,7 @@ Tensiomètre (UART)                    ├─ /salle      Salle d'attente TV
 
 ---
 
-## 🔄 Flux complet d'un patient
+ 🔄 Flux complet d'un patient
 
 `
 1. SCAN CARTE D'IDENTITÉ
@@ -70,14 +70,14 @@ Tensiomètre (UART)                    ├─ /salle      Salle d'attente TV
 
 ---
 
-## 🚀 Installation
+ 🚀 Installation
 
 ### Prérequis
 - Python 3.10+
 - Git
 
 ### 1. Cloner le projet
-`ash
+bash
 git clone https://github.com/1inaSis/PLBD-4.git
 cd PLBD-4/ml
 pip install -r requirements.txt
@@ -94,7 +94,7 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 `
 
 **Mac :**
-`ash
+bash
 brew install tesseract tesseract-lang
 `
 
@@ -102,7 +102,7 @@ brew install tesseract tesseract-lang
 
 ## ▶️ Démarrage rapide
 
-`ash
+bash
 # 1. Générer le dataset
 python data_generator.py
 
@@ -142,7 +142,7 @@ python predict_api.py
 | Caméra | CSI | picamera2 | picamera2 |
 
 **Activation sur Raspberry Pi :**
-`ash
+bash
 pip install RPi.GPIO w1thermsensor max30102 pyserial picamera2
 sudo raspi-config  # Activer I2C et 1-Wire
 `
@@ -191,7 +191,7 @@ AVC, Méningite, Appendicite, Éclampsie, Pneumonie, et 38 autres.
 
 ## 🧪 Tests
 
-`ash
+bash
 python tests/test_predictions.py
 `
 
