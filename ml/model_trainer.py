@@ -370,8 +370,11 @@ def sauvegarder(modele, scaler, noms_features) -> None:
     sauvegarder_artefacts(modele, scaler, noms_features)
 
 
+import streamlit as st
+
+@st.cache_resource(show_spinner=False)
 def charger_modele():
-    """Charge le modèle entraîné depuis le disque (utilisé par l'API Flask)."""
+    """Charge le modèle entraîné depuis le disque. Mis en cache pour Streamlit / Raspberry Pi."""
     with open(CHEMIN_MODELE, "rb") as f:
         modele = pickle.load(f)
     with open(CHEMIN_SCALER, "rb") as f:
