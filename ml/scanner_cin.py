@@ -238,7 +238,12 @@ def scanner_piece_identite(source=None) -> dict:
         cap = cv2.VideoCapture(index_cam)
 
         if not cap.isOpened():
-            return _resultat_erreur("Impossible d'accéder à la caméra.")
+            # Pas de caméra détectée (ex: Pi sans module caméra branché)
+            # → mode simulation plutôt qu'une erreur bloquante.
+            cap.release()
+            resultat = _resultat_simulation()
+            resultat["message"] = "Caméra non détectée — mode simulation activé"
+            return resultat
 
         # Attendre que la caméra se stabilise
         for _ in range(5):
@@ -248,7 +253,10 @@ def scanner_piece_identite(source=None) -> dict:
         cap.release()
 
         if not ret:
-            return _resultat_erreur("Échec de la capture d'image.")
+            # Caméra détectée mais capture impossible → fallback simulation également.
+            resultat = _resultat_simulation()
+            resultat["message"] = "Échec de la capture d'image — mode simulation activé"
+            return resultat
 
     elif isinstance(source, str) and os.path.exists(source):
         # Charger depuis un fichier
