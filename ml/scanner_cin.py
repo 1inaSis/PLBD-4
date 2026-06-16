@@ -95,6 +95,12 @@ def extraire_zone_texte(image: np.ndarray) -> np.ndarray:
 # Extraction des informations depuis le texte OCR
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _nettoyer_nom(valeur: str) -> str:
+    """Garde uniquement lettres (latin + arabe), espaces et tirets. Fallback si < 2 chars."""
+    nettoye = re.sub(r'[^؀-ۿa-zA-ZÀ-ÿ\s\-]', '', valeur).strip()
+    return nettoye if len(nettoye) >= 2 else "Inconnu"
+
+
 def extraire_nom_prenom(texte: str) -> tuple:
     """Extrait le nom et prénom depuis le texte OCR."""
     lignes = [l.strip() for l in texte.split('\n') if l.strip()]
@@ -127,6 +133,8 @@ def extraire_nom_prenom(texte: str) -> tuple:
                     prenom = ligne.title()
                     break
 
+    nom = _nettoyer_nom(nom)
+    prenom = _nettoyer_nom(prenom)
     return nom, prenom
 
 
@@ -238,7 +246,8 @@ def scanner_piece_identite(source=None) -> dict:
         chemin_tmp = '/tmp/scan_cin.jpg'
         try:
             subprocess.run(
-                ['rpicam-still', '-o', chemin_tmp, '--timeout', '2000', '--nopreview'],
+                ['rpicam-still', '-o', chemin_tmp, '--timeout', '500',
+                 '--width', '640', '--height', '480', '--immediate', '--nopreview'],
                 check=True
             )
             image = cv2.imread(chemin_tmp)
@@ -248,6 +257,9 @@ def scanner_piece_identite(source=None) -> dict:
             resultat = _resultat_simulation()
             resultat["message"] = "Échec de rpicam-still — mode simulation activé"
             return resultat
+        finally:
+            if os.path.exists(chemin_tmp):
+                os.remove(chemin_tmp)
 
     elif isinstance(source, str) and os.path.exists(source):
         # Charger depuis un fichier
@@ -297,7 +309,26 @@ def scanner_piece_identite(source=None) -> dict:
             return _resultat_erreur("Aucun texte détecté. Repositionnez la carte.")
 
         # Extraction des informations
-        nom, prenom           = extraire_nom_prenom(meilleur_texte)
+        nom, prenom = extraire_nom_prenom(meilleur_texte)
+
+        # Retry avec carte pivotée 180° si le nom n'a pas été détecté
+        if nom == "Inconnu":
+            image_rot = cv2.rotate(image, cv2.ROTATE_180)
+            image_rot_traitee = pretraiter_image(image_rot)
+            texte_rot = ""
+            for config in configs:
+                try:
+                    t = pytesseract.image_to_string(image_rot_traitee, config=config)
+                    if len(t) > len(texte_rot):
+                        texte_rot = t
+                except Exception:
+                    continue
+            if texte_rot.strip():
+                nom_rot, prenom_rot = extraire_nom_prenom(texte_rot)
+                if nom_rot != "Inconnu":
+                    nom, prenom = nom_rot, prenom_rot
+                    meilleur_texte = texte_rot
+
         date_naissance, age   = extraire_date_naissance(meilleur_texte)
         sexe                  = extraire_sexe(meilleur_texte)
 
