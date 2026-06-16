@@ -12,6 +12,7 @@ import cv2
 import re
 import os
 import base64
+import subprocess
 import numpy as np
 from datetime import datetime
 
@@ -233,29 +234,19 @@ def scanner_piece_identite(source=None) -> dict:
 
     # ── Charger l'image ──────────────────────────────────────────
     if source is None or isinstance(source, int):
-        # Capture depuis webcam ou Raspberry Pi
-        index_cam = source if isinstance(source, int) else 0
-        cap = cv2.VideoCapture(index_cam, cv2.CAP_V4L2)
-
-        if not cap.isOpened():
-            # Pas de caméra détectée (ex: Pi sans module caméra branché)
-            # → mode simulation plutôt qu'une erreur bloquante.
-            cap.release()
+        # Capture via rpicam-still (OV5647 / Raspberry Pi 5)
+        chemin_tmp = '/tmp/scan_cin.jpg'
+        try:
+            subprocess.run(
+                ['rpicam-still', '-o', chemin_tmp, '--timeout', '2000', '--nopreview'],
+                check=True
+            )
+            image = cv2.imread(chemin_tmp)
+            if image is None:
+                raise RuntimeError("Fichier capturé illisible par OpenCV")
+        except Exception:
             resultat = _resultat_simulation()
-            resultat["message"] = "Caméra non détectée — mode simulation activé"
-            return resultat
-
-        # Attendre que la caméra se stabilise
-        for _ in range(5):
-            cap.read()
-
-        ret, image = cap.read()
-        cap.release()
-
-        if not ret:
-            # Caméra détectée mais capture impossible → fallback simulation également.
-            resultat = _resultat_simulation()
-            resultat["message"] = "Échec de la capture d'image — mode simulation activé"
+            resultat["message"] = "Échec de rpicam-still — mode simulation activé"
             return resultat
 
     elif isinstance(source, str) and os.path.exists(source):
