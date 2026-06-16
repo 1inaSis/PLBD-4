@@ -235,7 +235,7 @@ def scanner_piece_identite(source=None) -> dict:
     if source is None or isinstance(source, int):
         # Capture depuis webcam ou Raspberry Pi
         index_cam = source if isinstance(source, int) else 0
-        cap = cv2.VideoCapture(index_cam)
+        cap = cv2.VideoCapture(index_cam, cv2.CAP_V4L2)
 
         if not cap.isOpened():
             # Pas de caméra détectée (ex: Pi sans module caméra branché)
