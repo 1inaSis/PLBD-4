@@ -1,0 +1,1966 @@
+/* ============================================================
+   kiosk.css — Styles spécifiques à l'interface tactile
+   Optimisé pour grands écrans kiosque (1080p+), doigts, gants.
+   Variables de couleur héritées de global.css.
+   ============================================================ */
+
+/* ── Shell principal ───────────────────────────────────────── */
+.kiosk-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 40px;
+  gap: 24px;
+  position: relative;
+}
+
+/* ── Centrage vertical du contenu ──────────────────────────── */
+.kiosk-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Carte principale ──────────────────────────────────────── */
+.kiosk-card {
+  background: rgba(15, 23, 42, 0.80);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 32px;
+  backdrop-filter: blur(24px);
+  box-shadow: 0 32px 80px rgba(2, 8, 23, 0.45);
+  padding: 52px 60px;
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.kiosk-card--centree {
+  align-items: center;
+  text-align: center;
+}
+
+/* ── Titres ────────────────────────────────────────────────── */
+.kiosk-titre {
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 1.05;
+  margin: 8px 0 0;
+  font-weight: 700;
+}
+
+.kiosk-titre-sm {
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: 700;
+  margin: 8px 0 0;
+}
+
+.kiosk-soustitre {
+  color: #94a3b8;
+  font-size: 1.15rem;
+  line-height: 1.65;
+  max-width: 52ch;
+}
+
+.kiosk-note {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+/* ── Boutons tactiles (min 70px de hauteur) ────────────────── */
+.kiosk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 70px;
+  padding: 18px 40px;
+  border-radius: 20px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
+  width: 100%;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.kiosk-btn:active {
+  transform: scale(0.97);
+}
+
+.kiosk-btn--primary {
+  background: linear-gradient(135deg, #0d9488, #14b8a6);
+  color: #fff;
+  box-shadow: 0 8px 32px rgba(20, 184, 166, 0.30);
+}
+
+.kiosk-btn--primary:hover {
+  box-shadow: 0 12px 40px rgba(20, 184, 166, 0.45);
+}
+
+.kiosk-btn--secondary {
+  background: rgba(148, 163, 184, 0.10);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+}
+
+.kiosk-btn--secondary:hover {
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.kiosk-btn-icone {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+/* ── Groupe de boutons ─────────────────────────────────────── */
+.kiosk-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+/* ── Message d'alerte/erreur ───────────────────────────────── */
+.kiosk-alerte {
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 14px;
+  padding: 16px 20px;
+  color: #fca5a5;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* ── Indicateur de connexion WebSocket ────────────────────── */
+.ws-badge {
+  position: fixed;
+  bottom: 20px;
+  right: 24px;
+  font-size: 0.78rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.ws-badge--ok  { color: #34d399; background: rgba(52, 211, 153, 0.10); }
+.ws-badge--off { color: #f87171; background: rgba(248, 113, 113, 0.10); }
+
+/* ── Indicateur caméra active (scan CIN) ──────────────────── */
+.camera-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  margin-bottom: 1rem;
+}
+.camera-active-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f87171;
+  animation: camera-pulse 1s ease-in-out infinite;
+}
+@keyframes camera-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.8); }
+}
+
+/* ── Spinner de chargement ─────────────────────────────────── */
+.kiosk-spinner {
+  width: 72px;
+  height: 72px;
+  border: 4px solid rgba(148, 163, 184, 0.18);
+  border-top-color: #14b8a6;
+  border-radius: 50%;
+  animation: kiosk-spin 0.85s linear infinite;
+  margin: 12px auto 24px;
+}
+
+@keyframes kiosk-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Infos patient (écran confirmation) ────────────────────── */
+.patient-infos {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 20px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.patient-info-ligne {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.10);
+}
+
+.patient-info-ligne:last-child {
+  border-bottom: none;
+}
+
+.patient-info-label {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+
+.patient-info-valeur {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+/* ── Indicateur d'étape ────────────────────────────────────── */
+.indicateur-etape {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 4px;
+  user-select: none;
+}
+
+.etape {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  position: relative;
+}
+
+.etape-bulle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s;
+}
+
+.etape--terminee .etape-bulle {
+  background: rgba(20, 184, 166, 0.20);
+  color: #2dd4bf;
+  border: 2px solid #0d9488;
+}
+
+.etape--active .etape-bulle {
+  background: #0d9488;
+  color: #fff;
+  border: 2px solid #14b8a6;
+  box-shadow: 0 0 0 5px rgba(20, 184, 166, 0.18);
+}
+
+.etape--a-venir .etape-bulle {
+  background: rgba(148, 163, 184, 0.10);
+  color: #475569;
+  border: 2px solid rgba(148, 163, 184, 0.20);
+}
+
+.etape-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.etape--terminee .etape-label { color: #2dd4bf; }
+.etape--active   .etape-label { color: #f8fafc; }
+.etape--a-venir  .etape-label { color: #475569; }
+
+.etape-trait {
+  flex: 1;
+  height: 2px;
+  border-radius: 1px;
+  margin: 0 8px;
+}
+
+.etape-trait--actif   { background: #0d9488; }
+.etape-trait--inactif { background: rgba(148, 163, 184, 0.15); }
+
+/* ── Bouton désactivé ──────────────────────────────────────── */
+.kiosk-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Alerte urgence ────────────────────────────────────────── */
+.kiosk-alerte--urgence {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.40);
+  color: #fcd34d;
+  font-weight: 600;
+  animation: kiosk-pulse-alerte 1.5s ease-in-out 2;
+}
+
+@keyframes kiosk-pulse-alerte {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Étape 2 — Layout questionnaire / pictogramme
+   ═══════════════════════════════════════════════════════════════ */
+
+.questionnaire-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.questionnaire-col { display: flex; flex-direction: column; }
+.questionnaire-col--saisie { height: 100%; }
+
+/* ── Pictogramme corps humain ──────────────────────────────── */
+.corps-humain-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
+  padding: 24px 20px;
+  backdrop-filter: blur(18px);
+}
+
+.corps-humain-consigne {
+  color: #94a3b8;
+  font-size: 1rem;
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.corps-humain-consigne small {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.corps-humain-svg {
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  border-radius: 16px;
+  /* Zones cliquables ont un rayon suffisant pour le toucher */
+  touch-action: manipulation;
+}
+
+/* ── Légende SVG ───────────────────────────────────────────── */
+.corps-legende {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.corps-legende-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.corps-legende-item::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.corps-legende-item--inactif::before {
+  background: rgba(45, 212, 191, 0.10);
+  border: 2px solid rgba(45, 212, 191, 0.45);
+}
+
+.corps-legende-item--actif::before {
+  background: rgba(239, 68, 68, 0.45);
+  border: 2px solid #ef4444;
+}
+
+/* ── Zones sélectionnées (chips) ───────────────────────────── */
+.zones-choisies {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zones-choisies-titre {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  margin: 0;
+}
+
+.zones-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.zone-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.40);
+  color: #fca5a5;
+  font-size: 0.92rem;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 44px;
+  transition: background 0.15s;
+}
+
+.zone-tag:hover {
+  background: rgba(239, 68, 68, 0.28);
+}
+
+.zone-tag-suppr {
+  font-size: 1.1rem;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+/* ── Textarea description symptômes ────────────────────────── */
+.symptome-groupe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.symptome-label {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+.symptome-optionnel {
+  color: #64748b;
+  font-weight: 400;
+}
+
+.symptome-input {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.60);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  color: #f1f5f9;
+  padding: 16px 18px;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 110px;
+  transition: border-color 0.15s;
+  caret-color: #14b8a6;
+}
+
+.symptome-input::placeholder { color: #475569; }
+.symptome-input:focus {
+  outline: none;
+  border-color: rgba(45, 212, 191, 0.55);
+}
+
+.symptome-compteur {
+  font-size: 0.8rem;
+  color: #475569;
+  text-align: right;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Étape 3 — Constantes vitales
+   ═══════════════════════════════════════════════════════════════ */
+
+.constantes-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.constantes-header { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── Barre de stabilisation ────────────────────────────────── */
+.stabilisation-bloc {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stabilisation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stabilisation-label { color: #94a3b8; font-size: 0.95rem; }
+
+.stabilisation-timer {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #14b8a6;
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+  text-align: right;
+}
+
+.stabilisation-barre {
+  height: 8px;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.stabilisation-progression {
+  height: 100%;
+  background: linear-gradient(90deg, #0d9488, #14b8a6);
+  border-radius: 999px;
+  transition: width 0.9s linear;
+}
+
+.stabilisation-ok {
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  border-radius: 16px;
+  padding: 14px 20px;
+  color: #34d399;
+  font-weight: 600;
+  font-size: 1rem;
+  text-align: center;
+}
+
+/* ── Grille biométrie (4 cartes) ───────────────────────────── */
+.bio-grille {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.bio-carte {
+  background: rgba(15, 23, 42, 0.72);
+  border-radius: 22px;
+  padding: 22px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  transition: border-color 0.3s, background 0.3s;
+}
+
+/* Teinte de bordure selon la couleur */
+.bio-carte--vert   { border-color: rgba(52,  211, 153, 0.35); }
+.bio-carte--jaune  { border-color: rgba(251, 191,  36, 0.35); }
+.bio-carte--orange { border-color: rgba(249, 115,  22, 0.35); }
+.bio-carte--rouge  { border-color: rgba(239,  68,  68, 0.45); background: rgba(239,68,68,0.07); }
+.bio-carte--gris   { border-color: rgba(148, 163, 184, 0.18); }
+
+.bio-icone { font-size: 2rem; line-height: 1; }
+
+.bio-label {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.bio-valeur {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1.1;
+  min-height: 2.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.bio-unite {
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: #64748b;
+}
+
+/* Spinner par carte (avant la première lecture) */
+.bio-spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(148, 163, 184, 0.18);
+  border-top-color: #14b8a6;
+  border-radius: 50%;
+  animation: kiosk-spin 0.85s linear infinite;
+}
+
+/* ── Badge couleur ─────────────────────────────────────────── */
+.bio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bio-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bio-badge--vert   { background: rgba(52,211,153,0.14); color: #34d399; }
+.bio-badge--vert   .bio-badge-dot { background: #34d399; }
+
+.bio-badge--jaune  { background: rgba(251,191,36,0.14);  color: #fbbf24; }
+.bio-badge--jaune  .bio-badge-dot { background: #fbbf24; }
+
+.bio-badge--orange { background: rgba(249,115,22,0.14);  color: #fb923c; }
+.bio-badge--orange .bio-badge-dot { background: #fb923c; }
+
+.bio-badge--rouge  { background: rgba(239,68,68,0.16);   color: #f87171; }
+.bio-badge--rouge  .bio-badge-dot { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.25); }
+
+.bio-badge--gris   { background: rgba(148,163,184,0.10); color: #64748b; }
+.bio-badge--gris   .bio-badge-dot { background: #475569; }
+
+/* ── Actions constantes ────────────────────────────────────── */
+.constantes-actions { max-width: 480px; }
+
+/* ── Mesure séquentielle : carte unique ────────────────────── */
+.constante-sequentielle {
+  max-width: 680px;
+  gap: 26px;
+}
+
+/* En-tête : "Étape 3/5" à gauche, compteur "2/4" à droite */
+.seq-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.seq-compteur {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Icône + titre de la constante */
+.seq-titre-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.seq-icone {
+  font-size: 2.8rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Phase ATTENTE : spinner centré */
+.seq-attente {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 0;
+}
+
+/* Phase STABILISATION : valeur + barre */
+.seq-stabilisation {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Phase COMPLET : résultat centré */
+.seq-complet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Grande valeur numérique (style commun STABILISATION + COMPLET) */
+.seq-valeur-grande {
+  font-size: clamp(2.8rem, 5vw, 4rem);
+  font-weight: 800;
+  color: #f1f5f9;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Coloration de la valeur selon le badge couleur (phase COMPLET) */
+.seq-valeur-grande--vert   { color: #34d399; }
+.seq-valeur-grande--jaune  { color: #fbbf24; }
+.seq-valeur-grande--orange { color: #fb923c; }
+.seq-valeur-grande--rouge  { color: #f87171; }
+.seq-valeur-grande--gris   { color: #94a3b8; }
+
+.seq-unite {
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: #64748b;
+}
+
+/* ── Étape double (oxymètre : SpO₂ + FC côte à côte) ──────────── */
+.seq-double-valeurs {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.seq-double-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 120px;
+}
+
+.seq-double-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  text-align: center;
+}
+
+/* Séparateur visuel entre les deux valeurs */
+.seq-double-item + .seq-double-item {
+  border-left: 1px solid rgba(148, 163, 184, 0.12);
+  padding-left: 24px;
+}
+
+/* Message "✓ Mesure effectuée" */
+.seq-ok {
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.32);
+  border-radius: 14px;
+  padding: 12px 24px;
+  color: #34d399;
+  font-weight: 600;
+  font-size: 1rem;
+  text-align: center;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .bio-grille { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Responsive (tablette/kiosk portrait) ──────────────────── */
+@media (max-width: 900px) {
+  .questionnaire-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .corps-humain-svg { max-width: 260px; }
+}
+
+@media (max-width: 768px) {
+  .kiosk-shell     { padding: 16px 20px; }
+  .kiosk-card      { padding: 32px 24px; }
+  .kiosk-titre     { font-size: 2rem; }
+  .kiosk-titre-sm  { font-size: 1.5rem; }
+  .etape-label     { display: none; } /* masquer texte sur petits écrans */
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Illustrations de gestes patient (SVG inline)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Conteneur centré autour de l'illustration */
+.illustration-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 4px 0 2px;
+}
+
+/* SVG lui-même : taille fixe, filtre d'ombre douce */
+.illustration-geste {
+  width: 180px;
+  height: auto;
+  flex-shrink: 0;
+  filter: drop-shadow(0 4px 18px rgba(20, 184, 166, 0.12));
+  transition: opacity 0.3s;
+}
+
+/* Sur tablette/mobile : réduire légèrement */
+@media (max-width: 600px) {
+  .illustration-geste { width: 150px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Utilitaire global
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Label catégorie au-dessus d'un titre */
+.eyebrow {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: #14b8a6;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Étape 4 — Questions adaptatives IA
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Carte plus large pour le texte des questions */
+.q-carte {
+  max-width: 860px;
+  gap: 28px;
+}
+
+/* En-tête : "Étape 4/5 · Questions IA" + compteur "2 / 4" */
+.q-progression-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.q-compteur {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Barre de progression horizontale des questions */
+.q-barre-wrapper {
+  height: 6px;
+  background: rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.q-barre-progression {
+  height: 100%;
+  background: linear-gradient(90deg, #0d9488, #14b8a6);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+/* Texte de la question (grand, lisible à distance) */
+.q-texte {
+  font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+  font-weight: 600;
+  line-height: 1.45;
+  color: #f1f5f9;
+  margin: 0;
+}
+
+/* ── Type OUI / NON ─────────────────────────────────────────── */
+.q-oui-non {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.q-btn-oui {
+  background: rgba(52, 211, 153, 0.14);
+  border: 2px solid rgba(52, 211, 153, 0.40);
+  color: #34d399;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 22px;
+  min-height: 90px;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.q-btn-oui:hover, .q-btn-oui:focus-visible {
+  background: rgba(52, 211, 153, 0.26);
+  border-color: rgba(52, 211, 153, 0.70);
+  transform: translateY(-2px);
+}
+
+.q-btn-non {
+  background: rgba(239, 68, 68, 0.12);
+  border: 2px solid rgba(239, 68, 68, 0.38);
+  color: #f87171;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 22px;
+  min-height: 90px;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.q-btn-non:hover, .q-btn-non:focus-visible {
+  background: rgba(239, 68, 68, 0.24);
+  border-color: rgba(239, 68, 68, 0.65);
+  transform: translateY(-2px);
+}
+
+.q-btn-icone {
+  font-style: normal;
+  font-size: 1.5rem;
+}
+
+/* ── Type CHOIX (plusieurs options) ────────────────────────── */
+.q-choix-grille {
+  display: grid;
+  gap: 14px;
+}
+
+.q-btn-choix {
+  background: rgba(30, 41, 59, 0.80);
+  border: 2px solid rgba(148, 163, 184, 0.22);
+  color: #cbd5e1;
+  font-size: 1.1rem;
+  font-weight: 500;
+  border-radius: 20px;
+  min-height: 80px;
+  text-align: left;
+  padding: 18px 28px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.q-btn-choix:hover, .q-btn-choix:focus-visible {
+  background: rgba(20, 184, 166, 0.14);
+  border-color: rgba(20, 184, 166, 0.55);
+  color: #f1f5f9;
+}
+
+/* ── Type TEXTE LIBRE ───────────────────────────────────────── */
+.q-texte-libre-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Bouton "Passer cette question" ────────────────────────── */
+.q-btn-passer {
+  background: none;
+  border: none;
+  color: #475569;
+  font-size: 0.92rem;
+  cursor: pointer;
+  padding: 10px 0;
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s;
+  align-self: center;
+  animation: q-passer-apparition 0.4s ease both;
+}
+
+.q-btn-passer:hover { color: #94a3b8; }
+
+@keyframes q-passer-apparition {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Bouton retour (discret) ────────────────────────────────── */
+.q-btn-retour {
+  align-self: flex-start;
+  font-size: 0.9rem;
+  min-height: 48px;
+  padding: 10px 22px;
+  margin-top: 8px;
+}
+
+/* ── Vue chargement (spinner centré) ───────────────────────── */
+.q-chargement {
+  gap: 24px;
+}
+
+/* ── Responsive questions ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .q-oui-non { grid-template-columns: 1fr; }
+  .q-texte   { font-size: 1.2rem; }
+  .q-carte   { padding: 32px 24px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Écran Salle d'Attente — grand affichage public (TV/moniteur)
+   Police grande pour lisibilité à 3-5 m.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Shell plein écran */
+.salle-shell {
+  min-height: 100vh;
+  background: #080e1c;
+  display: flex;
+  flex-direction: column;
+  color: #f1f5f9;
+  font-size: 1rem;
+}
+
+/* ── En-tête ─────────────────────────────────────────────────── */
+.salle-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 48px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+  flex-shrink: 0;
+}
+
+.salle-header-gauche {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.salle-nom-hopital {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.salle-sous-titre {
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.salle-header-droite {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Logo ECC — coin supérieur droit */
+.salle-logo-ecc {
+  height: 70px;
+  width: auto;
+  object-fit: contain;
+  opacity: 0.92;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.40));
+  flex-shrink: 0;
+}
+
+/* Groupe heure + badge ws (empilés verticalement) */
+.salle-header-infos {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.salle-heure {
+  font-size: 2.8rem;
+  font-weight: 900;
+  color: #14b8a6;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* Badge état WS */
+.salle-ws-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.salle-ws-badge--connecte   { background: rgba(52,211,153,0.14);  color: #34d399; }
+.salle-ws-badge--connexion  { background: rgba(251,191,36,0.12);  color: #fbbf24; }
+.salle-ws-badge--deconnecte { background: rgba(239,68,68,0.13);   color: #f87171; }
+
+/* ── Bande compteur ──────────────────────────────────────────── */
+.salle-compteur-bande {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 48px;
+  background: rgba(20, 184, 166, 0.07);
+  border-bottom: 1px solid rgba(20, 184, 166, 0.16);
+  flex-shrink: 0;
+}
+
+.salle-compteur-nb {
+  font-size: 2.6rem;
+  font-weight: 900;
+  color: #14b8a6;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.salle-compteur-label {
+  font-size: 1.1rem;
+  color: #64748b;
+}
+
+/* ── Alertes priorité maximale (ESI 1 / 2) ──────────────────── */
+.salle-alertes {
+  padding: 12px 48px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.salle-alerte-critique {
+  background: rgba(239, 68, 68, 0.13);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-left: 4px solid #ef4444;
+  border-radius: 12px;
+  padding: 14px 24px;
+  color: #f87171;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  animation: salle-alerte-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes salle-alerte-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.65; }
+}
+
+/* ── Zone principale scrollable ──────────────────────────────── */
+.salle-main {
+  flex: 1;
+  padding: 18px 48px 32px;
+  overflow-y: auto;
+}
+
+/* Écran vide */
+.salle-vide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 50vh;
+  gap: 20px;
+}
+
+.salle-vide-icone { font-size: 6rem; opacity: 0.3; }
+
+.salle-vide-texte {
+  font-size: 1.6rem;
+  color: #334155;
+  font-weight: 500;
+}
+
+/* ── Liste patients ───────────────────────────────────────────── */
+.salle-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Grille commune ligne patient + en-tête :
+   pos | esi+libellé | ticket | prénom | attente | médecin      */
+.salle-ligne {
+  display: grid;
+  grid-template-columns: 64px 220px 170px 1fr 130px 210px;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 28px;
+  border-radius: 18px;
+  border-left: 4px solid transparent;
+  transition: opacity 0.3s;
+}
+
+/* En-tête colonnes */
+.salle-ligne--entete {
+  background: transparent !important;
+  border-left-color: transparent !important;
+  padding: 6px 28px 10px;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  color: #334155;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+/* ── Colonnes ─────────────────────────────────────────────────── */
+.salle-col-pos {
+  display: flex;
+  align-items: center;
+}
+
+/* Bulle de position (1, 2, 3…) */
+.salle-pos-bulle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.10);
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.salle-col-esi {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Grand badge ESI numérique */
+.salle-esi-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  border: 2px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.7rem;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.salle-esi-libelle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+/* Ticket patient (monospace) */
+.salle-ticket-id {
+  font-size: 0.88rem;
+  font-family: 'Courier New', monospace;
+  color: #475569;
+  letter-spacing: 0.06em;
+  word-break: break-all;
+}
+
+/* Prénom du patient (grand) */
+.salle-col-patient {
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Temps d'attente */
+.salle-col-attente {
+  font-size: 1.05rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Médecin assigné */
+.salle-col-medecin {
+  font-size: 0.95rem;
+  color: #64748b;
+}
+
+/* ── Toasts (notifications en bas à droite) ─────────────────── */
+.salle-toasts {
+  position: fixed;
+  bottom: 36px;
+  right: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 200;
+  max-width: 440px;
+}
+
+.salle-toast {
+  padding: 18px 28px;
+  border-radius: 18px;
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1.4;
+  backdrop-filter: blur(16px);
+  animation: salle-toast-entree 0.35s ease both;
+}
+
+@keyframes salle-toast-entree {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.salle-toast--nouveau {
+  background: rgba(52, 211, 153, 0.14);
+  border: 1px solid rgba(52, 211, 153, 0.38);
+  color: #34d399;
+}
+
+.salle-toast--prise_en_charge {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  color: #38bdf8;
+}
+
+.salle-toast--degradation {
+  background: rgba(249, 115, 22, 0.13);
+  border: 1px solid rgba(249, 115, 22, 0.40);
+  color: #fb923c;
+}
+
+/* ── Responsive (si affiché sur tablette) ───────────────────── */
+@media (max-width: 1100px) {
+  .salle-ligne {
+    grid-template-columns: 52px 180px 140px 1fr 110px 1fr;
+    gap: 12px;
+  }
+  .salle-col-patient  { font-size: 1.2rem; }
+  .salle-heure        { font-size: 2rem; }
+  .salle-header,
+  .salle-compteur-bande,
+  .salle-alertes,
+  .salle-main         { padding-left: 24px; padding-right: 24px; }
+}
+
+@media (max-width: 768px) {
+  /* Sur mobile : masquer les colonnes secondaires */
+  .salle-col-ticket,
+  .salle-col-medecin  { display: none; }
+  .salle-ligne {
+    grid-template-columns: 44px 160px 1fr 90px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Étape 5 — Résultat triage ESI
+   ═══════════════════════════════════════════════════════════════ */
+
+.resultat-carte {
+  max-width: 680px;
+  gap: 28px;
+}
+
+/* ── Numéro de ticket ───────────────────────────────────────── */
+.resultat-ticket-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.resultat-ticket {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #f1f5f9;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Badge ESI (grand, coloré) ──────────────────────────────── */
+.resultat-esi-badge {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  border-radius: 28px;
+  padding: 28px 36px;
+}
+
+.resultat-esi-numero {
+  font-size: 4.5rem;
+  font-weight: 900;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.resultat-esi-infos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resultat-esi-libelle {
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.resultat-esi-sous {
+  font-size: 0.85rem;
+  font-weight: 500;
+  opacity: 0.65;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Texte de statut (issu de niveau_urgence backend) ──────── */
+.resultat-statut {
+  font-size: 1.1rem;
+  color: #94a3b8;
+  text-align: center;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* ── Méta-données : file / attente / médecin ───────────────── */
+.resultat-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  width: 100%;
+}
+
+.resultat-meta-item {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 18px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resultat-meta-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.resultat-meta-valeur {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+/* ── Message de guidage ─────────────────────────────────────── */
+.resultat-instruction {
+  background: rgba(20, 184, 166, 0.08);
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  border-radius: 16px;
+  padding: 16px 22px;
+  color: #5eead4;
+  font-size: 0.98rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .resultat-meta         { grid-template-columns: 1fr; }
+  .resultat-esi-numero   { font-size: 3rem; }
+  .resultat-esi-libelle  { font-size: 1.35rem; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Interface Médecin — /medecin/:id
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Shell global ─────────────────────────────────────────────── */
+.medecin-shell {
+  min-height: 100vh;
+  background: #080f1c;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Manrope', 'Inter', system-ui, sans-serif;
+  color: #cbd5e1;
+}
+
+/* ── En-tête ──────────────────────────────────────────────────── */
+.medecin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 40px;
+  background: rgba(15, 23, 42, 0.80);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.10);
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.medecin-header-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.medecin-nom {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.medecin-specialite {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.medecin-header-droite {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.medecin-nb-patients {
+  font-size: 0.95rem;
+  color: #64748b;
+}
+
+/* ── Alerte critique (banner modal persistant) ────────────────── */
+.medecin-alerte-critique {
+  background: rgba(239, 68, 68, 0.14);
+  border-bottom: 2px solid #ef4444;
+  padding: 18px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  animation: salle-alerte-pulse 2.2s ease-in-out infinite;
+}
+
+.medecin-alerte-corps {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: #f87171;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.medecin-alerte-icone {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.medecin-alerte-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.medecin-btn-voir-alerte {
+  background: rgba(239, 68, 68, 0.18) !important;
+  border: 1px solid #ef4444 !important;
+  color: #f87171 !important;
+  padding: 10px 20px !important;
+  font-size: 0.95rem !important;
+}
+
+.medecin-btn-fermer-alerte {
+  background: none;
+  border: none;
+  color: #f87171;
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.medecin-btn-fermer-alerte:hover {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+/* ── Zone principale ──────────────────────────────────────────── */
+.medecin-main {
+  flex: 1;
+  padding: 28px 40px 40px;
+  overflow-y: auto;
+}
+
+/* Écran vide */
+.medecin-vide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 50vh;
+  gap: 20px;
+}
+
+/* ── Grille de cartes patients ────────────────────────────────── */
+.medecin-patients-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 20px;
+}
+
+/* ── Carte résumé patient ─────────────────────────────────────── */
+.medecin-carte {
+  border-radius: 18px;
+  border-left: 4px solid transparent;
+  padding: 22px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+
+.medecin-carte:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+}
+
+.medecin-carte-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Grand chiffre ESI dans la carte */
+.medecin-carte-esi {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border: 2px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.medecin-carte-identite {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.medecin-carte-nom {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.medecin-carte-sous {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.medecin-badge-alerte {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  title: 'Constante critique';
+}
+
+.medecin-carte-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+}
+
+.medecin-carte-ticket {
+  font-family: 'Courier New', monospace;
+  color: #475569;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+}
+
+.medecin-carte-info {
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.medecin-carte-symptomes {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  line-height: 1.55;
+  font-style: italic;
+  margin: 0;
+}
+
+.medecin-carte-btn {
+  margin-top: 6px;
+  align-self: stretch;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Dossier médical complet
+   ═══════════════════════════════════════════════════════════════ */
+
+.dossier-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* ── Barre navigation retour ──────────────────────────────────── */
+.dossier-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dossier-btn-retour {
+  padding: 10px 20px !important;
+  font-size: 0.92rem !important;
+}
+
+.dossier-ticket {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  color: #475569;
+  letter-spacing: 0.05em;
+}
+
+/* ── Bande ESI + niveau urgence ───────────────────────────────── */
+.dossier-esi-bande {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 20px 28px;
+  border-radius: 18px;
+  border: 1px solid;
+  flex-wrap: wrap;
+}
+
+.dossier-esi-numero {
+  font-size: 3.5rem;
+  font-weight: 900;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.dossier-esi-libelle {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dossier-esi-urgence {
+  font-size: 0.95rem;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.dossier-esi-meta {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: #64748b;
+  text-align: right;
+}
+
+/* ── Grille deux colonnes ─────────────────────────────────────── */
+.dossier-grille-principale {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.dossier-colonne {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ── Section ──────────────────────────────────────────────────── */
+.dossier-section {
+  background: rgba(15, 23, 42, 0.60);
+  border: 1px solid rgba(148, 163, 184, 0.10);
+  border-radius: 18px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dossier-section-titre {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: #14b8a6;
+  margin: 0;
+}
+
+/* ── Grille identité ──────────────────────────────────────────── */
+.dossier-meta-grille {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dossier-info-ligne {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.07);
+  font-size: 0.92rem;
+}
+
+.dossier-info-ligne:last-child {
+  border-bottom: none;
+}
+
+.dossier-info-label {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.dossier-info-valeur {
+  color: #f1f5f9;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ── Symptômes & zones ────────────────────────────────────────── */
+.dossier-symptome-texte {
+  color: #94a3b8;
+  font-style: italic;
+  line-height: 1.65;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.dossier-zones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dossier-zone-tag {
+  background: rgba(20, 184, 166, 0.10);
+  border: 1px solid rgba(20, 184, 166, 0.28);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 0.82rem;
+  color: #5eead4;
+}
+
+/* ── Tags NLP ─────────────────────────────────────────────────── */
+.dossier-nlp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dossier-nlp-tag {
+  background: rgba(249, 115, 22, 0.10);
+  border: 1px solid rgba(249, 115, 22, 0.30);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 0.82rem;
+  color: #fb923c;
+  font-weight: 500;
+}
+
+/* ── Horodatage ───────────────────────────────────────────────── */
+.dossier-horodatage {
+  font-size: 0.78rem;
+  color: #334155;
+  text-align: right;
+  margin: 0;
+}
+
+/* ── Bouton "Pris en charge" ──────────────────────────────────── */
+.dossier-action {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 20px;
+}
+
+.dossier-btn-pec {
+  padding: 18px 40px !important;
+  font-size: 1.1rem !important;
+  font-weight: 700 !important;
+  border-radius: 18px !important;
+  letter-spacing: 0.03em;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: opacity 0.18s, transform 0.18s;
+}
+
+.dossier-btn-pec:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.dossier-btn-pec:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .dossier-grille-principale {
+    grid-template-columns: 1fr;
+  }
+  .medecin-header { padding: 16px 20px; }
+  .medecin-main   { padding: 20px; }
+}
+
+@media (max-width: 640px) {
+  .medecin-patients-grille {
+    grid-template-columns: 1fr;
+  }
+  .dossier-esi-meta { display: none; }
+}

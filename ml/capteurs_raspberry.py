@@ -2,308 +2,234 @@
 capteurs_raspberry.py — Lecture des capteurs biomédicaux pour HealthGate
 Projet HealthGate | Centrale Casablanca | PLBD 4 | 2025-2026
 
-Capteurs utilisés :
-  - DS18B20      → Température corporelle (GPIO / 1-Wire)
-  - MAX30102     → SpO2 + fréquence cardiaque (I2C)
-  - Tensiomètre  → Tension artérielle (UART ou I2C selon modèle)
+Architecture (mode commande) :
+  - L'Arduino (USB) est démarré UNIQUEMENT quand le patient arrive sur l'étape Constantes.
+  - Le Pi envoie une commande série ("MESURE:temperature" ou "MESURE:spo2"),
+    l'Arduino mesure et répond UNE FOIS avec un JSON, puis se rendort.
+  - La tension artérielle est toujours simulée (pas de tensiomètre connecté).
+  - Si l'Arduino est absent ou ne répond pas → simulation complète.
 
-Sur PC (dev/test) : mode simulation automatique si RPi non détecté.
-Sur Raspberry Pi  : lecture réelle des capteurs.
-
-Câblage conseillé :
-  DS18B20  → GPIO 4  (1-Wire, résistance pull-up 4.7kΩ requise)
-  MAX30102 → SDA=GPIO2, SCL=GPIO3 (I2C bus 1)
-  Tensiomètre UART → TX=GPIO14, RX=GPIO15
+API publique :
+  demarrer_arduino() → bool        : ouvre le port série (appelé au mount de ConstantesPage)
+  arreter_arduino()                 : ferme le port série (appelé au unmount)
+  mesurer_capteur(type) → dict      : envoie commande, lit réponse JSON
+  lire_toutes_constantes() → dict   : fallback séquentiel (utilisé par api_triage)
 """
 
-import time
+import json
 import random
+import threading
+import time
 
-# Détection automatique Raspberry Pi
-try:
-    import RPi.GPIO as GPIO
-    SUR_RASPBERRY = True
-except ImportError:
-    SUR_RASPBERRY = False
+# ── Ports série candidats (Linux / Raspberry Pi OS) ──────────────────────────
+PORTS_CANDIDATS = [
+    "/dev/ttyUSB0",
+    "/dev/ttyUSB1",
+    "/dev/ttyACM0",
+    "/dev/ttyACM1",
+]
+BAUDRATE_ARDUINO = 9600
+TIMEOUT_MESURE   = 20    # secondes max pour recevoir la réponse de l'Arduino
 
-# Librairies capteurs (installées uniquement sur le Pi)
-if SUR_RASPBERRY:
-    try:
-        import w1thermsensor          # DS18B20
-        TEMP_DISPONIBLE = True
-    except ImportError:
-        TEMP_DISPONIBLE = False
-
-    try:
-        from max30102 import MAX30102  # SpO2 / FC
-        import hrcalc
-        SPO2_DISPONIBLE = True
-    except ImportError:
-        SPO2_DISPONIBLE = False
-else:
-    TEMP_DISPONIBLE = False
-    SPO2_DISPONIBLE = False
+# ── État partagé ─────────────────────────────────────────────────────────────
+_verrou: threading.Lock = threading.Lock()
+_port_serie = None       # serial.Serial | None  (None = Arduino non connecté)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Lecture Température (DS18B20)
+# Démarrage / arrêt du port série
 # ─────────────────────────────────────────────────────────────────────────────
 
-def lire_temperature() -> dict:
+def demarrer_arduino() -> bool:
     """
-    Lit la température corporelle via le capteur DS18B20.
+    Détecte et ouvre le port série de l'Arduino.
+    Appelé quand le patient arrive sur l'étape Constantes (GET /api/constantes/start).
+    Retourne True si la connexion est établie, False sinon.
+    """
+    global _port_serie
+
+    with _verrou:
+        # Déjà ouvert → rien à faire
+        if _port_serie is not None and _port_serie.is_open:
+            print("[ARDUINO] Port serie deja ouvert")
+            return True
+
+        try:
+            import serial
+        except ImportError:
+            print("[ARDUINO] pyserial non installe (pip install pyserial)")
+            return False
+
+        for port in PORTS_CANDIDATS:
+            try:
+                ser = serial.Serial(port, BAUDRATE_ARDUINO, timeout=TIMEOUT_MESURE)
+                # Attendre la fin du reset Arduino (ouverture USB déclenche un reset)
+                time.sleep(1.5)
+                ser.reset_input_buffer()
+                _port_serie = ser
+                print(f"[ARDUINO] Connecte sur {port}")
+                return True
+            except Exception as e:
+                print(f"[ARDUINO] Port {port} inaccessible : {e}")
+
+        print("[ARDUINO] Aucun port disponible → simulation")
+        return False
+
+
+def arreter_arduino() -> None:
+    """
+    Envoie MESURE:stop puis ferme le port série.
+    Appelé quand le patient quitte l'étape Constantes (GET /api/constantes/stop).
+    """
+    global _port_serie
+
+    with _verrou:
+        if _port_serie is not None and _port_serie.is_open:
+            try:
+                _port_serie.write(b"MESURE:stop\n")
+                time.sleep(0.1)
+            except Exception:
+                pass
+            try:
+                _port_serie.close()
+            except Exception:
+                pass
+            print("[ARDUINO] Port serie ferme")
+        _port_serie = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Mesure sur commande
+# ─────────────────────────────────────────────────────────────────────────────
+
+def mesurer_capteur(type_mesure: str) -> dict:
+    """
+    Envoie une commande à l'Arduino et attend la réponse JSON (bloquant).
+
+    Paramètre
+    ---------
+    type_mesure : "temperature" | "spo2"
 
     Retourne
     --------
-    dict : { valeur (float °C), capteur, succes, message }
+    dict avec les valeurs mesurées + "source": "capteur"|"simulation"|"erreur"
     """
-    if not SUR_RASPBERRY or not TEMP_DISPONIBLE:
-        # Simulation réaliste
+    with _verrou:
+        if _port_serie is None or not _port_serie.is_open:
+            print(f"[ARDUINO] Port non ouvert → simulation ({type_mesure})")
+            return _simuler_mesure(type_mesure)
+
+        try:
+            _port_serie.reset_input_buffer()
+            commande = f"MESURE:{type_mesure}\n".encode()
+            _port_serie.write(commande)
+            print(f"[ARDUINO] Commande → MESURE:{type_mesure}")
+
+            # Attente de la réponse JSON (timeout = TIMEOUT_MESURE)
+            deadline = time.time() + TIMEOUT_MESURE
+            while time.time() < deadline:
+                ligne = _port_serie.readline().decode("utf-8", errors="ignore").strip()
+                if not ligne:
+                    continue
+                if ligne.startswith("{"):
+                    try:
+                        data = json.loads(ligne)
+                        print(f"[ARDUINO] Reponse : {data}")
+                        return data
+                    except json.JSONDecodeError:
+                        continue
+                # Ignorer les lignes de debug Arduino ("[ARDUINO] ...")
+
+            print(f"[ARDUINO] Timeout ({TIMEOUT_MESURE}s) pour {type_mesure} → simulation")
+            return _simuler_mesure(type_mesure)
+
+        except Exception as e:
+            print(f"[ARDUINO] Erreur serie ({type_mesure}) : {e}")
+            return _simuler_mesure(type_mesure)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Simulations de repli
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _simuler_mesure(type_mesure: str) -> dict:
+    """Génère une mesure simulée réaliste pour le type demandé."""
+    if type_mesure == "temperature":
         temp = round(random.gauss(37.0, 0.8), 1)
         temp = max(35.0, min(42.0, temp))
-        return {
-            "valeur":   temp,
-            "capteur":  "DS18B20 (simulé)",
-            "succes":   True,
-            "message":  "Simulation",
-        }
+        return {"temperature": temp, "source": "simulation"}
 
-    try:
-        capteur = w1thermsensor.W1ThermSensor()
-        # Moyenne sur 3 lectures pour plus de précision
-        lectures = []
-        for _ in range(3):
-            lectures.append(capteur.get_temperature())
-            time.sleep(0.1)
-
-        temperature = round(sum(lectures) / len(lectures), 1)
-
-        return {
-            "valeur":  temperature,
-            "capteur": "DS18B20",
-            "succes":  True,
-            "message": "Lecture réussie",
-        }
-
-    except Exception as e:
-        return {
-            "valeur":  37.0,
-            "capteur": "DS18B20",
-            "succes":  False,
-            "message": f"Erreur capteur température : {str(e)}",
-        }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Lecture SpO2 et fréquence cardiaque (MAX30102)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def lire_spo2_fc() -> dict:
-    """
-    Lit le taux d'oxygène (SpO2) et la fréquence cardiaque via MAX30102.
-
-    Le patient doit garder le doigt immobile pendant ~5 secondes.
-
-    Retourne
-    --------
-    dict : { spo2 (float %), fc (int bpm), capteur, succes, message }
-    """
-    if not SUR_RASPBERRY or not SPO2_DISPONIBLE:
-        # Simulation réaliste
+    if type_mesure == "spo2":
         spo2 = round(random.gauss(97.0, 1.5), 1)
         spo2 = max(85.0, min(100.0, spo2))
         fc   = int(random.gauss(75, 12))
         fc   = max(45, min(150, fc))
-        return {
-            "spo2":    spo2,
-            "fc":      fc,
-            "capteur": "MAX30102 (simulé)",
-            "succes":  True,
-            "message": "Simulation",
-        }
+        return {"spo2": spo2, "heart_rate": fc, "source": "simulation"}
 
-    try:
-        capteur = MAX30102()
-        capteur.setup_sensor()
+    return {"source": "simulation"}
 
-        # Collecter 500 échantillons (~5 secondes à 100Hz)
-        rouge, infrarouge = [], []
-        for _ in range(500):
-            capteur.check()
-            if capteur.available():
-                rouge.append(capteur.pop_red_from_storage())
-                infrarouge.append(capteur.pop_ir_from_storage())
-            time.sleep(0.01)
 
-        # Calcul SpO2 et FC
-        if len(rouge) >= 100:
-            valide, spo2, _, fc = hrcalc.calc_hr_and_spo2(
-                infrarouge[:100], rouge[:100]
-            )
-            if valide and 50 < spo2 <= 100 and 30 < fc < 200:
-                return {
-                    "spo2":    round(float(spo2), 1),
-                    "fc":      int(fc),
-                    "capteur": "MAX30102",
-                    "succes":  True,
-                    "message": "Lecture réussie",
-                }
-
-        return {
-            "spo2":    98.0,
-            "fc":      75,
-            "capteur": "MAX30102",
-            "succes":  False,
-            "message": "Signal insuffisant — replacez le doigt",
-        }
-
-    except Exception as e:
-        return {
-            "spo2":    98.0,
-            "fc":      75,
-            "capteur": "MAX30102",
-            "succes":  False,
-            "message": f"Erreur SpO2 : {str(e)}",
-        }
+def _simuler_tension() -> dict:
+    """Génère une tension artérielle simulée avec distribution réaliste."""
+    sys  = int(random.gauss(120, 15))
+    sys  = max(80, min(200, sys))
+    dias = int(sys * random.uniform(0.55, 0.68))
+    return {"bp_systolic": sys, "bp_diastolic": dias, "source": "simulation"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Lecture Tension artérielle
-# ─────────────────────────────────────────────────────────────────────────────
-
-def lire_tension() -> dict:
-    """
-    Lit la tension artérielle.
-
-    Note : la plupart des tensiomètres grand public communiquent via UART
-    ou Bluetooth. Cette fonction gère le protocole UART série.
-    À adapter selon votre modèle exact.
-
-    Retourne
-    --------
-    dict : { systolique (int), diastolique (int), capteur, succes, message }
-    """
-    if not SUR_RASPBERRY:
-        # Simulation réaliste
-        sys  = int(random.gauss(120, 15))
-        sys  = max(80, min(200, sys))
-        dias = int(sys * random.uniform(0.55, 0.68))
-        return {
-            "systolique":  sys,
-            "diastolique": dias,
-            "capteur":     "Tensiomètre UART (simulé)",
-            "succes":      True,
-            "message":     "Simulation",
-        }
-
-    # ── Lecture UART (à adapter selon votre tensiomètre) ──────────
-    try:
-        import serial
-
-        # Configuration UART — adapter le port selon votre Pi
-        # Pi 4/5 : /dev/ttyAMA0 ou /dev/ttyUSB0 (si adaptateur USB)
-        port  = "/dev/ttyUSB0"
-        baud  = 9600
-
-        with serial.Serial(port, baud, timeout=30) as ser:
-            # Déclencher la mesure (commande spécifique à votre modèle)
-            # Exemple générique — consultez la datasheet de votre tensiomètre
-            ser.write(b'\x52')   # commande "mesure" souvent 0x52 ou 0x53
-
-            # Attendre la réponse (peut prendre 30s pour une mesure complète)
-            donnees = ser.read(10)
-
-            if len(donnees) >= 4:
-                # Décoder selon le protocole de votre tensiomètre
-                # Format typique : [START][SYS_H][SYS_L][DIAS_H][DIAS_L][...]
-                systolique  = (donnees[1] << 8) | donnees[2]
-                diastolique = (donnees[3] << 8) | donnees[4]
-
-                if 60 < systolique < 250 and 40 < diastolique < 150:
-                    return {
-                        "systolique":  systolique,
-                        "diastolique": diastolique,
-                        "capteur":     "Tensiomètre UART",
-                        "succes":      True,
-                        "message":     "Lecture réussie",
-                    }
-
-        return {
-            "systolique":  120,
-            "diastolique": 80,
-            "capteur":     "Tensiomètre UART",
-            "succes":      False,
-            "message":     "Données invalides reçues",
-        }
-
-    except Exception as e:
-        return {
-            "systolique":  120,
-            "diastolique": 80,
-            "capteur":     "Tensiomètre",
-            "succes":      False,
-            "message":     f"Erreur tension : {str(e)}",
-        }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Lecture complète de toutes les constantes
+# Lecture complète — fallback pour api_triage (si constantes pas en session)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def lire_toutes_constantes() -> dict:
     """
-    Lit les 3 constantes vitales en parallèle et retourne un résultat unifié.
-    Appel principal depuis predict_api.py
-
-    Retourne
-    --------
-    dict avec : temperature, spo2, heart_rate, bp_systolic, bp_diastolic,
-                statut_capteurs, succes_global
+    Lit toutes les constantes vitales séquentiellement.
+    Utilisé uniquement comme fallback depuis api_triage() si l'étape Constantes
+    a été ignorée ou si la session ne contient pas encore les constantes.
     """
-    print("[CAPTEURS] Lecture en cours...")
+    print("[CAPTEURS] Lecture sequentielle de toutes les constantes...")
 
-    # Lecture séquentielle (parallèle possible avec threading si besoin)
-    res_temp    = lire_temperature()
-    res_spo2    = lire_spo2_fc()
-    res_tension = lire_tension()
+    temp_data = mesurer_capteur("temperature")
+    spo2_data = mesurer_capteur("spo2")
+    tension   = _simuler_tension()
 
-    succes_global = res_temp["succes"] and res_spo2["succes"] and res_tension["succes"]
+    temperature = temp_data.get("temperature")
+    spo2        = spo2_data.get("spo2")
+    heart_rate  = spo2_data.get("heart_rate")
+
+    # Repli simulation si valeur nulle ou source erreur
+    temp_ok = temperature is not None and temp_data.get("source") != "erreur"
+    spo2_ok = spo2 is not None and spo2_data.get("source") != "erreur"
+    fc_ok   = heart_rate is not None and spo2_data.get("source") != "erreur"
+
+    if not temp_ok:
+        temperature = round(random.gauss(37.0, 0.8), 1)
+        temperature = max(35.0, min(42.0, temperature))
+    if not spo2_ok:
+        spo2 = round(random.gauss(97.0, 1.5), 1)
+        spo2 = max(85.0, min(100.0, spo2))
+    if not fc_ok:
+        heart_rate = int(random.gauss(75, 12))
+        heart_rate = max(45, min(150, heart_rate))
 
     constantes = {
-        "temperature":   res_temp["valeur"],
-        "spo2":          res_spo2["spo2"],
-        "heart_rate":    res_spo2["fc"],
-        "bp_systolic":   res_tension["systolique"],
-        "bp_diastolic":  res_tension["diastolique"],
-        "succes_global": succes_global,
+        "temperature":   round(float(temperature), 1),
+        "spo2":          round(float(spo2), 1),
+        "heart_rate":    int(heart_rate),
+        "bp_systolic":   tension["bp_systolic"],
+        "bp_diastolic":  tension["bp_diastolic"],
+        "succes_global": True,
         "statut_capteurs": {
-            "temperature": {
-                "valeur":  res_temp["valeur"],
-                "capteur": res_temp["capteur"],
-                "succes":  res_temp["succes"],
-                "message": res_temp["message"],
-            },
-            "spo2_fc": {
-                "spo2":    res_spo2["spo2"],
-                "fc":      res_spo2["fc"],
-                "capteur": res_spo2["capteur"],
-                "succes":  res_spo2["succes"],
-                "message": res_spo2["message"],
-            },
-            "tension": {
-                "systolique":  res_tension["systolique"],
-                "diastolique": res_tension["diastolique"],
-                "capteur":     res_tension["capteur"],
-                "succes":      res_tension["succes"],
-                "message":     res_tension["message"],
-            },
-        }
+            "temperature": {"source": "capteur" if temp_ok else "simulation"},
+            "spo2_fc":     {"source": "capteur" if (spo2_ok and fc_ok) else "simulation"},
+            "tension":     {"source": "simulation"},
+        },
     }
 
-    print(f"[CAPTEURS] Température  : {constantes['temperature']}°C  ({res_temp['capteur']})")
-    print(f"[CAPTEURS] SpO2         : {constantes['spo2']}%  ({res_spo2['capteur']})")
-    print(f"[CAPTEURS] Fréq. card.  : {constantes['heart_rate']} bpm")
-    print(f"[CAPTEURS] Tension      : {constantes['bp_systolic']}/{constantes['bp_diastolic']} mmHg")
+    print(f"[CAPTEURS] Temperature : {constantes['temperature']}°C")
+    print(f"[CAPTEURS] SpO2        : {constantes['spo2']}%")
+    print(f"[CAPTEURS] Freq. card. : {constantes['heart_rate']} bpm")
+    print(f"[CAPTEURS] Tension     : {constantes['bp_systolic']}/{constantes['bp_diastolic']} mmHg (sim)")
 
     return constantes
 
@@ -313,15 +239,21 @@ def lire_toutes_constantes() -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("=" * 50)
-    print("TEST DES CAPTEURS — HealthGate")
-    print(f"Mode : {'Raspberry Pi réel' if SUR_RASPBERRY else 'Simulation PC'}")
+    print("TEST DES CAPTEURS — HealthGate (mode commande)")
     print("=" * 50)
 
-    constantes = lire_toutes_constantes()
+    print("\n[1] Démarrage Arduino...")
+    ok = demarrer_arduino()
+    print(f"    Connecte : {ok}")
 
-    print("\n=== CONSTANTES VITALES ===")
-    print(f"  Température  : {constantes['temperature']} °C")
-    print(f"  SpO2         : {constantes['spo2']} %")
-    print(f"  Fréq. card.  : {constantes['heart_rate']} bpm")
-    print(f"  Tension      : {constantes['bp_systolic']}/{constantes['bp_diastolic']} mmHg")
-    print(f"  Succès global: {constantes['succes_global']}")
+    print("\n[2] Mesure température...")
+    res = mesurer_capteur("temperature")
+    print(f"    → {res}")
+
+    print("\n[3] Mesure SpO2 + FC...")
+    res = mesurer_capteur("spo2")
+    print(f"    → {res}")
+
+    print("\n[4] Arrêt Arduino...")
+    arreter_arduino()
+    print("    Arrete.")

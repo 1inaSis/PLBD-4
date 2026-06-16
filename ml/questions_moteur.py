@@ -12,21 +12,21 @@ load_dotenv()
 
 # Toutes les features que le modèle ML attend pour les réponses encodées.
 FEATURES_QUESTIONS = [
-    'q_craquement_trauma', 'q_appui_pied_trauma', 'q_gonflement_trauma', 'q_deformation_trauma', 
-    'q_perte_conscience_trauma', 'q_saignement_trauma', 'q_mecanisme_trauma', 'q_douleur_irradiee_bras', 
-    'q_douleur_repos_effort', 'q_duree_douleur_thoracique', 'q_sueurs_froides_cardiaque', 'q_antecedent_infarctus', 
-    'q_medicaments_coeur', 'q_palpitations_cardiaque', 'q_duree_dyspnee', 'q_asthme_poumon', 'q_dyspnee_repos', 
-    'q_crachats_sang', 'q_crise_similaire_respiratoire', 'q_fievre_associee_respiratoire', 'q_localisation_abdomen', 
-    'q_debut_abdomen', 'q_vomissements_abdomen', 'q_fievre_abdomen', 'q_aggravation_marche', 'q_sang_selles', 
-    'q_neuro_faiblesse', 'q_neuro_parole', 'q_neuro_debut_soudain', 'q_neuro_perte_conscience', 'q_neuro_antcedent', 
-    'q_duree_fievre', 'q_frissons_fievre', 'q_voyage_fievre', 'q_medicaments_fievre', 'q_toux_fievre', 
-    'q_entourage_malade', 'q_douleur_urinaire_fievre', 'q_douleur_flancs', 'q_urines_troubles', 'q_duree_urinaire', 
-    'q_mal_de_gorge_fievre', 'q_dysphagie_orl', 'q_duree_orl', 'q_ganglions_orl', 'q_rougeur_peau', 
-    'q_demangeaison_peau', 'q_allergie_peau', 'q_plaie_peau', 'q_traitement_diabete', 'q_mange_diabete', 
-    'q_tremblements_diabete', 'q_duree_mal_diabete', 'q_grossesse_mois', 'q_saignement_vaginal', 
-    'q_contractions_grossesse', 'q_bebe_bouge', 'q_hydratation_pediatrie', 'q_reveil_pediatrie', 
-    'q_convulsions_pediatrie', 'q_duree_mal_pediatrie', 'q_hypertension_connue', 'q_traitement_tension', 
-    'q_vision_hypertension', 'q_medicaments_generaux', 'q_allergies_generales', 'q_premiere_fois', 
+    'q_craquement_trauma', 'q_appui_pied_trauma', 'q_gonflement_trauma', 'q_deformation_trauma',
+    'q_perte_conscience_trauma', 'q_saignement_trauma', 'q_mecanisme_trauma', 'q_douleur_irradiee_bras',
+    'q_douleur_repos_effort', 'q_duree_douleur_thoracique', 'q_sueurs_froides_cardiaque', 'q_antecedent_infarctus',
+    'q_medicaments_coeur', 'q_palpitations_cardiaque', 'q_duree_dyspnee', 'q_asthme_poumon', 'q_dyspnee_repos',
+    'q_crachats_sang', 'q_crise_similaire_respiratoire', 'q_fievre_associee_respiratoire', 'q_localisation_abdomen',
+    'q_debut_abdomen', 'q_vomissements_abdomen', 'q_fievre_abdomen', 'q_aggravation_marche', 'q_sang_selles',
+    'q_neuro_faiblesse', 'q_neuro_parole', 'q_neuro_debut_soudain', 'q_neuro_perte_conscience', 'q_neuro_antcedent',
+    'q_duree_fievre', 'q_frissons_fievre', 'q_voyage_fievre', 'q_medicaments_fievre', 'q_toux_fievre',
+    'q_entourage_malade', 'q_douleur_urinaire_fievre', 'q_douleur_flancs', 'q_urines_troubles', 'q_duree_urinaire',
+    'q_mal_de_gorge_fievre', 'q_dysphagie_orl', 'q_duree_orl', 'q_ganglions_orl', 'q_rougeur_peau',
+    'q_demangeaison_peau', 'q_allergie_peau', 'q_plaie_peau', 'q_traitement_diabete', 'q_mange_diabete',
+    'q_tremblements_diabete', 'q_duree_mal_diabete', 'q_grossesse_mois', 'q_saignement_vaginal',
+    'q_contractions_grossesse', 'q_bebe_bouge', 'q_hydratation_pediatrie', 'q_reveil_pediatrie',
+    'q_convulsions_pediatrie', 'q_duree_mal_pediatrie', 'q_hypertension_connue', 'q_traitement_tension',
+    'q_vision_hypertension', 'q_medicaments_generaux', 'q_allergies_generales', 'q_premiere_fois',
     'q_geriatrie_chutes', 'q_geriatrie_medicaments', 'q_geriatrie_memor'
 ]
 
@@ -89,32 +89,147 @@ def encoder_reponses(questions: list, reponses: dict) -> dict:
     return features
 
 
-def generer_questions(constantes: dict, symptom_text: str, age: int, sex: int) -> list:
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    
-    if not api_key:
-        print("[AVERTISSEMENT] Pas de GROQ_API_KEY définie.")
-        return [{"id": "q1", "texte": "Avez-vous des antécédents ?", "type": "oui_non", "feature_name": "q_medicaments_generaux"}]
+# ── Labels français des zones du pictogramme ─────────────────────────────────
+_ZONES_LABELS_FR = {
+    "tete":          "Tête / Visage",
+    "cou":           "Cou / Gorge",
+    "poitrine":      "Poitrine / Coeur",
+    "ventre":        "Ventre / Abdomen",
+    "bas_ventre":    "Bas-ventre",
+    "epaule_gauche": "Epaule gauche",
+    "epaule_droite": "Epaule droite",
+    "bras_gauche":   "Bras gauche",
+    "bras_droit":    "Bras droit",
+    "hanche_gauche": "Hanche / Dos gauche",
+    "hanche_droite": "Hanche / Dos droit",
+    "jambe_gauche":  "Jambe gauche",
+    "jambe_droite":  "Jambe droite",
+    "pied_gauche":   "Pied / Cheville gauche",
+    "pied_droit":    "Pied / Cheville droit",
+}
 
-    prompt_system = "Tu es un infirmier d accueil urgentiste (IAO). Agis de faà§on TRàˆS variée à  chaque patient."
-    
-    prompt_user = f"Le patient a {age} ans, sexe {'Homme' if sex==1 else 'Femme'}.\n"
-    prompt_user += f"Tension et Constantes : {json.dumps(constantes)}\n"
-    prompt_user += f"Motif ou symptômes actuels : {symptom_text}\n\n"
-    prompt_user += "Génère exactement 4 questions médicales d'urgence pertinentes et directes à  poser.\n"
-    prompt_user += "TRES IMPORTANT: POUR NE PAS TOUJOURS POSER LA MEME 1ERE QUESTION (ex: Avez-vous des antecedents?), varie ENORMEMENT le choix de tes questions par rapport aux constantes !\n"
-    prompt_user += "Tu peux poser des questions ouvertes ('texte_libre'), des choix multiples ('choix') ou des 'oui_non'.\n"
-    prompt_user += "TRES IMPORTANT : Pour le champ 'feature_name', tu DOIS OBLIGATOIREMENT ET STRICTEMENT copier-coller une de ces valeurs et aucune autre, sinon le ML plantera :\n"
+# ── Labels français des features NLP détectées ───────────────────────────────
+_NLP_LABELS_FR = {
+    "nlp_chest_pain":            "douleur thoracique",
+    "nlp_dyspnea":               "dyspnee / essoufflement",
+    "nlp_loss_of_consciousness": "perte de conscience",
+    "nlp_severe_bleeding":       "saignement important",
+    "nlp_neurological":          "symptomes neurologiques",
+    "nlp_abdominal_pain":        "douleur abdominale",
+    "nlp_fever":                 "fievre",
+    "nlp_trauma":                "traumatisme",
+    "nlp_urgence_critique":      "urgence critique",
+}
+
+
+def _gravite_constante(cle: str, valeur) -> str:
+    """Retourne un libelle de gravite (NORMAL / ALERTE / CRITIQUE) pour une constante."""
+    if valeur is None:
+        return "non mesuree"
+    v = float(valeur)
+    if cle == "temperature":
+        if v >= 41.0:            return "HYPERPYREXIE CRITIQUE"
+        if v >= 39.0:            return "FIEVRE ELEVEE ALERTE"
+        if v >= 37.5:            return "LEGERE FIEVRE"
+        if v < 36.0:             return "HYPOTHERMIE ALERTE"
+        return "NORMAL"
+    if cle == "spo2":
+        if v < 90:               return "CRITIQUE"
+        if v < 93:               return "ALERTE"
+        if v < 95:               return "LEGEREMENT BAS"
+        return "NORMAL"
+    if cle == "heart_rate":
+        if v < 40 or v > 150:   return "CRITIQUE"
+        if v < 50 or v > 130:   return "ALERTE"
+        if v < 60 or v > 100:   return "LEGEREMENT ANORMAL"
+        return "NORMAL"
+    if cle == "bp_systolic":
+        if v > 190 or v < 70:   return "CRITIQUE"
+        if v > 160 or v < 80:   return "ALERTE"
+        if v > 140 or v < 90:   return "LEGEREMENT ANORMAL"
+        return "NORMAL"
+    return ""
+
+
+def generer_questions(
+    constantes: dict,
+    symptom_text: str,
+    age: int,
+    sex: int,
+    zones_corps: list = None,
+    features_nlp: dict = None,
+) -> list:
+    api_key = os.environ.get("GROQ_API_KEY", "")
+
+    if not api_key:
+        print("[AVERTISSEMENT] Pas de GROQ_API_KEY definie.")
+        return [{"id": "q1", "texte": "Avez-vous des antecedents ?", "type": "oui_non", "feature_name": "q_medicaments_generaux"}]
+
+    prompt_system = (
+        "Tu es un infirmier d'accueil urgentiste (IAO) experimente aux urgences. "
+        "Tu dois poser des questions CIBLEES sur la situation specifique du patient, "
+        "pas des questions generiques. Chaque question doit potentiellement modifier le score ESI."
+    )
+
+    sexe_str = "Homme" if sex == 1 else "Femme"
+    prompt_user = f"PATIENT : {age} ans, {sexe_str}\n\n"
+
+    # Constantes vitales avec niveaux de gravite
+    prompt_user += "CONSTANTES VITALES :\n"
+    for cle, label, unite in [
+        ("temperature", "Temperature",        "degC"),
+        ("spo2",        "SpO2",               "%"),
+        ("heart_rate",  "Frequence cardiaque", "bpm"),
+        ("bp_systolic", "Tension systolique",  "mmHg"),
+    ]:
+        val = constantes.get(cle)
+        if val is not None:
+            niv = _gravite_constante(cle, val)
+            prompt_user += f"  - {label} : {val} {unite} -> {niv}\n"
+
+    # Zones douloureuses indiquees sur le pictogramme
+    if zones_corps:
+        zones_fr = [_ZONES_LABELS_FR.get(z, z) for z in zones_corps]
+        prompt_user += f"\nZONES DOULOUREUSES INDIQUEES : {', '.join(zones_fr)}\n"
+    else:
+        prompt_user += "\nZONES DOULOUREUSES : non precisees\n"
+
+    # Description textuelle
+    prompt_user += f"\nDESCRIPTION DU PATIENT : << {symptom_text} >>\n"
+
+    # Features NLP deja identifiees - ne pas reposer ces questions
+    detectees = []
+    if features_nlp:
+        detectees = [
+            _NLP_LABELS_FR[k]
+            for k, v in features_nlp.items()
+            if v and v > 0 and k in _NLP_LABELS_FR
+        ]
+    if detectees:
+        prompt_user += f"\nDEJA IDENTIFIE PAR ANALYSE AUTOMATIQUE : {', '.join(detectees)}\n"
+        prompt_user += "-> NE PAS reposer de questions sur ces elements, ils sont deja connus.\n"
+
+    prompt_user += "\n"
+    prompt_user += "Genere exactement 4 questions medicales CIBLEES pour affiner le triage ESI.\n"
+    prompt_user += "REGLES IMPERATIVES :\n"
+    prompt_user += "  1. Questions directement liees aux zones douloureuses et constantes ci-dessus.\n"
+    prompt_user += "  2. Ne pas commencer par 'Avez-vous des antecedents ?' de facon generique.\n"
+    prompt_user += "  3. Priorite aux questions qui peuvent faire passer l'ESI de 3 a 2 (aggravation, duree, signes associes).\n"
+    prompt_user += "  4. Varier les types : 'oui_non', 'choix', 'texte_libre'.\n"
+    prompt_user += "  5. Pour 'feature_name', copier-coller EXACTEMENT une valeur de cette liste :\n"
     prompt_user += str(FEATURES_QUESTIONS) + "\n\n"
-    prompt_user += "Donne UNIQUEMENT un tableau JSON natif contenant des objets sous la forme:\n"
-    prompt_user += "[\n  {\n"
-    prompt_user += '    "id": "q_1",\n'
-    prompt_user += '    "texte": "La question posée",\n'
-    prompt_user += '    "type": "choix" ou "oui_non" ou "texte_libre",\n'
-    prompt_user += '    "choix": ["Option 1", "Option 2"] (si type="choix"),\n'
-    prompt_user += '    "feature_name": "q_la_feature_exacte"\n'
-    prompt_user += "  }\n]\n"
-    prompt_user += "Ne met RIEN DEVANT ou APRES le JSON. PUREMENT du JSON formatté valide."
+    prompt_user += "Reponds UNIQUEMENT avec un tableau JSON valide, sans texte avant ni apres :\n"
+    prompt_user += (
+        '[\n'
+        '  {\n'
+        '    "id": "q_1",\n'
+        '    "texte": "La question posee au patient",\n'
+        '    "type": "oui_non",\n'
+        '    "choix": ["Option A", "Option B"],\n'
+        '    "feature_name": "q_feature_exacte_de_la_liste"\n'
+        '  }\n'
+        ']\n'
+    )
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -142,7 +257,6 @@ def generer_questions(constantes: dict, symptom_text: str, age: int, sex: int) -
         else:
             print(f"[Erreur API] {response.status_code} - {response.text}")
     except Exception as e:
-        print(f"[Exception API] Erreur réseau ou de parsing JSON : {e}")
+        print(f"[Exception API] Erreur reseau ou de parsing JSON : {e}")
 
     return [{"id": "q_secours", "texte": "Que ressentez-vous?", "type": "texte_libre", "feature_name": "q_premiere_fois"}]
-

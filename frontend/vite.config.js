@@ -6,5 +6,11 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    proxy: {
+      // Requêtes REST → FastAPI :8000
+      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+      // WebSocket → FastAPI :8000
+      '/ws': { target: 'ws://localhost:8000', ws: true },
+    },
   },
 })

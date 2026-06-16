@@ -1,0 +1,30 @@
+[Unit]
+Description=HealthGate – Frontend React (PLBD-4)
+After=network.target plbd4-backend.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+
+# Répertoire du frontend
+WorkingDirectory=/home/pi/PLBD-4/frontend
+
+# npm run preview sert le build de production (dist/) sans hot-reload
+# Le build doit avoir été fait avant : cd frontend && npm run build
+ExecStart=/usr/bin/npm run preview -- --host 0.0.0.0 --port 5173
+
+# Redémarrage automatique en cas de crash
+Restart=always
+RestartSec=5
+
+Environment=NODE_ENV=production
+
+# Logs accessibles via : journalctl -u plbd4-frontend -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plbd4-frontend
+
+[Install]
+WantedBy=multi-user.target

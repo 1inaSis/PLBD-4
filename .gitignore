@@ -1,14 +1,40 @@
-﻿__pycache__/
+# ── Dépendances ──────────────────────────────────────────────
+node_modules/
+__pycache__/
 *.pyc
 *.pyo
-.DS_Store
-Thumbs.db
-*.log
-*.tmp
-.env
+.venv/
 venv/
 env/
-ml/models/*.pkl
-ml/data/patients_50000.csv
-ml/data/patients_1000.csv
+
+# ── Build frontend ────────────────────────────────────────────
+frontend/dist/
+
+# ── Fichiers sensibles ────────────────────────────────────────
+.env
+.env.*
+.env.local
+.env.production
+.env.development
+!.env.example
+!backend/.env.example
 .streamlit/secrets.toml
+
+# ── Modèles ML (trop lourds pour GitHub) ─────────────────────
+ml/models/*.pkl
+
+# ── Données d'entraînement et bases de données ───────────────
+ml/data/*.csv
+ml/data/*.db
+
+# ── Fichiers temporaires et OS ────────────────────────────────
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo

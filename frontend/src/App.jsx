@@ -1,73 +1,47 @@
-const stats = [
-	{ label: 'Patients triages', value: '50k+' },
-	{ label: 'Delai moyen', value: '< 2 min' },
-	{ label: 'Niveau critique', value: 'ESI 1-2' },
-]
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { PatientProvider } from './context/PatientContext'
+import AccueilPage       from './pages/AccueilPage'
+import QuestionnairePage from './pages/QuestionnairePage'
+import ConstantesPage    from './pages/ConstantesPage'
+import QuestionsPage     from './pages/QuestionsPage'
+import ResultatPage      from './pages/ResultatPage'
+import FileAttentePage   from './pages/FileAttentePage'
+import SalleAttentePage  from './pages/SalleAttentePage'
+import MedecinPage       from './pages/MedecinPage'
 
-const workflow = [
-	'Scan de la carte d’identite',
-	'Symptomes libres et constantes',
-	'Prediction ESI et file priorisee',
-]
+export default function App() {
+  return (
+    <PatientProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Étape 1 — Identité */}
+          <Route path="/"              element={<AccueilPage />} />
 
-function App() {
-	return (
-		<main className="app-shell">
-			<section className="hero-card">
-				<div className="hero-copy">
-					<span className="eyebrow">HealthGate</span>
-					<h1>Borne de triage medical intelligent.</h1>
-					<p>
-						Une interface frontale claire pour capturer les donnees patient,
-						prioriser les urgences et garder la file visible en temps reel.
-					</p>
+          {/* Étape 2 — Symptômes + pictogramme corps */}
+          <Route path="/questionnaire" element={<QuestionnairePage />} />
 
-					<div className="stats-grid">
-						{stats.map((stat) => (
-							<article key={stat.label} className="stat-card">
-								<strong>{stat.value}</strong>
-								<span>{stat.label}</span>
-							</article>
-						))}
-					</div>
-				</div>
+          {/* Étape 3 — Constantes vitales (capteurs) */}
+          <Route path="/constantes"    element={<ConstantesPage />} />
 
-				<aside className="panel-card">
-					<div className="panel-header">
-						<span className="status-dot" />
-						Systeme actif
-					</div>
+          {/* Étape 4 — Questions adaptatives IA */}
+          <Route path="/questions"     element={<QuestionsPage />} />
 
-					<div className="queue-preview">
-						<div>
-							<span className="queue-label">Patient courant</span>
-							<strong>ESI 2 - Urgence</strong>
-						</div>
-						<div>
-							<span className="queue-label">Medecin assigne</span>
-							<strong>Dr. M1</strong>
-						</div>
-						<div>
-							<span className="queue-label">Attente estimee</span>
-							<strong>07 min</strong>
-						</div>
-					</div>
-				</aside>
-			</section>
+          {/* Étape 5 — Résultat ESI + ticket */}
+          <Route path="/resultat"      element={<ResultatPage />} />
 
-			<section className="workflow-card">
-				<h2>Pipeline de triage</h2>
-				<div className="workflow-list">
-					{workflow.map((step, index) => (
-						<div key={step} className="workflow-step">
-							<span>{index + 1}</span>
-							<p>{step}</p>
-						</div>
-					))}
-				</div>
-			</section>
-		</main>
-	)
+          {/* Écran salle d'attente — grand affichage public */}
+          <Route path="/salle"         element={<SalleAttentePage />} />
+
+          {/* Ancienne route file d'attente (conservée) */}
+          <Route path="/file-attente"  element={<FileAttentePage />} />
+
+          {/* Interface médecin — dossiers patients assignés */}
+          <Route path="/medecin/:id"   element={<MedecinPage />} />
+
+          {/* Redirection fallback */}
+          <Route path="*"              element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </PatientProvider>
+  )
 }
-
-export default App

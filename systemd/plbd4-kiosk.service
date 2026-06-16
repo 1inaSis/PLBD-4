@@ -1,0 +1,38 @@
+[Unit]
+Description=HealthGate – Kiosque Chromium 800x480 (PLBD-4)
+# Démarrer après le frontend React ET après que l'environnement graphique X11 soit prêt
+After=plbd4-frontend.service display-manager.service graphical.target
+Wants=graphical.target
+# Dépendance douce : si le frontend tombe, le kiosk s'arrête aussi
+PartOf=plbd4-frontend.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+
+# Variable d'affichage X11 (adapter si DISPLAY différent, vérifier avec : echo $DISPLAY)
+Environment=DISPLAY=:0
+# Fichier d'autorisation X11 (généré à la connexion de l'utilisateur pi)
+Environment=XAUTHORITY=/home/pi/.Xauthority
+# Éviter les popups de mise à jour Chromium
+Environment=CHROMIUM_FLAGS="--disable-software-rasterizer"
+
+# Répertoire du projet (adapter si cloné ailleurs)
+WorkingDirectory=/home/pi/PLBD-4
+
+# Le script gère lui-même la boucle de relance → Restart=on-failure suffit
+ExecStart=/home/pi/PLBD-4/scripts/launch_kiosk.sh
+
+# Redémarrage si le script quitte anormalement (sortie ≠ 0)
+Restart=on-failure
+RestartSec=10
+
+# Logs accessibles via : journalctl -u plbd4-kiosk -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plbd4-kiosk
+
+[Install]
+# Démarrage dans la cible "mode graphique" (pas multi-user.target qui est headless)
+WantedBy=graphical.target
