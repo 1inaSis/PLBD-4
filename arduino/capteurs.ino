@@ -17,7 +17,7 @@
  *
  * Bibliothèques requises :
  *   - Adafruit MLX90614 Library
- *   - SparkFun MAX3010x Pulse and Proximity Sensor Library
+ *   - SparkFun MAX3010x Pulse and Proximity Sensor Library (compatible MAX30102)
  *
  * Câblage I2C (Uno / Nano) : SDA → A4,  SCL → A5
  */
@@ -31,18 +31,13 @@
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 MAX30105 capteurMax;
 
-// ── Buffer pour l'algorithme SpO2/FC ────────────────────────────────────────
-#define TAILLE_BUFFER 100
+// ── Buffer pour l'algorithme SpO2/FC (minimum 25 pour spo2_algorithm) ────────
+#define TAILLE_BUFFER 48  // doit correspondre à BUFFER_SIZE dans spo2_algorithm.h (FreqS*4)
 uint16_t tamponIR[TAILLE_BUFFER];
 uint16_t tamponRouge[TAILLE_BUFFER];
 
-int32_t valeurSpo2     = 0;
-int8_t  spo2Valide     = 0;
-int32_t valeurFreqCard = 0;
-int8_t  freqCardValide = 0;
-
 // Seuil IR pour détecter la présence d'un doigt (<50 000 = pas de doigt)
-const uint32_t SEUIL_DOIGT = 50000;
+#define SEUIL_DOIGT 50000UL
 
 bool mlxOk = false;
 bool maxOk = false;
@@ -54,31 +49,32 @@ void setup() {
 
   mlxOk = mlx.begin();
 
+  // MAX30102 : 2 LEDs seulement (rouge + infrarouge, pas de verte)
+  // ledMode=2 force le mode bicolore compatible MAX30102
   if (capteurMax.begin(Wire, I2C_SPEED_STANDARD)) {
     maxOk = true;
-    capteurMax.setup();
+    capteurMax.setup(0x1F, 4, 2, 100, 411, 4096);
     capteurMax.setPulseAmplitudeRed(0x0A);
-    capteurMax.setPulseAmplitudeGreen(0);
   }
 
-  // Signal de démarrage pour la détection automatique du port côté Python
   Serial.println(F("[ARDUINO] Pret - en attente de commandes"));
 }
 
 // ── Boucle principale : attente de commandes ─────────────────────────────────
 void loop() {
   if (Serial.available() > 0) {
-    String commande = Serial.readStringUntil('\n');
-    commande.trim();
+    char commande[25];
+    byte len = Serial.readBytesUntil('\n', commande, sizeof(commande) - 1);
+    commande[len] = '\0';
+    if (len > 0 && commande[len - 1] == '\r') commande[--len] = '\0';
 
-    if (commande == F("MESURE:temperature")) {
+    if (strcmp(commande, "MESURE:temperature") == 0) {
       mesurerTemperature();
-    } else if (commande == F("MESURE:spo2")) {
+    } else if (strcmp(commande, "MESURE:spo2") == 0) {
       mesurerOxymetrie();
-    } else if (commande == F("MESURE:stop")) {
+    } else if (strcmp(commande, "MESURE:stop") == 0) {
       Serial.println(F("{\"statut\": \"arrete\"}"));
     }
-    // Les commandes inconnues sont ignorées silencieusement
   }
 }
 
@@ -89,19 +85,16 @@ void mesurerTemperature() {
     return;
   }
 
-  // Attente courte pour laisser le capteur se stabiliser
   delay(500);
 
-  // Moyenne sur 5 lectures (intervalle 200 ms = 1 s total)
   float somme = 0.0;
-  const int NB_LECTURES = 5;
-  for (int i = 0; i < NB_LECTURES; i++) {
+  const byte NB_LECTURES = 5;
+  for (byte i = 0; i < NB_LECTURES; i++) {
     somme += mlx.readObjectTempC();
     delay(200);
   }
   float temperature = somme / NB_LECTURES;
 
-  // Validation plage physiologique humaine : 30 °C – 45 °C
   if (temperature < 30.0 || temperature > 45.0) {
     Serial.println(F("{\"temperature\": null, \"source\": \"erreur\"}"));
     return;
@@ -119,7 +112,7 @@ void mesurerOxymetrie() {
     return;
   }
 
-  // Remplissage initial du buffer (100 échantillons ≈ 1 s à 100 sps)
+  // Remplissage initial du buffer (25 échantillons ≈ 250 ms à 100 sps)
   for (byte i = 0; i < TAILLE_BUFFER; i++) {
     while (!capteurMax.available()) capteurMax.check();
     tamponRouge[i] = capteurMax.getRed();
@@ -127,21 +120,19 @@ void mesurerOxymetrie() {
     capteurMax.nextSample();
   }
 
-  // Vérifier que le doigt est posé sur le capteur
   if (tamponIR[TAILLE_BUFFER - 1] < SEUIL_DOIGT) {
     Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
     return;
   }
 
-  // 4 itérations de fenêtre glissante pour stabilisation (~4 s supplémentaires)
-  for (int iter = 0; iter < 4; iter++) {
-    // Décaler les anciens échantillons
-    for (byte i = 25; i < TAILLE_BUFFER; i++) {
-      tamponRouge[i - 25] = tamponRouge[i];
-      tamponIR[i - 25]    = tamponIR[i];
-    }
-    // Lire 25 nouveaux échantillons (~250 ms)
-    for (byte i = TAILLE_BUFFER - 25; i < TAILLE_BUFFER; i++) {
+  int32_t valeurSpo2     = 0;
+  int8_t  spo2Valide     = 0;
+  int32_t valeurFreqCard = 0;
+  int8_t  freqCardValide = 0;
+
+  // 4 lectures consécutives de 25 échantillons pour stabilisation
+  for (byte iter = 0; iter < 4; iter++) {
+    for (byte i = 0; i < TAILLE_BUFFER; i++) {
       while (!capteurMax.available()) capteurMax.check();
       tamponRouge[i] = capteurMax.getRed();
       tamponIR[i]    = capteurMax.getIR();
@@ -154,7 +145,6 @@ void mesurerOxymetrie() {
     );
   }
 
-  // Validation des plages physiologiques
   bool spo2Ok = spo2Valide     && (valeurSpo2     >= 70)  && (valeurSpo2     <= 100);
   bool freqOk = freqCardValide && (valeurFreqCard >= 30)  && (valeurFreqCard <= 220);
 
