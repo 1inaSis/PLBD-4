@@ -71,26 +71,51 @@ def _nettoyer(val: str) -> str:
     return re.sub(r'[^a-zA-ZÀ-ÿ\s\-\']', '', val).strip()
 
 
+_MOT_LABEL_RE = re.compile(
+    r'^\s*(?:nom|name|surname|pr[eé]noms?|given|first|date|n[eé]e?|naissance|'
+    r'sexe|sex|nationality|nationalit[eé]|lieu|born|expiry)\s*:',
+    re.IGNORECASE
+)
+
+
+def _est_ligne_label(ligne: str) -> bool:
+    """Vrai si la ligne est un label de champ (ex: 'Nom:', 'Prenoms:')."""
+    return bool(_MOT_LABEL_RE.match(ligne))
+
+
 def _apres_label(texte: str, patterns: list) -> str:
-    """Retourne la valeur sur la même ligne après ':', ou la ligne suivante."""
+    """Retourne la valeur sur la même ligne après ':', ou la 1ère ligne suivante non-label."""
     lignes = texte.split('\n')
     for i, ligne in enumerate(lignes):
         for pat in patterns:
             if re.search(pat, ligne, re.IGNORECASE):
+                # Valeur inline (après le label sur la même ligne)
                 m = re.search(pat + r'\s*:?\s*(.+)', ligne, re.IGNORECASE)
                 if m:
                     val = _nettoyer(m.group(1))
                     if len(val) >= 2:
                         return val.title()
+                # Valeur sur la ligne suivante — skip les lignes de label
                 for j in range(i + 1, min(i + 3, len(lignes))):
+                    if _est_ligne_label(lignes[j]):
+                        continue
                     val = _nettoyer(lignes[j])
                     if len(val) >= 2:
                         return val.title()
     return ""
 
 
+_MOT_DATE_RE = re.compile(r'\bn[eé]e?\b', re.IGNORECASE)
+
+
+def _supprimer_mots_date(val: str) -> str:
+    """Supprime 'Née', 'Né', 'Nee' isolés qui contaminent le prénom."""
+    return _MOT_DATE_RE.sub('', val).strip()
+
+
 def _extraire_nom(texte: str) -> str:
-    val = _apres_label(texte, [r'\bNOM\b', r'\bNAME\b', r'\bSURNAME\b'])
+    # Colon requis pour éviter de matcher "Prenoms" avec le pattern "Nom"
+    val = _apres_label(texte, [r'\bNom\s*:', r'\bName\s*:', r'\bSurname\s*:'])
     if val:
         return val
     # Fallback : première ligne tout-majuscules avec 2+ mots
@@ -113,9 +138,10 @@ def _extraire_nom(texte: str) -> str:
 
 
 def _extraire_prenom(texte: str) -> str:
-    return _apres_label(texte, [
-        r'\bPR[EÉ]NOMS?\b', r'\bFIRST\s*NAME\b', r'\bGIVEN\s*NAME\b', r'\bFORENAME\b',
+    val = _apres_label(texte, [
+        r'\bPr[eé]noms?\s*:', r'\bFirst\s*Name\s*:', r'\bGiven\s*Name\s*:', r'\bForename\s*:',
     ])
+    return _supprimer_mots_date(val) if val else ""
 
 
 def _extraire_date_naissance(texte: str) -> tuple:
