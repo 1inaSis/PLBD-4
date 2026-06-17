@@ -74,8 +74,28 @@ void loop() {
       mesurerOxymetrie();
     } else if (strcmp(commande, "MESURE:stop") == 0) {
       Serial.println(F("{\"statut\": \"arrete\"}"));
+    } else if (strcmp(commande, "SCAN:i2c") == 0) {
+      scannerI2C();
     }
   }
+}
+
+// ── [DIAG] Scan bus I2C — à supprimer après diagnostic ──────────────────────
+void scannerI2C() {
+  Serial.print(F("{\"i2c_scan\": ["));
+  bool premier = true;
+  for (byte addr = 0x00; addr <= 0x7F; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      if (!premier) Serial.print(F(", "));
+      Serial.print(F("{\"adresse\": \"0x"));
+      if (addr < 0x10) Serial.print(F("0"));
+      Serial.print(addr, HEX);
+      Serial.print(F("\", \"found\": true}"));
+      premier = false;
+    }
+  }
+  Serial.println(F("]}"));
 }
 
 // ── Mesure de température (MLX90614) ────────────────────────────────────────
