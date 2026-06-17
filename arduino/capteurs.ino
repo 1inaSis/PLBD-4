@@ -47,7 +47,12 @@ void setup() {
   Serial.begin(9600);
   Wire.begin();
 
-  mlxOk = mlx.begin();
+  // Jusqu'à 3 tentatives d'initialisation MLX90614
+  for (byte tentative = 0; tentative < 3 && !mlxOk; tentative++) {
+    mlxOk = mlx.begin();
+    if (!mlxOk) delay(200);
+  }
+  if (mlxOk) delay(500);  // stabilisation après begin() réussi
 
   // MAX30102 : 2 LEDs seulement (rouge + infrarouge, pas de verte)
   // ledMode=2 force le mode bicolore compatible MAX30102
@@ -101,7 +106,7 @@ void scannerI2C() {
 // ── Mesure de température (MLX90614) ────────────────────────────────────────
 void mesurerTemperature() {
   if (!mlxOk) {
-    Serial.println(F("{\"temperature\": null, \"source\": \"erreur\"}"));
+    Serial.println(F("{\"temperature\": null, \"mlx_ok\": false, \"source\": \"erreur\"}"));
     return;
   }
 
@@ -116,13 +121,15 @@ void mesurerTemperature() {
   float temperature = somme / NB_LECTURES;
 
   if (temperature < 30.0 || temperature > 45.0) {
-    Serial.println(F("{\"temperature\": null, \"source\": \"erreur\"}"));
+    Serial.print(F("{\"temperature\": null, \"mlx_ok\": true, \"valeur_brute\": "));
+    Serial.print(temperature, 1);
+    Serial.println(F(", \"source\": \"erreur\"}"));
     return;
   }
 
   Serial.print(F("{\"temperature\": "));
   Serial.print(temperature, 1);
-  Serial.println(F(", \"source\": \"capteur\"}"));
+  Serial.println(F(", \"mlx_ok\": true, \"source\": \"capteur\"}"));
 }
 
 // ── Mesure SpO2 + fréquence cardiaque (MAX30102) ────────────────────────────
