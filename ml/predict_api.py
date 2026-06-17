@@ -227,6 +227,65 @@ def api_scanner():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# API — Étape 1b : Saisie manuelle de l'identité (filet de sécurité CIN)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/scanner/manuel', methods=['POST'])
+def api_scanner_manuel():
+    """
+    Enregistre l'identité saisie manuellement quand l'OCR est incomplet.
+    Met à jour une session existante (session_id fourni) ou en crée une.
+    """
+    donnees        = request.get_json() or {}
+    session_id     = donnees.get('session_id')
+    nom            = donnees.get('nom', '').strip()
+    prenom         = donnees.get('prenom', '').strip()
+    date_naissance = donnees.get('date_naissance', '').strip()
+
+    if not nom or not prenom:
+        return jsonify({"statut": "erreur", "message": "Nom et prénom obligatoires"}), 400
+
+    # Calcul de l'âge depuis DD/MM/YYYY
+    age = 30
+    if date_naissance:
+        try:
+            j, mo, a = map(int, date_naissance.split('/'))
+            today = datetime.now()
+            age = today.year - a - ((today.month, today.day) < (mo, j))
+            age = max(0, min(age, 120))
+        except Exception:
+            pass
+
+    # Créer ou mettre à jour la session
+    if not session_id or session_id not in patients_session:
+        session_id = str(uuid.uuid4())[:8].upper()
+
+    patients_session[session_id] = {
+        **patients_session.get(session_id, {}),
+        "session_id":    session_id,
+        "nom":           nom.title(),
+        "prenom":        prenom.title(),
+        "age":           age,
+        "date_naissance": date_naissance,
+        "sex":           -1,
+        "heure_arrivee": datetime.now().strftime("%H:%M"),
+        "etape":         "scan_ok",
+    }
+
+    return jsonify({
+        "statut":          "succès",
+        "session_id":      session_id,
+        "nom":             nom.title(),
+        "prenom":          prenom.title(),
+        "age":             age,
+        "date_naissance":  date_naissance,
+        "sexe":            -1,
+        "succes":          True,
+        "formulaire_manuel": False,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # API — Étape 2 : Enregistrer les symptômes
 # ─────────────────────────────────────────────────────────────────────────────
 

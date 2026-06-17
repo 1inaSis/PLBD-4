@@ -24,6 +24,14 @@ export function scannerCIN(imageBase64 = null) {
   })
 }
 
+// ── Étape 1b : Saisie manuelle identité (filet si OCR incomplet) ─────────────
+export function saisirManuel(session_id, nom, prenom, date_naissance) {
+  return requete('/scanner/manuel', {
+    method: 'POST',
+    body: JSON.stringify({ session_id, nom, prenom, date_naissance }),
+  })
+}
+
 // ── Étape 2 : Enregistrer les symptômes ──────────────────────────────────────
 export function soumettreSymptomes(session_id, symptom_text, zones_corps = []) {
   return requete('/symptomes', {

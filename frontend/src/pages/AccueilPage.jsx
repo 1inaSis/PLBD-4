@@ -1,35 +1,40 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
-import { scannerCIN } from '../services/api'
+import { scannerCIN, saisirManuel } from '../services/api'
 import IndicateurEtape from '../components/IndicateurEtape'
 import ConfirmationPatient from '../components/ConfirmationPatient'
 import { IllustrationScanCIN } from '../components/IllustrationsGestes'
 import '../styles/kiosk.css'
 
-// États internes de cette page
 const VUE = {
-  ACCUEIL:      'accueil',      // Écran de bienvenue + bouton scan
-  SCAN:         'scan',         // Scan en cours (spinner)
-  CONFIRMATION: 'confirmation', // Données extraites à valider
+  ACCUEIL:      'accueil',
+  SCAN:         'scan',
+  FORMULAIRE:   'formulaire',
+  CONFIRMATION: 'confirmation',
 }
 
 export default function AccueilPage() {
   const navigate = useNavigate()
   const { setIdentite, connecterBorne, reinitialiser } = usePatient()
 
-  const [vue, setVue]           = useState(VUE.ACCUEIL)
-  const [donneesScan, setDonneesScan] = useState(null)
-  const [erreur, setErreur]     = useState(null)
-  const [wsConnecte, setWsConnecte] = useState(false)
+  const [vue, setVue]                   = useState(VUE.ACCUEIL)
+  const [donneesScan, setDonneesScan]   = useState(null)
+  const [erreur, setErreur]             = useState(null)
+  const [wsConnecte, setWsConnecte]     = useState(false)
 
-  // Connexion WebSocket role=borne dès l'arrivée sur la page.
-  // Le contexte garde la référence vivante pour tout le parcours.
+  // Session créée côté backend même si OCR incomplet
+  const [sessionManuelId, setSessionManuelId] = useState(null)
+
+  // Champs du formulaire manuel (pré-remplis si OCR partiel)
+  const [formulaire, setFormulaire] = useState({ nom: '', prenom: '', date_naissance: '' })
+  const [erreurForm, setErreurForm] = useState(null)
+  const [enSoumission, setEnSoumission] = useState(false)
+
   useEffect(() => {
-    reinitialiser() // Nettoie toute session précédente
+    reinitialiser()
 
     const ws = connecterBorne((msg) => {
-      // La borne écoute : constantes_update, patient_pris_en_charge
       if (msg.event === 'constantes_update') {
         console.log('[WS borne] Constantes reçues :', msg.data)
       }
@@ -37,27 +42,70 @@ export default function AccueilPage() {
 
     ws.onopen  = () => setWsConnecte(true)
     ws.onclose = () => setWsConnecte(false)
-
-    // Pas de fermeture ici : la WS doit survivre à la navigation
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Lancer le scan CIN ──────────────────────────────────────────────────────
+  // ── Scan CIN ─────────────────────────────────────────────────────────────
   const lancerScan = async () => {
     setVue(VUE.SCAN)
     setErreur(null)
+    setErreurForm(null)
     try {
-      // Sans image base64 → le backend utilise la caméra ou le mode simulation
       const data = await scannerCIN()
-      setDonneesScan(data)
-      setVue(VUE.CONFIRMATION)
-    } catch (err) {
-      setErreur(`Erreur lors du scan : ${err.message}. Veuillez réessayer.`)
-      setVue(VUE.ACCUEIL)
+      if (data.formulaire_manuel) {
+        // OCR incomplet → formulaire avec pré-remplissage partiel
+        setSessionManuelId(data.session_id || null)
+        setFormulaire({
+          nom:            data.nom            || '',
+          prenom:         data.prenom         || '',
+          date_naissance: data.date_naissance || '',
+        })
+        setVue(VUE.FORMULAIRE)
+      } else {
+        setDonneesScan(data)
+        setVue(VUE.CONFIRMATION)
+      }
+    } catch {
+      // Échec réseau ou autre → formulaire vide
+      setSessionManuelId(null)
+      setFormulaire({ nom: '', prenom: '', date_naissance: '' })
+      setVue(VUE.FORMULAIRE)
     }
   }
 
-  // ── Valider l'identité et passer à l'étape 2 ────────────────────────────────
+  // ── Formulaire manuel ─────────────────────────────────────────────────────
+  const changerChamp = (e) => {
+    setFormulaire((prev) => ({ ...prev, [e.target.name]: e.target.value }))
+    setErreurForm(null)
+  }
+
+  const validerManuel = async () => {
+    const { nom, prenom, date_naissance } = formulaire
+    if (!nom.trim() || !prenom.trim()) {
+      setErreurForm('Le nom et le prénom sont obligatoires.')
+      return
+    }
+    setEnSoumission(true)
+    setErreurForm(null)
+    try {
+      const data = await saisirManuel(sessionManuelId, nom.trim(), prenom.trim(), date_naissance.trim())
+      setIdentite({
+        session_id: data.session_id,
+        nom:        data.nom,
+        prenom:     data.prenom,
+        age:        data.age,
+        sexe:       data.sexe ?? -1,
+        numero_cin: '',
+      })
+      navigate('/questionnaire')
+    } catch (err) {
+      setErreurForm(`Erreur : ${err.message}`)
+    } finally {
+      setEnSoumission(false)
+    }
+  }
+
+  // ── Scan réussi confirmé ──────────────────────────────────────────────────
   const confirmer = () => {
     setIdentite({
       session_id:  donneesScan.session_id,
@@ -77,15 +125,13 @@ export default function AccueilPage() {
 
   return (
     <div className="kiosk-shell">
-      {/* Indicateur de progression */}
       <IndicateurEtape etapeCourante={1} />
 
-      {/* Indicateur de connexion WebSocket (discret, coin bas-droit) */}
       <div className={`ws-badge ${wsConnecte ? 'ws-badge--ok' : 'ws-badge--off'}`}>
         {wsConnecte ? '● Connecté' : '○ Hors ligne'}
       </div>
 
-      {/* Vue : Accueil */}
+      {/* ── Accueil ─────────────────────────────────────────────── */}
       {vue === VUE.ACCUEIL && (
         <div className="kiosk-center">
           <div className="kiosk-card">
@@ -96,21 +142,15 @@ export default function AccueilPage() {
               d'identité nationale.
             </p>
 
-            {/* Illustration : positionnement de la carte sur le scanner */}
             <div className="illustration-wrapper">
               <IllustrationScanCIN />
             </div>
 
             {erreur && (
-              <div className="kiosk-alerte" role="alert">
-                {erreur}
-              </div>
+              <div className="kiosk-alerte" role="alert">{erreur}</div>
             )}
 
-            <button
-              className="kiosk-btn kiosk-btn--primary"
-              onClick={lancerScan}
-            >
+            <button className="kiosk-btn kiosk-btn--primary" onClick={lancerScan}>
               <svg className="kiosk-btn-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="2" y="5" width="20" height="14" rx="2" />
                 <path d="M2 10h20" />
@@ -118,18 +158,20 @@ export default function AccueilPage() {
               Scanner ma carte d'identité
             </button>
 
-            <p className="kiosk-note">
-              Pas de lecteur physique ? Le système utilisera le mode simulation.
-            </p>
+            <button
+              className="kiosk-btn kiosk-btn--secondary"
+              onClick={() => { setFormulaire({ nom: '', prenom: '', date_naissance: '' }); setSessionManuelId(null); setVue(VUE.FORMULAIRE) }}
+            >
+              Saisie manuelle
+            </button>
           </div>
         </div>
       )}
 
-      {/* Vue : Scan en cours */}
+      {/* ── Scan en cours ───────────────────────────────────────── */}
       {vue === VUE.SCAN && (
         <div className="kiosk-center">
           <div className="kiosk-card kiosk-card--centree">
-            {/* Indicateur caméra active */}
             <div className="camera-active-badge" role="status" aria-live="polite">
               <span className="camera-active-dot" aria-hidden="true" />
               Caméra active
@@ -143,7 +185,82 @@ export default function AccueilPage() {
         </div>
       )}
 
-      {/* Vue : Confirmation des données */}
+      {/* ── Formulaire manuel ───────────────────────────────────── */}
+      {vue === VUE.FORMULAIRE && (
+        <div className="kiosk-center">
+          <div className="kiosk-card">
+            <span className="eyebrow">Saisie manuelle</span>
+            <h2 className="kiosk-titre-sm">Entrez vos informations</h2>
+            <p className="kiosk-soustitre">
+              Le scanner n'a pas pu lire votre carte. Veuillez renseigner vos informations manuellement.
+            </p>
+
+            {erreurForm && (
+              <div className="kiosk-alerte" role="alert">{erreurForm}</div>
+            )}
+
+            <div className="cin-form">
+              <div className="cin-field">
+                <label className="cin-label" htmlFor="cin-nom">Nom</label>
+                <input
+                  id="cin-nom"
+                  className="cin-input"
+                  name="nom"
+                  type="text"
+                  placeholder="Votre nom de famille"
+                  value={formulaire.nom}
+                  onChange={changerChamp}
+                  autoComplete="family-name"
+                />
+              </div>
+
+              <div className="cin-field">
+                <label className="cin-label" htmlFor="cin-prenom">Prénom</label>
+                <input
+                  id="cin-prenom"
+                  className="cin-input"
+                  name="prenom"
+                  type="text"
+                  placeholder="Votre prénom"
+                  value={formulaire.prenom}
+                  onChange={changerChamp}
+                  autoComplete="given-name"
+                />
+              </div>
+
+              <div className="cin-field">
+                <label className="cin-label" htmlFor="cin-ddn">Date de naissance</label>
+                <input
+                  id="cin-ddn"
+                  className="cin-input"
+                  name="date_naissance"
+                  type="text"
+                  placeholder="JJ/MM/AAAA"
+                  value={formulaire.date_naissance}
+                  onChange={changerChamp}
+                  inputMode="numeric"
+                />
+                <span className="cin-hint">Format : 15/03/1985</span>
+              </div>
+            </div>
+
+            <div className="kiosk-actions">
+              <button
+                className="kiosk-btn kiosk-btn--primary"
+                onClick={validerManuel}
+                disabled={enSoumission}
+              >
+                {enSoumission ? 'Validation…' : 'Valider et continuer →'}
+              </button>
+              <button className="kiosk-btn kiosk-btn--secondary" onClick={() => setVue(VUE.ACCUEIL)}>
+                ↩ Retour — Réessayer le scan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirmation après scan réussi ──────────────────────── */}
       {vue === VUE.CONFIRMATION && (
         <ConfirmationPatient
           donnees={donneesScan}

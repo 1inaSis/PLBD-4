@@ -1949,6 +1949,57 @@
   cursor: not-allowed;
 }
 
+/* ── Formulaire manuel CIN ────────────────────────────────────── */
+.cin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 8px 0;
+}
+
+.cin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cin-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #94a3b8;
+}
+
+.cin-input {
+  background: rgba(30, 41, 59, 0.70);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  padding: 18px 20px;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+
+.cin-input::placeholder {
+  color: #475569;
+  font-weight: 400;
+}
+
+.cin-input:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+}
+
+.cin-hint {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .dossier-grille-principale {
