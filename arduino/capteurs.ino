@@ -112,23 +112,25 @@ void mesurerTemperature() {
 
   delay(500);
 
-  float somme = 0.0;
-  const byte NB_LECTURES = 5;
-  for (byte i = 0; i < NB_LECTURES; i++) {
-    somme += mlx.readObjectTempC();
+  // 10 lectures, suppression min+max, moyenne des 8 restantes
+  const byte NB = 10;
+  float lectures[NB];
+  for (byte i = 0; i < NB; i++) {
+    lectures[i] = mlx.readObjectTempC();
     delay(200);
   }
-  float brute = somme / NB_LECTURES;
-
-  // Offset frontal : le capteur lit ~26-27°C à 5cm du front (vrai = ~36°C)
-  float temperature = brute;
-  if (brute >= 20.0 && brute <= 32.0) {
-    temperature = brute + 9.5;
+  float vMin = lectures[0], vMax = lectures[0];
+  float somme = 0.0;
+  for (byte i = 0; i < NB; i++) {
+    somme += lectures[i];
+    if (lectures[i] < vMin) vMin = lectures[i];
+    if (lectures[i] > vMax) vMax = lectures[i];
   }
+  float temperature = (somme - vMin - vMax) / (NB - 2);
 
-  if (temperature < 15.0 || temperature > 50.0) {
+  if (temperature < 28.0 || temperature > 40.0) {
     Serial.print(F("{\"temperature\": null, \"mlx_ok\": true, \"valeur_brute\": "));
-    Serial.print(brute, 1);
+    Serial.print(temperature, 1);
     Serial.println(F(", \"source\": \"erreur\"}"));
     return;
   }
@@ -136,8 +138,8 @@ void mesurerTemperature() {
   Serial.print(F("{\"temperature\": "));
   Serial.print(temperature, 1);
   Serial.print(F(", \"mlx_ok\": true, \"valeur_brute\": "));
-  Serial.print(brute, 1);
-  Serial.println(F(", \"source\": \"capteur\"}"));
+  Serial.print(temperature, 1);
+  Serial.println(F(", \"mesure_type\": \"surface_cutanee\", \"source\": \"capteur\"}"));
 }
 
 // ── Mesure SpO2 + fréquence cardiaque (MAX30102) ────────────────────────────
