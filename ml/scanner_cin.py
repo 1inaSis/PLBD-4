@@ -1,10 +1,10 @@
 """
 scanner_cin.py — Scanner CIN universel pour HealthGate
-Stratégie : rpicam-still → EasyOCR (init unique au démarrage) → extraction
+Stratégie : rpicam-still → doctr (python-doctr) → extraction
 Supporte : Maroc, Côte d'Ivoire, Sénégal, Mali, et cartes africaines en général
 Si incomplet → formulaire_manuel: True avec champs partiellement pré-remplis
 
-Note perf : premier import prend ~30s (chargement modèles EasyOCR),
+Note perf : premier import prend ~20s (chargement modèles doctr),
             les scans suivants sont rapides (~2-4s).
 """
 
@@ -15,45 +15,57 @@ import subprocess
 import numpy as np
 from datetime import datetime
 
+# Cache doctr — doit être défini avant l'import des modèles
+os.environ.setdefault('DOCTR_CACHE_DIR', '/home/touaregs/.cache/doctr')
+
 try:
     import cv2
     CV2_DISPONIBLE = True
 except ImportError:
     CV2_DISPONIBLE = False
 
-# ─── Init EasyOCR unique au chargement du module ─────────────────────────────
+# ─── Init doctr unique au chargement du module ───────────────────────────────
 
 try:
-    import easyocr
-    print("[SCANNER] Chargement EasyOCR (première fois ~30s)...")
-    _reader = easyocr.Reader(['fr', 'en'], gpu=False, verbose=False)
-    EASYOCR_DISPONIBLE = True
-    print("[SCANNER] EasyOCR prêt.")
+    from doctr.io import DocumentFile
+    from doctr.models import ocr_predictor
+    print("[SCANNER] Chargement modèles doctr (première fois ~20s)...")
+    _model = ocr_predictor(
+        det_arch='db_mobilenet_v3_large',
+        reco_arch='crnn_mobilenet_v3_small',
+        pretrained=True,
+    )
+    DOCTR_DISPONIBLE = True
+    print("[SCANNER] doctr prêt.")
 except Exception as _e:
-    _reader = None
-    EASYOCR_DISPONIBLE = False
-    print(f"[SCANNER] EasyOCR non disponible : {_e}")
+    _model = None
+    DOCTR_DISPONIBLE = False
+    print(f"[SCANNER] doctr non disponible : {_e}")
 
 TIMEOUT_CAPTURE = 4     # secondes max pour rpicam-still
 _IMG_TMP        = '/tmp/cin.jpg'
 
 
-# ─── OCR via EasyOCR ─────────────────────────────────────────────────────────
+# ─── OCR via doctr ───────────────────────────────────────────────────────────
 
 def _ocr(image_path: str) -> str:
     """
-    Lance EasyOCR sur le fichier image et retourne le texte reconstruit.
-    Les blocs sont triés par coordonnée Y (haut→bas) pour reconstituer l'ordre de lecture.
+    Lance doctr sur le fichier image et reconstruit le texte ligne par ligne
+    depuis result.pages[0].blocks → lines → words.
+    Les blocs sont déjà triés en ordre de lecture par doctr.
     """
     try:
-        resultats = _reader.readtext(image_path, detail=1, paragraph=False)
-        if not resultats:
-            return ""
-        # Trier par Y du coin supérieur gauche du bbox
-        tries = sorted(resultats, key=lambda r: r[0][0][1])
-        return '\n'.join(texte for _, texte, _ in tries)
+        doc = DocumentFile.from_images(image_path)
+        result = _model(doc)
+        lignes = []
+        for block in result.pages[0].blocks:
+            for line in block.lines:
+                ligne_texte = ' '.join(w.value for w in line.words)
+                if ligne_texte.strip():
+                    lignes.append(ligne_texte.strip())
+        return '\n'.join(lignes)
     except Exception as e:
-        print(f"[SCANNER] Erreur EasyOCR : {e}")
+        print(f"[SCANNER] Erreur doctr : {e}")
         return ""
 
 
@@ -66,21 +78,25 @@ _LABELS_A_IGNORER = {
     'EXPIRY', 'EXPIRES', 'VALID', 'ISSUED', 'PRENOMS', 'PRÉNOMS',
 }
 
-
-def _nettoyer(val: str) -> str:
-    return re.sub(r'[^a-zA-ZÀ-ÿ\s\-\']', '', val).strip()
-
-
 _MOT_LABEL_RE = re.compile(
     r'^\s*(?:nom|name|surname|pr[eé]noms?|given|first|date|n[eé]e?|naissance|'
     r'sexe|sex|nationality|nationalit[eé]|lieu|born|expiry)\s*:',
     re.IGNORECASE
 )
 
+_MOT_DATE_RE = re.compile(r'\bn[eé]e?\b', re.IGNORECASE)
+
+
+def _nettoyer(val: str) -> str:
+    return re.sub(r'[^a-zA-ZÀ-ÿ\s\-\']', '', val).strip()
+
 
 def _est_ligne_label(ligne: str) -> bool:
-    """Vrai si la ligne est un label de champ (ex: 'Nom:', 'Prenoms:')."""
     return bool(_MOT_LABEL_RE.match(ligne))
+
+
+def _supprimer_mots_date(val: str) -> str:
+    return _MOT_DATE_RE.sub('', val).strip()
 
 
 def _apres_label(texte: str, patterns: list) -> str:
@@ -89,13 +105,11 @@ def _apres_label(texte: str, patterns: list) -> str:
     for i, ligne in enumerate(lignes):
         for pat in patterns:
             if re.search(pat, ligne, re.IGNORECASE):
-                # Valeur inline (après le label sur la même ligne)
                 m = re.search(pat + r'\s*:?\s*(.+)', ligne, re.IGNORECASE)
                 if m:
                     val = _nettoyer(m.group(1))
                     if len(val) >= 2:
                         return val.title()
-                # Valeur sur la ligne suivante — skip les lignes de label
                 for j in range(i + 1, min(i + 3, len(lignes))):
                     if _est_ligne_label(lignes[j]):
                         continue
@@ -105,16 +119,7 @@ def _apres_label(texte: str, patterns: list) -> str:
     return ""
 
 
-_MOT_DATE_RE = re.compile(r'\bn[eé]e?\b', re.IGNORECASE)
-
-
-def _supprimer_mots_date(val: str) -> str:
-    """Supprime 'Née', 'Né', 'Nee' isolés qui contaminent le prénom."""
-    return _MOT_DATE_RE.sub('', val).strip()
-
-
 def _extraire_nom(texte: str) -> str:
-    # Colon requis pour éviter de matcher "Prenoms" avec le pattern "Nom"
     val = _apres_label(texte, [r'\bNom\s*:', r'\bName\s*:', r'\bSurname\s*:'])
     if val:
         return val
@@ -154,7 +159,6 @@ def _extraire_date_naissance(texte: str) -> tuple:
                 return f"{j:02d}/{mo:02d}/{a}", age
         return None, None
 
-    # Priorité : après label Né(e), date, born
     ctx = re.search(
         r'(?:n[eé]e?\s*(?:le)?|naissance|date|born)[^\d]{0,15}(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})',
         texte, re.IGNORECASE
@@ -164,14 +168,12 @@ def _extraire_date_naissance(texte: str) -> tuple:
         if date:
             return date, age
 
-    # DD/MM/YYYY ou DD-MM-YYYY n'importe où
     m = re.search(r'\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b', texte)
     if m:
         date, age = _valider(int(m.group(1)), int(m.group(2)), int(m.group(3)))
         if date:
             return date, age
 
-    # YYYY-MM-DD
     m = re.search(r'\b(\d{4})[\/\-](\d{2})[\/\-](\d{2})\b', texte)
     if m:
         date, age = _valider(int(m.group(3)), int(m.group(2)), int(m.group(1)))
@@ -216,9 +218,11 @@ def _extraire_tout(texte: str) -> dict:
         for i, l in enumerate(lignes):
             if nom_low in l.lower():
                 for j in range(i + 1, min(i + 3, len(lignes))):
+                    if _est_ligne_label(lignes[j]):
+                        continue
                     val = _nettoyer(lignes[j])
                     if len(val) >= 2 and val.upper() not in _LABELS_A_IGNORER:
-                        prenom = val.title()
+                        prenom = _supprimer_mots_date(val.title())
                         print(f"[SCANNER] PRENOM     → {repr(prenom)} (fallback après nom)")
                         break
                 if prenom:
@@ -258,12 +262,12 @@ def _capturer(chemin: str) -> bool:
 
 def scanner_piece_identite(source=None) -> dict:
     """
-    Scan CIN via EasyOCR. Pipeline : capture → EasyOCR → extraction.
+    Scan CIN via doctr. Pipeline : capture → doctr → extraction.
     Retourne formulaire_manuel=True avec champs partiels si extraction incomplète.
 
     source : None → rpicam-still | str (chemin fichier) | bytes (base64) | ndarray
     """
-    if not EASYOCR_DISPONIBLE:
+    if not DOCTR_DISPONIBLE:
         return _resultat_simulation()
 
     image_path = None
@@ -290,7 +294,6 @@ def scanner_piece_identite(source=None) -> dict:
             fichier_temporaire = True
 
         else:
-            # Capture rpicam-still
             ok = _capturer(_IMG_TMP)
             if not ok:
                 return _besoin_formulaire("Capture échouée")
@@ -303,7 +306,7 @@ def scanner_piece_identite(source=None) -> dict:
         texte = _ocr(image_path)
 
         if not texte.strip():
-            print("[SCANNER] EasyOCR n'a produit aucun texte")
+            print("[SCANNER] doctr n'a produit aucun texte")
             return _besoin_formulaire("OCR sans résultat")
 
         info = _extraire_tout(texte)
@@ -364,7 +367,7 @@ def _resultat_simulation() -> dict:
         "sexe":              random.choice([0, 1]),
         "sexe_libelle":      random.choice(["Homme", "Femme"]),
         "texte_brut":        "[Simulation]",
-        "message":           "Mode simulation (EasyOCR non disponible)",
+        "message":           "Mode simulation (doctr non disponible)",
     }
 
 
