@@ -13,21 +13,19 @@ import subprocess
 import numpy as np
 from datetime import datetime
 
-TIMEOUT_CAPTURE  = 3    # secondes max pour rpicam-still
-TIMEOUT_TESSERACT = 5   # secondes max pour tesseract
-OCR_LANG         = 'ara+fra+eng'
-_IMG_TMP         = '/tmp/scan_cin_prep.png'
+TIMEOUT_CAPTURE   = 3    # secondes max pour rpicam-still
+TIMEOUT_TESSERACT = 5    # secondes max pour tesseract
+OCR_LANG          = 'fra+eng'
+_IMG_TMP          = '/tmp/scan_processed.jpg'
 
 
-# ─── Prétraitement image (pipeline unique séquentiel) ────────────────────────
+# ─── Prétraitement image ─────────────────────────────────────────────────────
 
 def _pretraiter(img: np.ndarray) -> np.ndarray:
-    """Gris → CLAHE → luminosité → resize x2 → Otsu."""
+    """Gris → CLAHE → Otsu THRESH_BINARY."""
     gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     gris = clahe.apply(gris)
-    gris = cv2.convertScaleAbs(gris, alpha=1.5, beta=30)
-    gris = cv2.resize(gris, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
     _, seuil = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return seuil
 
@@ -35,12 +33,11 @@ def _pretraiter(img: np.ndarray) -> np.ndarray:
 # ─── OCR via subprocess tesseract (timeout strict) ───────────────────────────
 
 def _ocr(img: np.ndarray) -> str:
-    """Sauvegarde l'image prétraitée puis appelle tesseract avec timeout=5s."""
+    """Sauvegarde en /tmp/scan_processed.jpg puis appelle tesseract (timeout 5s)."""
     try:
         cv2.imwrite(_IMG_TMP, img)
         res = subprocess.run(
-            ['tesseract', _IMG_TMP, 'stdout',
-             '-l', OCR_LANG, '--psm', '6', '--oem', '3'],
+            ['tesseract', _IMG_TMP, 'stdout', '-l', OCR_LANG, '--psm', '6'],
             capture_output=True, text=True, timeout=TIMEOUT_TESSERACT
         )
         return res.stdout
@@ -64,26 +61,26 @@ _LABELS_A_IGNORER = {
     'NOM', 'NAME', 'SURNAME', 'PRENOM', 'PRÉNOM', 'GIVEN', 'FIRST',
     'DATE', 'BIRTH', 'BORN', 'DOB', 'NAISSANCE', 'SEXE', 'SEX',
     'NATIONALITY', 'NATIONALITE', 'NATIONALITÉ', 'PLACE', 'LIEU',
-    'EXPIRY', 'EXPIRES', 'VALID', 'ISSUED', 'COGNOME', 'NOME',
-    'PRENOMS', 'PRÉNOMS',
+    'EXPIRY', 'EXPIRES', 'VALID', 'ISSUED', 'PRENOMS', 'PRÉNOMS',
 }
 
 
 def _nettoyer(val: str) -> str:
-    return re.sub(r'[^؀-ۿa-zA-ZÀ-ÿ\s\-\']', '', val).strip()
+    return re.sub(r'[^a-zA-ZÀ-ÿ\s\-\']', '', val).strip()
 
 
-def _extraire_champ(texte: str, patterns_label: list) -> str:
-    """Cherche la valeur après un label (inline ou ligne suivante)."""
+def _apres_label(texte: str, patterns: list) -> str:
+    """Retourne la valeur sur la même ligne après ':', ou la ligne suivante."""
     lignes = texte.split('\n')
     for i, ligne in enumerate(lignes):
-        for pat in patterns_label:
+        for pat in patterns:
             if re.search(pat, ligne, re.IGNORECASE):
-                m = re.search(pat + r'\s*[:\-]?\s*(.+)', ligne, re.IGNORECASE)
+                m = re.search(pat + r'\s*:?\s*(.+)', ligne, re.IGNORECASE)
                 if m:
                     val = _nettoyer(m.group(1))
                     if len(val) >= 2:
                         return val.title()
+                # Valeur sur la ligne suivante
                 for j in range(i + 1, min(i + 3, len(lignes))):
                     val = _nettoyer(lignes[j])
                     if len(val) >= 2:
@@ -91,8 +88,12 @@ def _extraire_champ(texte: str, patterns_label: list) -> str:
     return ""
 
 
-def _fallback_nom_majuscules(texte: str) -> str:
-    """Première ligne tout-majuscules avec 2+ mots, sans chiffres ni labels."""
+def _extraire_nom(texte: str) -> str:
+    # Labels directs
+    val = _apres_label(texte, [r'\bNOM\b', r'\bNAME\b', r'\bSURNAME\b'])
+    if val:
+        return val
+    # Fallback : première ligne tout-majuscules avec 2+ mots
     for ligne in texte.split('\n'):
         ligne = ligne.strip()
         if not ligne or any(c.isdigit() for c in ligne):
@@ -111,38 +112,14 @@ def _fallback_nom_majuscules(texte: str) -> str:
     return ""
 
 
-def _extraire_nom(texte: str) -> str:
-    patterns = [
-        r'\bNOM\b', r'\bNAME\b', r'\bSURNAME\b', r'\bCOGNOME\b',
-        r'الاسم\s*العائلي', r'\bالاسم\b', r'\bاللقب\b',
-    ]
-    return _extraire_champ(texte, patterns) or _fallback_nom_majuscules(texte)
-
-
 def _extraire_prenom(texte: str) -> str:
-    patterns = [
-        r'\bPR[EÉ]NOMS?\b', r'\bFIRST\s*NAME\b', r'\bGIVEN\s*NAME\b',
-        r'\bFORENAME\b', r'\bGIVEN\b',
-        r'الاسم\s*الشخصي', r'\bالشخصي\b',
-    ]
-    return _extraire_champ(texte, patterns)
-
-
-def _fallback_prenom_apres_nom(texte: str, nom: str) -> str:
-    """Prend la ligne suivant le nom si aucun label prénom trouvé."""
-    lignes = texte.split('\n')
-    nom_normalise = nom.lower()
-    for i, ligne in enumerate(lignes):
-        if nom_normalise in ligne.lower():
-            for j in range(i + 1, min(i + 3, len(lignes))):
-                val = _nettoyer(lignes[j])
-                if len(val) >= 2 and val.upper() not in _LABELS_A_IGNORER:
-                    return val.title()
-    return ""
+    return _apres_label(texte, [
+        r'\bPR[EÉ]NOMS?\b', r'\bFIRST\s*NAME\b', r'\bGIVEN\s*NAME\b', r'\bFORENAME\b',
+    ])
 
 
 def _extraire_date_naissance(texte: str) -> tuple:
-    """Retourne (date DD/MM/YYYY, age) ou ('', None)."""
+    """Retourne (date DD/MM/YYYY, age) ou ('', None). Cherche \d{2}/\d{2}/\d{4} en priorité."""
     def _valider(j, mo, a):
         if 1900 <= a <= datetime.now().year and 1 <= mo <= 12 and 1 <= j <= 31:
             today = datetime.now()
@@ -151,24 +128,9 @@ def _extraire_date_naissance(texte: str) -> tuple:
                 return f"{j:02d}/{mo:02d}/{a}", age
         return None, None
 
-    # DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
-    m = re.search(r'\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b', texte)
-    if m:
-        date, age = _valider(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        if date:
-            return date, age
-
-    # YYYY-MM-DD ou YYYY/MM/DD
-    m = re.search(r'\b(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})\b', texte)
-    if m:
-        date, age = _valider(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-        if date:
-            return date, age
-
-    # DD MM YYYY après label contextuel multilingue
+    # Priorité : après label contextuel (né(e), date, born)
     ctx = re.search(
-        r'(?:n[eé](?:e)?\s*(?:le)?|naissance|date\s*of\s*birth|dob|born|تاريخ\s*(?:الولادة|الميلاد)?)'
-        r'[^\d]{0,20}(\d{1,2})\s+(\d{1,2})\s+(\d{4})',
+        r'(?:n[eé]e?\s*(?:le)?|naissance|date|born)[^\d]{0,15}(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})',
         texte, re.IGNORECASE
     )
     if ctx:
@@ -176,21 +138,42 @@ def _extraire_date_naissance(texte: str) -> tuple:
         if date:
             return date, age
 
-    # Fallback DD MM YYYY sans label
-    m = re.search(r'\b(\d{1,2})\s+(\d{2})\s+(\d{4})\b', texte)
+    # Regex directe DD/MM/YYYY ou DD-MM-YYYY n'importe où dans le texte
+    m = re.search(r'\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b', texte)
     if m:
         date, age = _valider(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        if date:
+            return date, age
+
+    # YYYY-MM-DD
+    m = re.search(r'\b(\d{4})[\/\-](\d{2})[\/\-](\d{2})\b', texte)
+    if m:
+        date, age = _valider(int(m.group(3)), int(m.group(2)), int(m.group(1)))
         if date:
             return date, age
 
     return "", None
 
 
+def _extraire_sexe(texte: str) -> tuple:
+    """Retourne (code 0/1/-1, libellé). 0=Femme, 1=Homme, -1=Non détecté."""
+    m = re.search(
+        r'(?:sexe|sex|genre)\s*[:\-]?\s*([MF])\b|'
+        r'\b(masculin|male|homme)\b|\b(f[eé]minin|female|femme)\b',
+        texte, re.IGNORECASE
+    )
+    if not m:
+        return -1, "Non détecté"
+    texte_match = (m.group(1) or m.group(2) or m.group(3) or "").upper()
+    if texte_match in ('M', 'MASCULIN', 'MALE', 'HOMME'):
+        return 1, "Homme"
+    if texte_match in ('F', 'FÉMININ', 'FEMININ', 'FEMALE', 'FEMME'):
+        return 0, "Femme"
+    return -1, "Non détecté"
+
+
 def _extraire_nationalite(texte: str) -> str:
-    return _extraire_champ(texte, [
-        r'\bNATIONALIT[EÉ]\b', r'\bNATIONALITY\b',
-        r'\bNATIONALIT[AÀ]\b', r'الجنسية',
-    ])
+    return _apres_label(texte, [r'\bNATIONALIT[EÉ]\b', r'\bNATIONALITY\b'])
 
 
 def _extraire_tout(texte: str) -> dict:
@@ -201,20 +184,32 @@ def _extraire_tout(texte: str) -> dict:
     print(f"[SCANNER] NOM        → {repr(nom) if nom else 'non trouvé'}")
 
     prenom = _extraire_prenom(texte)
+    # Fallback : ligne suivant le nom
     if not prenom and nom:
-        prenom = _fallback_prenom_apres_nom(texte, nom)
-        if prenom:
-            print(f"[SCANNER] PRENOM     → {repr(prenom)} (fallback après nom)")
+        lignes = texte.split('\n')
+        nom_low = nom.lower()
+        for i, l in enumerate(lignes):
+            if nom_low in l.lower():
+                for j in range(i + 1, min(i + 3, len(lignes))):
+                    val = _nettoyer(lignes[j])
+                    if len(val) >= 2 and val.upper() not in _LABELS_A_IGNORER:
+                        prenom = val.title()
+                        print(f"[SCANNER] PRENOM     → {repr(prenom)} (fallback après nom)")
+                        break
+                if prenom:
+                    break
     print(f"[SCANNER] PRENOM     → {repr(prenom) if prenom else 'non trouvé'}")
 
     date_n, age = _extraire_date_naissance(texte)
     print(f"[SCANNER] DATE_NAISS → {repr(date_n) if date_n else 'non trouvée'}")
 
+    sexe_code, sexe_lib = _extraire_sexe(texte)
     nationalite = _extraire_nationalite(texte)
 
-    print(f"[SCANNER] Résultat : nom={repr(nom)} prenom={repr(prenom)} date={repr(date_n)}")
+    print(f"[SCANNER] Résultat : nom={repr(nom)} prenom={repr(prenom)} date={repr(date_n)} sexe={sexe_lib}")
     return {"nom": nom, "prenom": prenom, "date_naissance": date_n,
-            "age": age, "nationalite": nationalite}
+            "age": age, "sexe": sexe_code, "sexe_libelle": sexe_lib,
+            "nationalite": nationalite}
 
 
 # ─── Capture rpicam-still ────────────────────────────────────────────────────
@@ -282,8 +277,8 @@ def scanner_piece_identite(source=None) -> dict:
             "date_naissance":    info["date_naissance"],
             "age":               info["age"] or 30,
             "nationalite":       info["nationalite"],
-            "sexe":              -1,
-            "sexe_libelle":      "Non détecté",
+            "sexe":              info["sexe"],
+            "sexe_libelle":      info["sexe_libelle"],
             "texte_brut":        texte[:200],
             "message":           "Scan réussi",
         }
@@ -303,8 +298,8 @@ def _besoin_formulaire(message: str, partial: dict = None) -> dict:
         "date_naissance":    partial.get("date_naissance", ""),
         "age":               partial.get("age") or 30,
         "nationalite":       partial.get("nationalite", ""),
-        "sexe":              -1,
-        "sexe_libelle":      "Non détecté",
+        "sexe":              partial.get("sexe", -1),
+        "sexe_libelle":      partial.get("sexe_libelle", "Non détecté"),
         "texte_brut":        "",
         "message":           message,
     }
