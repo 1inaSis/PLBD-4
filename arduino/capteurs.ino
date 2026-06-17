@@ -33,8 +33,8 @@ MAX30105 capteurMax;
 
 // ── Buffer pour l'algorithme SpO2/FC ────────────────────────────────────────
 #define TAILLE_BUFFER 100
-uint32_t tamponIR[TAILLE_BUFFER];
-uint32_t tamponRouge[TAILLE_BUFFER];
+uint16_t tamponIR[TAILLE_BUFFER];
+uint16_t tamponRouge[TAILLE_BUFFER];
 
 int32_t valeurSpo2     = 0;
 int8_t  spo2Valide     = 0;
