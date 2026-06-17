@@ -23,10 +23,10 @@ import time
 
 # ── Ports série candidats (Linux / Raspberry Pi OS) ──────────────────────────
 PORTS_CANDIDATS = [
-    "/dev/ttyUSB0",
-    "/dev/ttyUSB1",
-    "/dev/ttyACM0",
+    "/dev/ttyACM0",   # Arduino Uno/Nano sur USB natif (priorité)
     "/dev/ttyACM1",
+    "/dev/ttyUSB0",   # Convertisseur USB-série
+    "/dev/ttyUSB1",
 ]
 BAUDRATE_ARDUINO = 9600
 TIMEOUT_MESURE   = 20    # secondes max pour recevoir la réponse de l'Arduino
@@ -62,12 +62,30 @@ def demarrer_arduino() -> bool:
 
         for port in PORTS_CANDIDATS:
             try:
-                ser = serial.Serial(port, BAUDRATE_ARDUINO, timeout=TIMEOUT_MESURE)
+                ser = serial.Serial(port, BAUDRATE_ARDUINO, timeout=2)
                 # Attendre la fin du reset Arduino (ouverture USB déclenche un reset)
                 time.sleep(1.5)
                 ser.reset_input_buffer()
+
+                # Attendre confirmation "Pret" de l'Arduino (timeout 5s)
+                deadline = time.time() + 5.0
+                pret = False
+                while time.time() < deadline:
+                    ligne = ser.readline().decode("utf-8", errors="ignore").strip()
+                    if ligne:
+                        print(f"[ARDUINO] {ligne}")
+                    if "Pret" in ligne or "pret" in ligne.lower():
+                        pret = True
+                        break
+
+                if not pret:
+                    print(f"[ARDUINO] Pas de confirmation 'Pret' sur {port}, abandon")
+                    ser.close()
+                    continue
+
+                ser.timeout = TIMEOUT_MESURE
                 _port_serie = ser
-                print(f"[ARDUINO] Connecte sur {port}")
+                print(f"[ARDUINO] Connecte et pret sur {port}")
                 return True
             except Exception as e:
                 print(f"[ARDUINO] Port {port} inaccessible : {e}")

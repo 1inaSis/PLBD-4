@@ -231,19 +231,29 @@ def _extraire_nationalite(texte: str) -> str:
 def _fusionner(textes: list) -> dict:
     nom = prenom = date_n = nationalite = ""
     age = None
-    for texte in textes:
+    for idx, texte in enumerate(textes):
+        print(f"[SCANNER] OCR#{idx+1} ({len(texte)} chars) : {repr(texte[:120])}")
         if not nom:
             nom = _extraire_nom(texte)
+            print(f"[SCANNER] NOM        → {repr(nom) if nom else 'non trouvé'}")
         if not prenom:
             prenom = _extraire_prenom(texte)
-        if not prenom and nom:
-            prenom = _fallback_prenom_apres_nom(texte, nom)
+            if not prenom and nom:
+                prenom = _fallback_prenom_apres_nom(texte, nom)
+                if prenom:
+                    print(f"[SCANNER] PRENOM     → {repr(prenom)} (fallback après nom)")
+            if prenom:
+                print(f"[SCANNER] PRENOM     → {repr(prenom)}")
+            else:
+                print("[SCANNER] PRENOM     → non trouvé")
         if not date_n:
             date_n, age = _extraire_date_naissance(texte)
+            print(f"[SCANNER] DATE_NAISS → {repr(date_n) if date_n else 'non trouvée'}")
         if not nationalite:
             nationalite = _extraire_nationalite(texte)
         if nom and prenom and date_n:
             break
+    print(f"[SCANNER] Résultat fusion : nom={repr(nom)} prenom={repr(prenom)} date={repr(date_n)}")
     return {
         "nom": nom,
         "prenom": prenom,
@@ -317,8 +327,10 @@ def scanner_piece_identite(source=None) -> dict:
         pass
 
     if not textes:
+        print("[SCANNER] Aucun texte OCR produit")
         return _besoin_formulaire("OCR sans résultat")
 
+    print(f"[SCANNER] {len(textes)} résultat(s) OCR reçus")
     info = _fusionner(textes)
 
     if info["nom"] and info["prenom"] and info["date_naissance"]:
