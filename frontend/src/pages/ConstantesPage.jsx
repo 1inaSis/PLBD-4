@@ -1,16 +1,15 @@
 // Étape 3 / 5 — Mesure séquentielle des constantes vitales
 //
 // Flux par étape :
-//   ATTENTE (polling GET /api/constantes toutes les 3s)
-//   → STABILISATION (valeur reçue, compte à rebours 8s)
+//   ATTENTE (mesure Arduino en cours)
 //   → COMPLET (résultat + badge couleur + bouton "Mesure suivante")
 //
-// 3 étapes : Température → Oxymètre (SpO₂ + FC) → Tension
-// L'étape Oxymètre est "double" : SpO₂ et fréquence cardiaque
-// sont mesurés simultanément par le même capteur (MAX30105).
+// 3 étapes : Température → Oxymètre (SpO₂ + FC) → Tension (simulée client)
+// L'étape Tension n'appelle pas l'Arduino : valeurs simulées côté client,
+// affichage immédiat, passage automatique au récap après 5 secondes.
 // Après les 3 étapes → RECAP (BiometrieDisplay complet + "Continuer")
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import { demarrerArduino, arreterArduino, mesurerConstante } from '../services/api'
@@ -33,12 +32,11 @@ function pireCouleur(...couleurs) {
   )
 }
 
-// ── 3 étapes de mesure (température / oxymètre / tension) ────────────────────
-// typeMesure : commande envoyée à l'Arduino via POST /api/constantes/mesurer
+// ── 3 étapes de mesure ────────────────────────────────────────────────────────
 const ETAPES = [
   {
     cle:          'temperature',
-    typeMesure:   'temperature',   // commande Arduino
+    typeMesure:   'temperature',
     label:        'Température',
     instruction:  'Placez le capteur thermique sur votre front et restez immobile.',
     unite:        '°C',
@@ -47,16 +45,14 @@ const ETAPES = [
     formatter:    (v) => Number(v).toFixed(1),
   },
 
-  // Étape fusionnée : SpO₂ + fréquence cardiaque — même capteur MAX30105
   {
-    cle:          'spo2',         // clé primaire : déclenche la transition ATTENTE → STABILISATION
-    typeMesure:   'spo2',          // commande Arduino
-    double:       true,            // deux valeurs affichées ensemble
+    cle:          'spo2',
+    typeMesure:   'spo2',
+    double:       true,
     label:        'Oxymétrie de pouls',
     instruction:  'Placez votre index sur le capteur de la borne et restez immobile.',
     icone:        '🫁',
     illustration: IllustrationSpo2,
-    // Descriptif des deux sous-mesures (ordre d'affichage)
     valeurs: [
       { cle: 'spo2',       label: 'SpO₂',               unite: '%',   formatter: (v) => Number(v).toFixed(1) },
       { cle: 'heart_rate', label: 'Fréquence cardiaque', unite: 'bpm', formatter: (v) => Math.round(Number(v)) },
@@ -65,9 +61,9 @@ const ETAPES = [
 
   {
     cle:          'bp_systolic',
-    typeMesure:   'tension',       // simulée côté backend
+    typeMesure:   'tension',
+    simulee:      true,   // pas d'appel Arduino — simulation côté client
     label:        'Tension artérielle',
-    instruction:  'Passez le brassard autour de votre bras gauche et restez immobile.',
     unite:        'mmHg',
     icone:        '💉',
     illustration: IllustrationTension,
@@ -75,18 +71,17 @@ const ETAPES = [
   },
 ]
 
-// Toutes les clés vitales — utilisées dans le récap pour détecter une valeur critique
-// (heart_rate n'est plus une clé primaire d'étape mais reste surveillée)
 const CLES_VITALES = ['temperature', 'spo2', 'heart_rate', 'bp_systolic']
 
-// Durée du compte à rebours de stabilisation par constante (secondes)
-const DUREE_STABILISATION = 8
-
-// Phases globales de la page
 const PHASE = { MESURE: 'mesure', RECAP: 'recap' }
+const ETAT  = { ATTENTE: 'attente', COMPLET: 'complet' }
 
-// États d'une étape individuelle
-const ETAT  = { ATTENTE: 'attente', STABILISATION: 'stabilisation', COMPLET: 'complet' }
+// ── Génère une tension artérielle simulée réaliste ───────────────────────────
+function simulerTension() {
+  const sys = Math.round(110 + Math.random() * 30)
+  const dia = Math.round(sys * (0.55 + Math.random() * 0.13))
+  return { bp_systolic: sys, bp_diastolic: dia }
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 export default function ConstantesPage() {
@@ -96,33 +91,27 @@ export default function ConstantesPage() {
   const [phase, setPhase]                = useState(PHASE.MESURE)
   const [indexEtape, setIndexEtape]      = useState(0)
   const [etat, setEtat]                  = useState(ETAT.ATTENTE)
-  // Accumulateur de toutes les valeurs reçues (merge progressif)
   const [constantes, setConstantesLocal] = useState({})
-  const [secondes, setSecondes]          = useState(DUREE_STABILISATION)
   const [erreur, setErreur]              = useState(null)
 
-  // Anti-requête concurrente (mesure Arduino peut prendre jusqu'à 20s)
   const enFetchRef = useRef(false)
 
   const etapeActuelle  = ETAPES[indexEtape]
-  // Valeur de la clé primaire — suffit pour déclencher la stabilisation
-  // (pour l'étape double, spo2 et heart_rate arrivent du même appel API)
   const valeurActuelle = constantes?.[etapeActuelle?.cle]
 
-  // ── Lifecycle Arduino : démarrage au mount, arrêt au unmount ────────────────
+  // ── Lifecycle Arduino ────────────────────────────────────────────────────────
   useEffect(() => {
-    demarrerArduino().catch(() => {})   // non bloquant, erreur silencieuse
-    return () => { arreterArduino() }   // keepalive : survit à la navigation
-  }, [])  // une seule fois au mount/unmount de la page
+    demarrerArduino().catch(() => {})
+    return () => { arreterArduino() }
+  }, [])
 
-  // ── Mesure unitaire : une commande par étape, pas de polling ────────────────
+  // ── Mesure Arduino (ignorée pour les étapes simulées) ───────────────────────
   useEffect(() => {
-    if (etat !== ETAT.ATTENTE || enFetchRef.current) return
+    if (etat !== ETAT.ATTENTE || enFetchRef.current || etapeActuelle.simulee) return
 
     enFetchRef.current = true
     mesurerConstante(etapeActuelle.typeMesure, patient.session_id)
       .then(res => {
-        // Merge : conserve les valeurs déjà acquises, ajoute les nouvelles non-nulles
         const nouvelles = {}
         Object.entries(res.constantes ?? {}).forEach(([k, v]) => {
           if (v != null) nouvelles[k] = v
@@ -134,40 +123,33 @@ export default function ConstantesPage() {
       .finally(() => { enFetchRef.current = false })
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etat, indexEtape])  // une mesure par étape, pas de polling
+  }, [etat, indexEtape])
 
-  // ── Transition ATTENTE → STABILISATION dès que la valeur primaire arrive ─────
+  // ── Tension simulée : résultat immédiat + passage auto au récap dans 5s ─────
+  useEffect(() => {
+    if (etat !== ETAT.ATTENTE || !etapeActuelle.simulee) return
+
+    setConstantesLocal(prev => ({ ...prev, ...simulerTension() }))
+    setEtat(ETAT.COMPLET)
+
+    const timer = setTimeout(() => setPhase(PHASE.RECAP), 5000)
+    return () => clearTimeout(timer)
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat, indexEtape])
+
+  // ── ATTENTE → COMPLET dès que la valeur primaire arrive ─────────────────────
   useEffect(() => {
     if (etat === ETAT.ATTENTE && valeurActuelle != null) {
-      setEtat(ETAT.STABILISATION)
-      setSecondes(DUREE_STABILISATION)
+      setEtat(ETAT.COMPLET)
     }
   }, [etat, valeurActuelle])
 
-  // ── Compte à rebours de stabilisation (8s) ──────────────────────────────────
-  useEffect(() => {
-    if (etat !== ETAT.STABILISATION) return
-
-    const timer = setInterval(() => {
-      setSecondes(s => {
-        if (s <= 1) {
-          clearInterval(timer)
-          setEtat(ETAT.COMPLET)
-          return 0
-        }
-        return s - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [etat])
-
-  // ── Passer à l'étape suivante ou afficher le récap ──────────────────────────
+  // ── Passer à l'étape suivante ou au récap ───────────────────────────────────
   const etapeSuivante = () => {
     if (indexEtape < ETAPES.length - 1) {
       setIndexEtape(i => i + 1)
       setEtat(ETAT.ATTENTE)
-      setSecondes(DUREE_STABILISATION)
     } else {
       setPhase(PHASE.RECAP)
     }
@@ -178,7 +160,6 @@ export default function ConstantesPage() {
     setConstantesLocal({})
     setIndexEtape(0)
     setEtat(ETAT.ATTENTE)
-    setSecondes(DUREE_STABILISATION)
     setPhase(PHASE.MESURE)
   }
 
@@ -188,12 +169,6 @@ export default function ConstantesPage() {
     navigate('/questions')
   }
 
-  // ── Progression de la barre de stabilisation ─────────────────────────────────
-  const pctStabilisation = Math.round(
-    ((DUREE_STABILISATION - secondes) / DUREE_STABILISATION) * 100
-  )
-
-  // ── Rendu ────────────────────────────────────────────────────────────────────
   return (
     <div className="kiosk-shell">
       <IndicateurEtape etapeCourante={3} />
@@ -206,8 +181,6 @@ export default function ConstantesPage() {
           etat={etat}
           valeur={valeurActuelle}
           constantes={constantes}
-          secondes={secondes}
-          pctStabilisation={pctStabilisation}
           erreur={erreur}
           onEtapeSuivante={etapeSuivante}
           onRetour={() => navigate('/questionnaire')}
@@ -226,100 +199,75 @@ export default function ConstantesPage() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Sous-vue : une mesure en cours (étape simple ou étape double)
+// Sous-vue : une mesure en cours (étape simple, double, ou simulée)
 // ═════════════════════════════════════════════════════════════════════════════
 function VueMesure({
   etape, indexEtape, total, etat, valeur, constantes,
-  secondes, pctStabilisation, erreur,
+  erreur,
   onEtapeSuivante, onRetour,
 }) {
-  // ── Étape simple : couleur et valeur formatée ──────────────────────────────
-  const couleur  = evaluerCouleur(etape.cle, valeur)
-  const affichee = !etape.double && valeur != null
+  const estSimulee    = !!etape.simulee
+  const couleur       = evaluerCouleur(etape.cle, valeur)
+  const affichee      = !etape.double && valeur != null
     ? etape.formatter(valeur, constantes)
     : null
 
-  // ── Étape double : couleur "pire" parmi les sous-mesures ──────────────────
   const couleurDouble = etape.double
     ? pireCouleur(...etape.valeurs.map(sv => evaluerCouleur(sv.cle, constantes?.[sv.cle])))
     : null
+  const couleurBadge  = etape.double ? couleurDouble : couleur
 
-  // Badge couleur final (simple ou double)
-  const couleurBadge = etape.double ? couleurDouble : couleur
-
-  const estDerniere  = indexEtape === total - 1
-  const Illustration = etape.illustration
+  const estDerniere   = indexEtape === total - 1
+  const Illustration  = etape.illustration
 
   return (
     <div className="kiosk-center">
       <div className="kiosk-card constante-sequentielle">
 
-        {/* ── En-tête : étiquette + compteur ──────────────────── */}
+        {/* ── En-tête */}
         <div className="seq-header">
           <span className="eyebrow">Étape 3 / 5 · Constantes vitales</span>
           <span className="seq-compteur">{indexEtape + 1} / {total}</span>
         </div>
 
-        {/* ── Nom de la constante + icône ──────────────────────── */}
+        {/* ── Nom + icône */}
         <div className="seq-titre-wrapper">
           <span className="seq-icone" aria-hidden="true">{etape.icone}</span>
           <h2 className="kiosk-titre-sm">{etape.label}</h2>
         </div>
 
-        {/* ── Illustration du geste (phase ATTENTE uniquement) ─── */}
-        {etat === ETAT.ATTENTE && Illustration && (
+        {/* ── Illustration (ATTENTE, étapes non simulées uniquement) */}
+        {etat === ETAT.ATTENTE && !estSimulee && Illustration && (
           <div className="illustration-wrapper">
             <Illustration />
           </div>
         )}
 
-        {/* ── Instruction au patient ────────────────────────────── */}
-        <p className="kiosk-soustitre">{etape.instruction}</p>
+        {/* ── Instruction (étapes non simulées) */}
+        {!estSimulee && (
+          <p className="kiosk-soustitre">{etape.instruction}</p>
+        )}
 
-        {/* ── Phase ATTENTE : spinner ───────────────────────────── */}
-        {etat === ETAT.ATTENTE && (
+        {/* ── ATTENTE : spinner (étapes non simulées) */}
+        {etat === ETAT.ATTENTE && !estSimulee && (
           <div className="seq-attente">
             <div className="kiosk-spinner" aria-label="Mesure en cours" />
             <p className="kiosk-note">Mesure en cours…</p>
           </div>
         )}
 
-        {/* ── Phase STABILISATION ───────────────────────────────── */}
-        {etat === ETAT.STABILISATION && (
-          <div className="seq-stabilisation">
-            {etape.double
-              ? <ValeursDouble valeurs={etape.valeurs} constantes={constantes} />
-              : affichee && (
-                  <div className="seq-valeur-grande">
-                    {affichee}
-                    <span className="seq-unite">{etape.unite}</span>
-                  </div>
-                )
-            }
-            <div className="stabilisation-bloc">
-              <div className="stabilisation-header">
-                <span className="stabilisation-label">Stabilisation de la mesure…</span>
-                <span className="stabilisation-timer">{secondes} s</span>
-              </div>
-              <div
-                className="stabilisation-barre"
-                role="progressbar"
-                aria-valuenow={pctStabilisation}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <div
-                  className="stabilisation-progression"
-                  style={{ width: `${pctStabilisation}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Phase COMPLET : résultat + badge + bouton ────────── */}
+        {/* ── COMPLET : résultat + badge */}
         {etat === ETAT.COMPLET && (
           <div className="seq-complet">
+
+            {/* Message tension simulée */}
+            {estSimulee && (
+              <p className="kiosk-note kiosk-note--info">
+                Tension artérielle simulée — tensiomètre manuel non connecté
+              </p>
+            )}
+
+            {/* Valeur(s) */}
             {etape.double
               ? <ValeursDouble valeurs={etape.valeurs} constantes={constantes} avecCouleur />
               : affichee && (
@@ -330,25 +278,37 @@ function VueMesure({
                 )
             }
 
+            {/* Badge couleur */}
             <div className={`bio-badge bio-badge--${couleurBadge}`}>
               <span className="bio-badge-dot" />
               {LIBELLES_COULEUR[couleurBadge]}
             </div>
 
-            <div className="seq-ok" role="status">✓ Mesure effectuée</div>
+            {/* Mesures réelles : confirmation + bouton */}
+            {!estSimulee && (
+              <>
+                <div className="seq-ok" role="status">✓ Mesure effectuée</div>
+                <button className="kiosk-btn kiosk-btn--primary" onClick={onEtapeSuivante}>
+                  {estDerniere ? 'Voir le bilan des mesures →' : 'Mesurer la constante suivante →'}
+                </button>
+              </>
+            )}
 
-            <button className="kiosk-btn kiosk-btn--primary" onClick={onEtapeSuivante}>
-              {estDerniere ? 'Voir le bilan des mesures →' : 'Mesurer la constante suivante →'}
-            </button>
+            {/* Tension simulée : avance automatique */}
+            {estSimulee && (
+              <p className="kiosk-note" role="status">
+                Passage automatique dans quelques secondes…
+              </p>
+            )}
           </div>
         )}
 
-        {/* ── Erreur capteur ────────────────────────────────────── */}
+        {/* ── Erreur capteur */}
         {erreur && (
           <div className="kiosk-alerte" role="alert">{erreur}</div>
         )}
 
-        {/* ── Bouton retour (1re étape, ATTENTE uniquement) ────── */}
+        {/* ── Bouton retour (1re étape, ATTENTE uniquement) */}
         {indexEtape === 0 && etat === ETAT.ATTENTE && (
           <button
             className="kiosk-btn kiosk-btn--secondary"
@@ -364,7 +324,7 @@ function VueMesure({
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Sous-composant : affiche deux valeurs côte à côte (étape oxymètre)
+// Sous-composant : deux valeurs côte à côte (étape oxymètre)
 // ═════════════════════════════════════════════════════════════════════════════
 function ValeursDouble({ valeurs, constantes, avecCouleur = false }) {
   return (
@@ -392,7 +352,6 @@ function ValeursDouble({ valeurs, constantes, avecCouleur = false }) {
 // Sous-vue : récapitulatif des constantes
 // ═════════════════════════════════════════════════════════════════════════════
 function VueRecap({ constantes, onContinuer, onRecommencer }) {
-  // Vérifie toutes les clés vitales, y compris heart_rate (plus de clé primaire)
   const alerteCritique = CLES_VITALES.some(
     cle => evaluerCouleur(cle, constantes?.[cle]) === 'rouge'
   )
