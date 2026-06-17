@@ -1,12 +1,11 @@
 // Étape 3 / 5 — Mesure séquentielle des constantes vitales
 //
 // Flux par étape :
-//   ATTENTE (mesure Arduino en cours)
-//   → COMPLET (résultat + badge couleur + bouton "Mesure suivante")
+//   ATTENTE → (valeur valide) → COMPLET
+//   ATTENTE → (null retourné) → message + bouton Réessayer
+//   ATTENTE → (30s sans valeur) → valeur simulée injectée + COMPLET auto (3s)
 //
 // 3 étapes : Température → Oxymètre (SpO₂ + FC) → Tension (simulée client)
-// L'étape Tension n'appelle pas l'Arduino : valeurs simulées côté client,
-// affichage immédiat, passage automatique au récap après 5 secondes.
 // Après les 3 étapes → RECAP (BiometrieDisplay complet + "Continuer")
 
 import { useState, useEffect, useRef } from 'react'
@@ -22,7 +21,6 @@ import {
 } from '../components/IllustrationsGestes'
 import '../styles/kiosk.css'
 
-// ── Priorité des niveaux de couleur (pour badge "pire état") ─────────────────
 const PRIORITE_COULEUR = { rouge: 5, orange: 4, jaune: 3, vert: 2, gris: 1 }
 
 function pireCouleur(...couleurs) {
@@ -39,10 +37,12 @@ const ETAPES = [
     typeMesure:   'temperature',
     label:        'Température',
     instruction:  'Placez le capteur thermique sur votre front et restez immobile.',
+    messageNull:  'Veuillez pointer le capteur face à votre front à 2-3 cm',
     unite:        '°C',
     icone:        '🌡️',
     illustration: IllustrationThermometre,
     formatter:    (v) => Number(v).toFixed(1),
+    fallback:     { temperature: 36.5 },
   },
 
   {
@@ -51,18 +51,20 @@ const ETAPES = [
     double:       true,
     label:        'Oxymétrie de pouls',
     instruction:  'Placez votre index sur le capteur de la borne et restez immobile.',
+    messageNull:  'Positionnez bien votre index sur le capteur et maintenez immobile',
     icone:        '🫁',
     illustration: IllustrationSpo2,
     valeurs: [
       { cle: 'spo2',       label: 'SpO₂',               unite: '%',   formatter: (v) => Number(v).toFixed(1) },
       { cle: 'heart_rate', label: 'Fréquence cardiaque', unite: 'bpm', formatter: (v) => Math.round(Number(v)) },
     ],
+    fallback: { spo2: 97.0, heart_rate: 75 },
   },
 
   {
     cle:          'bp_systolic',
     typeMesure:   'tension',
-    simulee:      true,   // pas d'appel Arduino — simulation côté client
+    simulee:      true,
     label:        'Tension artérielle',
     unite:        'mmHg',
     icone:        '💉',
@@ -71,12 +73,12 @@ const ETAPES = [
   },
 ]
 
-const CLES_VITALES = ['temperature', 'spo2', 'heart_rate', 'bp_systolic']
+const CLES_VITALES      = ['temperature', 'spo2', 'heart_rate', 'bp_systolic']
+const TIMEOUT_MESURE_MS = 30_000   // 30s avant injection valeur simulée
 
 const PHASE = { MESURE: 'mesure', RECAP: 'recap' }
 const ETAT  = { ATTENTE: 'attente', COMPLET: 'complet' }
 
-// ── Génère une tension artérielle simulée réaliste ───────────────────────────
 function simulerTension() {
   const sys = Math.round(110 + Math.random() * 30)
   const dia = Math.round(sys * (0.55 + Math.random() * 0.13))
@@ -93,6 +95,9 @@ export default function ConstantesPage() {
   const [etat, setEtat]                  = useState(ETAT.ATTENTE)
   const [constantes, setConstantesLocal] = useState({})
   const [erreur, setErreur]              = useState(null)
+  // 'null' = capteur non pointé  |  'timeout' = 30s dépassés  |  null = RAS
+  const [messageCapture, setMessageCapture] = useState(null)
+  const [tentative, setTentative]           = useState(0)
 
   const enFetchRef = useRef(false)
 
@@ -109,6 +114,7 @@ export default function ConstantesPage() {
   useEffect(() => {
     if (etat !== ETAT.ATTENTE || enFetchRef.current || etapeActuelle.simulee) return
 
+    setMessageCapture(null)
     enFetchRef.current = true
     mesurerConstante(etapeActuelle.typeMesure, patient.session_id)
       .then(res => {
@@ -116,14 +122,52 @@ export default function ConstantesPage() {
         Object.entries(res.constantes ?? {}).forEach(([k, v]) => {
           if (v != null) nouvelles[k] = v
         })
-        setConstantesLocal(prev => ({ ...prev, ...nouvelles }))
-        setErreur(null)
+        // Valeur primaire toujours null → capteur non pointé
+        if (nouvelles[etapeActuelle.cle] == null) {
+          setMessageCapture('null')
+        } else {
+          setConstantesLocal(prev => ({ ...prev, ...nouvelles }))
+          setErreur(null)
+        }
       })
       .catch(err => setErreur(`Erreur capteurs : ${err.message}`))
       .finally(() => { enFetchRef.current = false })
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etat, indexEtape])
+  }, [etat, indexEtape, tentative])
+
+  // ── Timeout 30s : injecte valeur simulée si toujours en attente ─────────────
+  useEffect(() => {
+    if (etat !== ETAT.ATTENTE || etapeActuelle.simulee) return
+
+    const timer = setTimeout(() => {
+      setConstantesLocal(prev => ({ ...prev, ...(etapeActuelle.fallback ?? {}) }))
+      setMessageCapture('timeout')
+      setEtat(ETAT.COMPLET)
+    }, TIMEOUT_MESURE_MS)
+
+    return () => clearTimeout(timer)
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat, indexEtape, tentative])
+
+  // ── Auto-avance 3s après un timeout (valeur simulée affichée brièvement) ────
+  useEffect(() => {
+    if (messageCapture !== 'timeout' || etat !== ETAT.COMPLET) return
+
+    const t = setTimeout(() => {
+      setMessageCapture(null)
+      if (indexEtape < ETAPES.length - 1) {
+        setIndexEtape(i => i + 1)
+        setEtat(ETAT.ATTENTE)
+      } else {
+        setPhase(PHASE.RECAP)
+      }
+    }, 3000)
+    return () => clearTimeout(t)
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messageCapture, etat, indexEtape])
 
   // ── Tension simulée : résultat immédiat + passage auto au récap dans 5s ─────
   useEffect(() => {
@@ -145,8 +189,15 @@ export default function ConstantesPage() {
     }
   }, [etat, valeurActuelle])
 
+  // ── Réessayer après null ─────────────────────────────────────────────────────
+  const reessayer = () => {
+    setMessageCapture(null)
+    setTentative(t => t + 1)
+  }
+
   // ── Passer à l'étape suivante ou au récap ───────────────────────────────────
   const etapeSuivante = () => {
+    setMessageCapture(null)
     if (indexEtape < ETAPES.length - 1) {
       setIndexEtape(i => i + 1)
       setEtat(ETAT.ATTENTE)
@@ -161,6 +212,8 @@ export default function ConstantesPage() {
     setIndexEtape(0)
     setEtat(ETAT.ATTENTE)
     setPhase(PHASE.MESURE)
+    setMessageCapture(null)
+    setTentative(0)
   }
 
   // ── Continuer vers l'étape 4 ────────────────────────────────────────────────
@@ -182,7 +235,9 @@ export default function ConstantesPage() {
           valeur={valeurActuelle}
           constantes={constantes}
           erreur={erreur}
+          messageCapture={messageCapture}
           onEtapeSuivante={etapeSuivante}
+          onReessayer={reessayer}
           onRetour={() => navigate('/questionnaire')}
         />
       )}
@@ -199,12 +254,10 @@ export default function ConstantesPage() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Sous-vue : une mesure en cours (étape simple, double, ou simulée)
-// ═════════════════════════════════════════════════════════════════════════════
 function VueMesure({
   etape, indexEtape, total, etat, valeur, constantes,
-  erreur,
-  onEtapeSuivante, onRetour,
+  erreur, messageCapture,
+  onEtapeSuivante, onReessayer, onRetour,
 }) {
   const estSimulee    = !!etape.simulee
   const couleur       = evaluerCouleur(etape.cle, valeur)
@@ -224,46 +277,63 @@ function VueMesure({
     <div className="kiosk-center">
       <div className="kiosk-card constante-sequentielle">
 
-        {/* ── En-tête */}
         <div className="seq-header">
           <span className="eyebrow">Étape 3 / 5 · Constantes vitales</span>
           <span className="seq-compteur">{indexEtape + 1} / {total}</span>
         </div>
 
-        {/* ── Nom + icône */}
         <div className="seq-titre-wrapper">
           <span className="seq-icone" aria-hidden="true">{etape.icone}</span>
           <h2 className="kiosk-titre-sm">{etape.label}</h2>
         </div>
 
-        {/* ── Illustration (ATTENTE, étapes non simulées uniquement) */}
-        {etat === ETAT.ATTENTE && !estSimulee && Illustration && (
+        {/* Illustration (ATTENTE, mesures réelles uniquement) */}
+        {etat === ETAT.ATTENTE && !estSimulee && messageCapture !== 'null' && Illustration && (
           <div className="illustration-wrapper">
             <Illustration />
           </div>
         )}
 
-        {/* ── Instruction (étapes non simulées) */}
-        {!estSimulee && (
+        {/* Instruction normale */}
+        {!estSimulee && messageCapture !== 'null' && (
           <p className="kiosk-soustitre">{etape.instruction}</p>
         )}
 
-        {/* ── ATTENTE : spinner (étapes non simulées) */}
-        {etat === ETAT.ATTENTE && !estSimulee && (
+        {/* ATTENTE : spinner (mesure en cours, pas encore de retour null) */}
+        {etat === ETAT.ATTENTE && !estSimulee && messageCapture !== 'null' && (
           <div className="seq-attente">
             <div className="kiosk-spinner" aria-label="Mesure en cours" />
             <p className="kiosk-note">Mesure en cours…</p>
           </div>
         )}
 
-        {/* ── COMPLET : résultat + badge */}
+        {/* ATTENTE : capteur non pointé → message + Réessayer */}
+        {etat === ETAT.ATTENTE && messageCapture === 'null' && (
+          <div className="seq-attente">
+            <div className="kiosk-alerte" role="alert">
+              {etape.messageNull ?? 'Vérifiez le positionnement du capteur'}
+            </div>
+            <button className="kiosk-btn kiosk-btn--primary" onClick={onReessayer}>
+              Réessayer
+            </button>
+          </div>
+        )}
+
+        {/* COMPLET */}
         {etat === ETAT.COMPLET && (
           <div className="seq-complet">
 
-            {/* Message tension simulée */}
+            {/* Tension simulée */}
             {estSimulee && (
               <p className="kiosk-note kiosk-note--info">
                 Tension artérielle simulée — tensiomètre manuel non connecté
+              </p>
+            )}
+
+            {/* Timeout : valeur simulée injectée */}
+            {messageCapture === 'timeout' && (
+              <p className="kiosk-alerte" role="alert">
+                Mesure impossible — valeur simulée utilisée
               </p>
             )}
 
@@ -284,8 +354,8 @@ function VueMesure({
               {LIBELLES_COULEUR[couleurBadge]}
             </div>
 
-            {/* Mesures réelles : confirmation + bouton */}
-            {!estSimulee && (
+            {/* Mesure réelle réussie : confirmation + bouton */}
+            {!estSimulee && messageCapture !== 'timeout' && (
               <>
                 <div className="seq-ok" role="status">✓ Mesure effectuée</div>
                 <button className="kiosk-btn kiosk-btn--primary" onClick={onEtapeSuivante}>
@@ -294,8 +364,8 @@ function VueMesure({
               </>
             )}
 
-            {/* Tension simulée : avance automatique */}
-            {estSimulee && (
+            {/* Auto-avance (tension simulée ou timeout) */}
+            {(estSimulee || messageCapture === 'timeout') && (
               <p className="kiosk-note" role="status">
                 Passage automatique dans quelques secondes…
               </p>
@@ -303,13 +373,11 @@ function VueMesure({
           </div>
         )}
 
-        {/* ── Erreur capteur */}
         {erreur && (
           <div className="kiosk-alerte" role="alert">{erreur}</div>
         )}
 
-        {/* ── Bouton retour (1re étape, ATTENTE uniquement) */}
-        {indexEtape === 0 && etat === ETAT.ATTENTE && (
+        {indexEtape === 0 && etat === ETAT.ATTENTE && messageCapture !== 'null' && (
           <button
             className="kiosk-btn kiosk-btn--secondary"
             onClick={onRetour}
@@ -323,8 +391,6 @@ function VueMesure({
   )
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Sous-composant : deux valeurs côte à côte (étape oxymètre)
 // ═════════════════════════════════════════════════════════════════════════════
 function ValeursDouble({ valeurs, constantes, avecCouleur = false }) {
   return (
@@ -348,8 +414,6 @@ function ValeursDouble({ valeurs, constantes, avecCouleur = false }) {
   )
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Sous-vue : récapitulatif des constantes
 // ═════════════════════════════════════════════════════════════════════════════
 function VueRecap({ constantes, onContinuer, onRecommencer }) {
   const alerteCritique = CLES_VITALES.some(
