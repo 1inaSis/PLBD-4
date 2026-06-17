@@ -118,18 +118,26 @@ void mesurerTemperature() {
     somme += mlx.readObjectTempC();
     delay(200);
   }
-  float temperature = somme / NB_LECTURES;
+  float brute = somme / NB_LECTURES;
 
-  if (temperature < 30.0 || temperature > 45.0) {
+  // Offset frontal : le capteur lit ~26-27°C à 5cm du front (vrai = ~36°C)
+  float temperature = brute;
+  if (brute >= 20.0 && brute <= 32.0) {
+    temperature = brute + 9.5;
+  }
+
+  if (temperature < 15.0 || temperature > 50.0) {
     Serial.print(F("{\"temperature\": null, \"mlx_ok\": true, \"valeur_brute\": "));
-    Serial.print(temperature, 1);
+    Serial.print(brute, 1);
     Serial.println(F(", \"source\": \"erreur\"}"));
     return;
   }
 
   Serial.print(F("{\"temperature\": "));
   Serial.print(temperature, 1);
-  Serial.println(F(", \"mlx_ok\": true, \"source\": \"capteur\"}"));
+  Serial.print(F(", \"mlx_ok\": true, \"valeur_brute\": "));
+  Serial.print(brute, 1);
+  Serial.println(F(", \"source\": \"capteur\"}"));
 }
 
 // ── Mesure SpO2 + fréquence cardiaque (MAX30102) ────────────────────────────
