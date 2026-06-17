@@ -1,11 +1,13 @@
 """
 scanner_cin.py — Scanner CIN universel pour HealthGate
-Stratégie : rpicam-still → prétraitement séquentiel → tesseract subprocess (timeout 5s)
+Stratégie : rpicam-still → EasyOCR (init unique au démarrage) → extraction
 Supporte : Maroc, Côte d'Ivoire, Sénégal, Mali, et cartes africaines en général
 Si incomplet → formulaire_manuel: True avec champs partiellement pré-remplis
+
+Note perf : premier import prend ~30s (chargement modèles EasyOCR),
+            les scans suivants sont rapides (~2-4s).
 """
 
-import cv2
 import re
 import os
 import base64
@@ -13,46 +15,46 @@ import subprocess
 import numpy as np
 from datetime import datetime
 
-TIMEOUT_CAPTURE   = 3    # secondes max pour rpicam-still
-TIMEOUT_TESSERACT = 5    # secondes max pour tesseract
-OCR_LANG          = 'fra+eng'
-_IMG_TMP          = '/tmp/scan_processed.jpg'
+try:
+    import cv2
+    CV2_DISPONIBLE = True
+except ImportError:
+    CV2_DISPONIBLE = False
+
+# ─── Init EasyOCR unique au chargement du module ─────────────────────────────
+
+try:
+    import easyocr
+    print("[SCANNER] Chargement EasyOCR (première fois ~30s)...")
+    _reader = easyocr.Reader(['fr', 'en'], gpu=False, verbose=False)
+    EASYOCR_DISPONIBLE = True
+    print("[SCANNER] EasyOCR prêt.")
+except Exception as _e:
+    _reader = None
+    EASYOCR_DISPONIBLE = False
+    print(f"[SCANNER] EasyOCR non disponible : {_e}")
+
+TIMEOUT_CAPTURE = 4     # secondes max pour rpicam-still
+_IMG_TMP        = '/tmp/cin.jpg'
 
 
-# ─── Prétraitement image ─────────────────────────────────────────────────────
+# ─── OCR via EasyOCR ─────────────────────────────────────────────────────────
 
-def _pretraiter(img: np.ndarray) -> np.ndarray:
-    """Gris → CLAHE → Otsu THRESH_BINARY."""
-    gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    gris = clahe.apply(gris)
-    _, seuil = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return seuil
-
-
-# ─── OCR via subprocess tesseract (timeout strict) ───────────────────────────
-
-def _ocr(img: np.ndarray) -> str:
-    """Sauvegarde en /tmp/scan_processed.jpg puis appelle tesseract (timeout 5s)."""
+def _ocr(image_path: str) -> str:
+    """
+    Lance EasyOCR sur le fichier image et retourne le texte reconstruit.
+    Les blocs sont triés par coordonnée Y (haut→bas) pour reconstituer l'ordre de lecture.
+    """
     try:
-        cv2.imwrite(_IMG_TMP, img)
-        res = subprocess.run(
-            ['tesseract', _IMG_TMP, 'stdout', '-l', OCR_LANG, '--psm', '6'],
-            capture_output=True, text=True, timeout=TIMEOUT_TESSERACT
-        )
-        return res.stdout
-    except subprocess.TimeoutExpired:
-        print("[SCANNER] Tesseract timeout (5s)")
-        return ""
-    except FileNotFoundError:
-        print("[SCANNER] tesseract non installé")
-        return ""
+        resultats = _reader.readtext(image_path, detail=1, paragraph=False)
+        if not resultats:
+            return ""
+        # Trier par Y du coin supérieur gauche du bbox
+        tries = sorted(resultats, key=lambda r: r[0][0][1])
+        return '\n'.join(texte for _, texte, _ in tries)
     except Exception as e:
-        print(f"[SCANNER] Erreur tesseract : {e}")
+        print(f"[SCANNER] Erreur EasyOCR : {e}")
         return ""
-    finally:
-        if os.path.exists(_IMG_TMP):
-            os.remove(_IMG_TMP)
 
 
 # ─── Extraction des champs ───────────────────────────────────────────────────
@@ -80,7 +82,6 @@ def _apres_label(texte: str, patterns: list) -> str:
                     val = _nettoyer(m.group(1))
                     if len(val) >= 2:
                         return val.title()
-                # Valeur sur la ligne suivante
                 for j in range(i + 1, min(i + 3, len(lignes))):
                     val = _nettoyer(lignes[j])
                     if len(val) >= 2:
@@ -89,7 +90,6 @@ def _apres_label(texte: str, patterns: list) -> str:
 
 
 def _extraire_nom(texte: str) -> str:
-    # Labels directs
     val = _apres_label(texte, [r'\bNOM\b', r'\bNAME\b', r'\bSURNAME\b'])
     if val:
         return val
@@ -119,7 +119,7 @@ def _extraire_prenom(texte: str) -> str:
 
 
 def _extraire_date_naissance(texte: str) -> tuple:
-    """Retourne (date DD/MM/YYYY, age) ou ('', None). Cherche \d{2}/\d{2}/\d{4} en priorité."""
+    """Retourne (date DD/MM/YYYY, age) ou ('', None)."""
     def _valider(j, mo, a):
         if 1900 <= a <= datetime.now().year and 1 <= mo <= 12 and 1 <= j <= 31:
             today = datetime.now()
@@ -128,7 +128,7 @@ def _extraire_date_naissance(texte: str) -> tuple:
                 return f"{j:02d}/{mo:02d}/{a}", age
         return None, None
 
-    # Priorité : après label contextuel (né(e), date, born)
+    # Priorité : après label Né(e), date, born
     ctx = re.search(
         r'(?:n[eé]e?\s*(?:le)?|naissance|date|born)[^\d]{0,15}(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})',
         texte, re.IGNORECASE
@@ -138,7 +138,7 @@ def _extraire_date_naissance(texte: str) -> tuple:
         if date:
             return date, age
 
-    # Regex directe DD/MM/YYYY ou DD-MM-YYYY n'importe où dans le texte
+    # DD/MM/YYYY ou DD-MM-YYYY n'importe où
     m = re.search(r'\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b', texte)
     if m:
         date, age = _valider(int(m.group(1)), int(m.group(2)), int(m.group(3)))
@@ -164,10 +164,10 @@ def _extraire_sexe(texte: str) -> tuple:
     )
     if not m:
         return -1, "Non détecté"
-    texte_match = (m.group(1) or m.group(2) or m.group(3) or "").upper()
-    if texte_match in ('M', 'MASCULIN', 'MALE', 'HOMME'):
+    val = (m.group(1) or m.group(2) or m.group(3) or "").upper()
+    if val in ('M', 'MASCULIN', 'MALE', 'HOMME'):
         return 1, "Homme"
-    if texte_match in ('F', 'FÉMININ', 'FEMININ', 'FEMALE', 'FEMME'):
+    if val in ('F', 'FÉMININ', 'FEMININ', 'FEMALE', 'FEMME'):
         return 0, "Femme"
     return -1, "Non détecté"
 
@@ -177,14 +177,13 @@ def _extraire_nationalite(texte: str) -> str:
 
 
 def _extraire_tout(texte: str) -> dict:
-    """Extrait tous les champs et logue les résultats."""
+    """Extrait tous les champs avec logs détaillés."""
     print(f"[SCANNER] OCR ({len(texte)} chars) : {repr(texte[:150])}")
 
     nom = _extraire_nom(texte)
     print(f"[SCANNER] NOM        → {repr(nom) if nom else 'non trouvé'}")
 
     prenom = _extraire_prenom(texte)
-    # Fallback : ligne suivant le nom
     if not prenom and nom:
         lignes = texte.split('\n')
         nom_low = nom.lower()
@@ -214,76 +213,95 @@ def _extraire_tout(texte: str) -> dict:
 
 # ─── Capture rpicam-still ────────────────────────────────────────────────────
 
-def _capturer_image() -> np.ndarray | None:
-    chemin = '/tmp/scan_cin_raw.jpg'
+def _capturer(chemin: str) -> bool:
+    """Capture avec rpicam-still en 1920×1080. Retourne True si succès."""
     try:
         subprocess.run(
             ['rpicam-still', '-o', chemin,
-             '--width', '1280', '--height', '720',
-             '--immediate', '--timeout', '500', '--nopreview'],
+             '--width', '1920', '--height', '1080',
+             '--immediate', '--timeout', '1000', '--nopreview'],
             check=True, timeout=TIMEOUT_CAPTURE
         )
-        return cv2.imread(chemin)
+        return os.path.exists(chemin)
     except Exception as e:
         print(f"[SCANNER] Capture échouée : {e}")
-        return None
-    finally:
-        if os.path.exists(chemin):
-            os.remove(chemin)
+        return False
 
 
 # ─── Fonction principale ──────────────────────────────────────────────────────
 
 def scanner_piece_identite(source=None) -> dict:
     """
-    Scan CIN (< 8s). Pipeline séquentiel : capture → prétraitement → tesseract.
+    Scan CIN via EasyOCR. Pipeline : capture → EasyOCR → extraction.
     Retourne formulaire_manuel=True avec champs partiels si extraction incomplète.
 
-    source : None → rpicam-still | str → fichier | bytes → base64 | ndarray
+    source : None → rpicam-still | str (chemin fichier) | bytes (base64) | ndarray
     """
-    # Chargement image
-    if isinstance(source, np.ndarray):
-        image = source
-    elif isinstance(source, bytes):
-        try:
-            nparr = np.frombuffer(base64.b64decode(source), np.uint8)
-            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        except Exception:
-            image = None
-    elif isinstance(source, str) and os.path.exists(source):
-        image = cv2.imread(source)
-    else:
-        image = _capturer_image()
+    if not EASYOCR_DISPONIBLE:
+        return _resultat_simulation()
 
-    if image is None:
-        return _besoin_formulaire("Capture échouée")
+    image_path = None
+    fichier_temporaire = False
 
-    # Prétraitement + OCR séquentiel
-    img_prep = _pretraiter(image)
-    texte = _ocr(img_prep)
+    try:
+        if isinstance(source, str) and os.path.exists(source):
+            image_path = source
 
-    if not texte.strip():
-        print("[SCANNER] Tesseract n'a produit aucun texte")
-        return _besoin_formulaire("OCR sans résultat")
+        elif isinstance(source, (bytes, bytearray)):
+            try:
+                nparr = np.frombuffer(base64.b64decode(source), np.uint8)
+                if CV2_DISPONIBLE:
+                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    cv2.imwrite(_IMG_TMP, img)
+                    image_path = _IMG_TMP
+                    fichier_temporaire = True
+            except Exception:
+                pass
 
-    info = _extraire_tout(texte)
+        elif isinstance(source, np.ndarray) and CV2_DISPONIBLE:
+            cv2.imwrite(_IMG_TMP, source)
+            image_path = _IMG_TMP
+            fichier_temporaire = True
 
-    if info["nom"] and info["prenom"] and info["date_naissance"]:
-        return {
-            "succes":            True,
-            "formulaire_manuel": False,
-            "nom":               info["nom"],
-            "prenom":            info["prenom"],
-            "date_naissance":    info["date_naissance"],
-            "age":               info["age"] or 30,
-            "nationalite":       info["nationalite"],
-            "sexe":              info["sexe"],
-            "sexe_libelle":      info["sexe_libelle"],
-            "texte_brut":        texte[:200],
-            "message":           "Scan réussi",
-        }
+        else:
+            # Capture rpicam-still
+            ok = _capturer(_IMG_TMP)
+            if not ok:
+                return _besoin_formulaire("Capture échouée")
+            image_path = _IMG_TMP
+            fichier_temporaire = True
 
-    return _besoin_formulaire("OCR incomplet", partial=info)
+        if image_path is None:
+            return _besoin_formulaire("Source image invalide")
+
+        texte = _ocr(image_path)
+
+        if not texte.strip():
+            print("[SCANNER] EasyOCR n'a produit aucun texte")
+            return _besoin_formulaire("OCR sans résultat")
+
+        info = _extraire_tout(texte)
+
+        if info["nom"] and info["prenom"] and info["date_naissance"]:
+            return {
+                "succes":            True,
+                "formulaire_manuel": False,
+                "nom":               info["nom"],
+                "prenom":            info["prenom"],
+                "date_naissance":    info["date_naissance"],
+                "age":               info["age"] or 30,
+                "nationalite":       info["nationalite"],
+                "sexe":              info["sexe"],
+                "sexe_libelle":      info["sexe_libelle"],
+                "texte_brut":        texte[:200],
+                "message":           "Scan réussi",
+            }
+
+        return _besoin_formulaire("OCR incomplet", partial=info)
+
+    finally:
+        if fichier_temporaire and image_path and os.path.exists(image_path):
+            os.remove(image_path)
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -320,7 +338,7 @@ def _resultat_simulation() -> dict:
         "sexe":              random.choice([0, 1]),
         "sexe_libelle":      random.choice(["Homme", "Femme"]),
         "texte_brut":        "[Simulation]",
-        "message":           "Mode simulation",
+        "message":           "Mode simulation (EasyOCR non disponible)",
     }
 
 
@@ -329,8 +347,14 @@ def capturer_et_scanner(index_cam: int = 0) -> dict:
 
 
 def pretraiter_image(image: np.ndarray) -> np.ndarray:
-    """Compat avec les anciens appels."""
-    return _pretraiter(image)
+    """Compat avec les anciens appels — applique CLAHE+Otsu."""
+    if not CV2_DISPONIBLE:
+        return image
+    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    gris = clahe.apply(gris)
+    _, seuil = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return seuil
 
 
 if __name__ == "__main__":
