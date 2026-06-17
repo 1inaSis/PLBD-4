@@ -371,21 +371,6 @@ def _resultat_simulation() -> dict:
     }
 
 
-def capturer_et_scanner(index_cam: int = 0) -> dict:
-    return scanner_piece_identite()
-
-
-def pretraiter_image(image: np.ndarray) -> np.ndarray:
-    """Compat avec les anciens appels — applique CLAHE+Otsu."""
-    if not CV2_DISPONIBLE:
-        return image
-    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    gris = clahe.apply(gris)
-    _, seuil = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return seuil
-
-
 if __name__ == "__main__":
     import sys
     src = sys.argv[1] if len(sys.argv) > 1 else None
