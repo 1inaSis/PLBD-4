@@ -130,7 +130,7 @@ def _est_label(ligne: str) -> bool:
 def _normaliser(val: str) -> str:
     mapping = str.maketrans(
         'àáâãäåèéêëìíîïòóôõöùúûüýÿñç',
-        'aaaaaaeeeeiiiioooooouuuuyyNC'
+        'aaaaaa' + 'eeee' + 'iiii' + 'ooooo' + 'uuuu' + 'yy' + 'nc'
     )
     return val.lower().translate(mapping)
 
