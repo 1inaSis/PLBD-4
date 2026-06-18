@@ -1,27 +1,22 @@
-// Étape 4 / 5 — Questions adaptatives générées par IA (Groq / Llama-3.3)
+// Étape 4 / 5 — Questions adaptatives IA (Groq / Llama-3.3) — mode question par question
 //
 // Flux :
-//   1. POST /api/questions → 4 questions (15 s de timeout max)
-//   2. Affichage une par une avec UI adaptée au type (oui_non / choix / texte_libre)
-//   3. Bouton "Passer" après 8 s (toujours disponible pour texte_libre)
-//   4. Dernière question répondue → POST /api/triage → navigate /resultat
+//   1. POST /api/questions/suivante (reponses=[]) → 1ère question générée
+//   2. Affichage → réponse → POST /api/questions/suivante (reponses=[...])
+//   3. Groq décide de continuer (min 3, max 5) ou d'arrêter → triage direct
 //
-// Invariant de robustesse : le patient n'est jamais bloqué.
-//   - Si Groq est lent ou indisponible : fallback silencieux, triage sans questions.
-//   - Si le triage échoue : écran d'erreur avec bouton "Réessayer".
+// Robustesse : si Groq est lent ou plante → triage lancé immédiatement.
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
-import { genererQuestions, lancerTriage } from '../services/api'
+import { demanderQuestionSuivante, lancerTriage } from '../services/api'
 import IndicateurEtape from '../components/IndicateurEtape'
 import '../styles/kiosk.css'
 
-// ── Constantes de timing ──────────────────────────────────────────────────────
-const TIMEOUT_GROQ_MS  = 15_000   // délai max pour que Groq réponde
-const DELAI_PASSER_MS  =  8_000   // délai avant apparition du bouton "Passer"
+const DELAI_PASSER_MS = 8_000
+const MAX_QUESTIONS   = 5
 
-// ── Phases internes ───────────────────────────────────────────────────────────
 const PHASE = {
   CHARGEMENT:    'chargement',
   QUESTION:      'question',
@@ -32,115 +27,40 @@ const PHASE = {
 // ═════════════════════════════════════════════════════════════════════════════
 export default function QuestionsPage() {
   const navigate = useNavigate()
-  const { patient, setQuestions, setReponse, setResultatTriage } = usePatient()
+  const { patient, setResultatTriage } = usePatient()
 
-  const [phase, setPhase]               = useState(PHASE.CHARGEMENT)
-  const [questions, setQuestionsLocal]  = useState([])
-  const [index, setIndex]               = useState(0)
-  const [reponsesLocal, setReponsesLocal] = useState({})
-  const [texteLibre, setTexteLibre]     = useState('')
+  const [phase, setPhase]                 = useState(PHASE.CHARGEMENT)
+  const [questionCourante, setQ]          = useState(null)
+  const [numQuestion, setNumQuestion]     = useState(0)
+  const [repsCumulees, setRepsCumulees]   = useState([])  // [{question, feature_name, reponse}]
+  const [repsDict, setRepsDict]           = useState({})  // {feature_name: reponse} → triage
+  const [texteLibre, setTexteLibre]       = useState('')
   const [passerVisible, setPasserVisible] = useState(false)
-  const [erreurTriage, setErreurTriage] = useState(null)
+  const [erreurTriage, setErreurTriage]   = useState(null)
 
-  const passerTimerRef      = useRef(null)
-  // Ref vers soumettreTriage pour éviter les closures rassies dans les callbacks mémoïsés
-  const soumettreTriageRef  = useRef(null)
+  const passerTimerRef  = useRef(null)
+  const lancerTriageRef = useRef(null)
+  const chargerRef      = useRef(null)
 
-  // ── 1. Chargement des questions avec timeout ────────────────────────────────
+  // ── Timer "Passer" — reset à chaque nouvelle question ──────────────────────
   useEffect(() => {
-    let annule = false
-
-    const demarrer = async () => {
-      const timeoutId = setTimeout(() => {
-        if (!annule) {
-          console.warn('[Questions] Timeout Groq — triage sans questions')
-          chargerQuestions([], annule)
-        }
-      }, TIMEOUT_GROQ_MS)
-
-      try {
-        const res = await genererQuestions(patient.session_id, patient.constantes)
-        clearTimeout(timeoutId)
-        const qs = Array.isArray(res?.questions) ? res.questions : []
-        chargerQuestions(qs, annule)
-      } catch (err) {
-        clearTimeout(timeoutId)
-        console.warn('[Questions] Erreur API :', err.message)
-        chargerQuestions([], annule)
-      }
-    }
-
-    const chargerQuestions = (qs, annule) => {
-      if (annule) return
-      setQuestionsLocal(qs)
-      setQuestions(qs)
-      setPhase(PHASE.QUESTION)
-    }
-
-    demarrer()
-    return () => { annule = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // ── 2. Timer "Passer" — reset à chaque nouvelle question ───────────────────
-  useEffect(() => {
-    if (phase !== PHASE.QUESTION) return
-    const q = questions[index]
-
-    // Pour texte_libre le bouton "Passer" est toujours visible immédiatement
-    if (!q || q.type === 'texte_libre') {
+    if (phase !== PHASE.QUESTION || !questionCourante) return
+    if (questionCourante.type === 'texte_libre') {
       setPasserVisible(true)
       return
     }
-
     setPasserVisible(false)
     clearTimeout(passerTimerRef.current)
     passerTimerRef.current = setTimeout(() => setPasserVisible(true), DELAI_PASSER_MS)
     return () => clearTimeout(passerTimerRef.current)
-  }, [phase, index, questions])
+  }, [phase, questionCourante])
 
-  // ── Dérivés ─────────────────────────────────────────────────────────────────
-  const questionCourante = questions[index] ?? null
-  const estDerniere      = index >= questions.length - 1
-  const sansQuestion     = questions.length === 0
-
-  // ── 3. Enregistrer la réponse et avancer ────────────────────────────────────
-  const repondre = useCallback((valeur) => {
-    if (!questionCourante) return
-
-    const cle = questionCourante.feature_name ?? questionCourante.id
-    const nouvellesReponses = { ...reponsesLocal, [cle]: valeur }
-    setReponsesLocal(nouvellesReponses)
-    setReponse(cle, valeur)       // persiste dans PatientContext
-    setTexteLibre('')
-
-    if (estDerniere || sansQuestion) {
-      soumettreTriageRef.current(nouvellesReponses)
-    } else {
-      setIndex(i => i + 1)
-    }
-  }, [questionCourante, reponsesLocal, estDerniere, sansQuestion, setReponse])
-
-  // Passer sans répondre
-  const passer = useCallback(() => {
-    setTexteLibre('')
-    if (estDerniere || sansQuestion) {
-      soumettreTriageRef.current(reponsesLocal)
-    } else {
-      setIndex(i => i + 1)
-    }
-  }, [reponsesLocal, estDerniere, sansQuestion])
-
-  // ── 4. Soumettre le triage ESI ──────────────────────────────────────────────
-  const soumettreTriage = useCallback(async (reponsesFin) => {
+  // ── Lancer le triage ESI ────────────────────────────────────────────────────
+  const lancerTriageAvec = useCallback(async (reponsesFinales) => {
     setPhase(PHASE.SOUMISSION)
     setErreurTriage(null)
     try {
-      const res = await lancerTriage(
-        patient.session_id,
-        patient.constantes ?? null,
-        reponsesFin,
-      )
+      const res = await lancerTriage(patient.session_id, patient.constantes ?? null, reponsesFinales)
       setResultatTriage(res)
       navigate('/resultat')
     } catch (err) {
@@ -149,42 +69,104 @@ export default function QuestionsPage() {
     }
   }, [patient.session_id, patient.constantes, setResultatTriage, navigate])
 
-  // Sync ref pour usage dans les callbacks mémoïsés
-  soumettreTriageRef.current = soumettreTriage
+  lancerTriageRef.current = lancerTriageAvec
+
+  // ── Charger la question suivante ────────────────────────────────────────────
+  const chargerSuivante = useCallback(async (repPrecedentes, repDict) => {
+    setPhase(PHASE.CHARGEMENT)
+    setTexteLibre('')
+    clearTimeout(passerTimerRef.current)
+    setPasserVisible(false)
+
+    try {
+      const res = await demanderQuestionSuivante(
+        patient.session_id,
+        repPrecedentes,
+        patient.constantes ?? null,
+        patient.symptom_text ?? null,
+      )
+
+      if (!res.continuer) {
+        lancerTriageRef.current(repDict)
+      } else {
+        setQ({
+          question:     res.question,
+          type:         res.type      || 'oui_non',
+          choix:        res.choix     || [],
+          feature_name: res.feature_name || `q_adaptive_${res.num_question}`,
+        })
+        setNumQuestion(res.num_question)
+        setPhase(PHASE.QUESTION)
+      }
+    } catch (err) {
+      console.warn('[Questions] Erreur API :', err.message)
+      lancerTriageRef.current(repDict)
+    }
+  }, [patient.session_id, patient.constantes, patient.symptom_text])
+
+  chargerRef.current = chargerSuivante
+
+  // ── Démarrage au mount : demander la 1ère question ──────────────────────────
+  useEffect(() => {
+    chargerRef.current([], {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Répondre à la question courante ────────────────────────────────────────
+  const repondre = useCallback((valeur) => {
+    if (!questionCourante) return
+    clearTimeout(passerTimerRef.current)
+
+    const nouvelleRep       = { question: questionCourante.question, feature_name: questionCourante.feature_name, reponse: valeur }
+    const nouvellesCumulees = [...repsCumulees, nouvelleRep]
+    const nouveauDict       = { ...repsDict, [questionCourante.feature_name]: valeur }
+
+    setRepsCumulees(nouvellesCumulees)
+    setRepsDict(nouveauDict)
+    chargerRef.current(nouvellesCumulees, nouveauDict)
+  }, [questionCourante, repsCumulees, repsDict])
+
+  // ── Passer sans répondre ────────────────────────────────────────────────────
+  const passer = useCallback(() => {
+    if (!questionCourante) return
+    clearTimeout(passerTimerRef.current)
+
+    const skip              = { question: questionCourante.question, feature_name: questionCourante.feature_name, reponse: 'sans réponse' }
+    const nouvellesCumulees = [...repsCumulees, skip]
+
+    setRepsCumulees(nouvellesCumulees)
+    chargerRef.current(nouvellesCumulees, repsDict)
+  }, [questionCourante, repsCumulees, repsDict])
 
   // ── Rendu ────────────────────────────────────────────────────────────────────
   return (
     <div className="kiosk-shell">
       <IndicateurEtape etapeCourante={4} />
 
-      {/* Phase : chargement Groq */}
-      {phase === PHASE.CHARGEMENT && <VueChargement />}
-
-      {/* Phase : affichage question */}
-      {phase === PHASE.QUESTION && (
-        sansQuestion
-          ? <VueSansQuestion onTerminer={() => soumettreTriageRef.current({})} />
-          : <VueQuestion
-              question={questionCourante}
-              index={index}
-              total={questions.length}
-              texteLibre={texteLibre}
-              onTexteChange={setTexteLibre}
-              passerVisible={passerVisible}
-              onRepondre={repondre}
-              onPasser={passer}
-              onRetour={() => navigate('/constantes')}
-            />
+      {phase === PHASE.CHARGEMENT && (
+        <VueChargement numQuestion={numQuestion} />
       )}
 
-      {/* Phase : soumission triage */}
+      {phase === PHASE.QUESTION && questionCourante && (
+        <VueQuestion
+          question={questionCourante}
+          numQuestion={numQuestion}
+          maxQuestions={MAX_QUESTIONS}
+          texteLibre={texteLibre}
+          onTexteChange={setTexteLibre}
+          passerVisible={passerVisible}
+          onRepondre={repondre}
+          onPasser={passer}
+          onRetour={numQuestion === 1 ? () => navigate('/constantes') : null}
+        />
+      )}
+
       {phase === PHASE.SOUMISSION && <VueSoumission />}
 
-      {/* Phase : erreur triage */}
       {phase === PHASE.ERREUR_TRIAGE && (
         <VueErreur
           message={erreurTriage}
-          onReessayer={() => soumettreTriageRef.current(reponsesLocal)}
+          onReessayer={() => lancerTriageRef.current(repsDict)}
           onRetour={() => navigate('/constantes')}
         />
       )}
@@ -196,16 +178,19 @@ export default function QuestionsPage() {
 // Sous-vues
 // ═════════════════════════════════════════════════════════════════════════════
 
-function VueChargement() {
+function VueChargement({ numQuestion }) {
   return (
     <div className="kiosk-center">
       <div className="kiosk-card kiosk-card--centree q-chargement">
         <div className="kiosk-spinner" aria-label="Chargement" />
-        <h2 className="kiosk-titre-sm">Préparation des questions…</h2>
+        <h2 className="kiosk-titre-sm">
+          {numQuestion === 0 ? 'Préparation des questions…' : 'Analyse de votre réponse…'}
+        </h2>
         <p className="kiosk-soustitre">
-          L'IA analyse vos symptômes et constantes pour personnaliser les questions.
+          {numQuestion === 0
+            ? "L'IA analyse vos symptômes et constantes pour personnaliser les questions."
+            : "L'IA adapte la prochaine question à vos réponses précédentes."}
         </p>
-        <p className="kiosk-note">Cela prend quelques secondes.</p>
       </div>
     </div>
   )
@@ -220,25 +205,6 @@ function VueSoumission() {
         <p className="kiosk-soustitre">
           Le modèle de triage analyse l'ensemble de vos données.
         </p>
-      </div>
-    </div>
-  )
-}
-
-function VueSansQuestion({ onTerminer }) {
-  return (
-    <div className="kiosk-center">
-      <div className="kiosk-card kiosk-card--centree">
-        <span className="eyebrow">Étape 4 / 5 · Questions IA</span>
-        <h2 className="kiosk-titre-sm">Informations suffisantes</h2>
-        <p className="kiosk-soustitre">
-          Vos données sont complètes. Vous pouvez passer directement au résultat.
-        </p>
-        <div className="kiosk-actions" style={{ marginTop: 16 }}>
-          <button className="kiosk-btn kiosk-btn--primary" onClick={onTerminer}>
-            Obtenir mon résultat →
-          </button>
-        </div>
       </div>
     </div>
   )
@@ -263,32 +229,37 @@ function VueErreur({ message, onReessayer, onRetour }) {
   )
 }
 
-// ── Vue principale : une question ─────────────────────────────────────────────
+// ── Vue principale : une seule question ──────────────────────────────────────
 function VueQuestion({
-  question, index, total,
+  question, numQuestion, maxQuestions,
   texteLibre, onTexteChange,
   passerVisible, onRepondre, onPasser, onRetour,
 }) {
-  const pctProgression = Math.round(((index) / total) * 100)
+  const pctProgression = Math.round(((numQuestion - 1) / maxQuestions) * 100)
 
   return (
     <div className="kiosk-center">
       <div className="kiosk-card q-carte">
 
-        {/* En-tête + progression */}
+        {/* En-tête + barre de progression */}
         <div className="q-progression-wrapper">
           <span className="eyebrow">Étape 4 / 5 · Questions IA</span>
-          <span className="q-compteur">{index + 1} / {total}</span>
+          <span className="q-compteur">Question {numQuestion} / {maxQuestions} max</span>
         </div>
-        <div className="q-barre-wrapper" role="progressbar"
-             aria-valuenow={pctProgression} aria-valuemin={0} aria-valuemax={100}>
+        <div
+          className="q-barre-wrapper"
+          role="progressbar"
+          aria-valuenow={pctProgression}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
           <div className="q-barre-progression" style={{ width: `${pctProgression}%` }} />
         </div>
 
         {/* Texte de la question */}
-        <p className="q-texte">{question.texte}</p>
+        <p className="q-texte">{question.question}</p>
 
-        {/* Réponses selon le type */}
+        {/* Réponses — type oui_non */}
         {question.type === 'oui_non' && (
           <div className="q-oui-non">
             <button className="kiosk-btn q-btn-oui" onClick={() => onRepondre('oui')}>
@@ -300,22 +271,21 @@ function VueQuestion({
           </div>
         )}
 
+        {/* Réponses — type choix */}
         {question.type === 'choix' && Array.isArray(question.choix) && (
-          <div className="q-choix-grille" style={{
-            gridTemplateColumns: question.choix.length <= 2 ? '1fr 1fr' : '1fr',
-          }}>
+          <div
+            className="q-choix-grille"
+            style={{ gridTemplateColumns: question.choix.length <= 2 ? '1fr 1fr' : '1fr' }}
+          >
             {question.choix.map((option, i) => (
-              <button
-                key={i}
-                className="kiosk-btn q-btn-choix"
-                onClick={() => onRepondre(option)}
-              >
+              <button key={i} className="kiosk-btn q-btn-choix" onClick={() => onRepondre(option)}>
                 {option}
               </button>
             ))}
           </div>
         )}
 
+        {/* Réponses — type texte_libre */}
         {question.type === 'texte_libre' && (
           <div className="q-texte-libre-wrapper">
             <textarea
@@ -338,15 +308,15 @@ function VueQuestion({
           </div>
         )}
 
-        {/* Bouton "Passer" (appara ît après DELAI_PASSER_MS) */}
+        {/* Bouton "Passer" (après DELAI_PASSER_MS) */}
         {passerVisible && (
           <button className="q-btn-passer" onClick={onPasser}>
             Passer cette question →
           </button>
         )}
 
-        {/* Retour discret */}
-        {index === 0 && (
+        {/* Retour (1ère question seulement) */}
+        {onRetour && (
           <button className="kiosk-btn kiosk-btn--secondary q-btn-retour" onClick={onRetour}>
             ← Retour
           </button>

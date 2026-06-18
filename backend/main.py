@@ -77,7 +77,7 @@ from capteurs_raspberry import (
 from model_trainer import predire_esi
 from nlp_extractor import extraire_features_nlp
 from queue_manager import gestionnaire_file
-from questions_moteur import encoder_reponses, generer_questions
+from questions_moteur import encoder_reponses, generer_questions, generer_question_suivante
 from scanner_cin import scanner_piece_identite
 
 
@@ -339,6 +339,13 @@ class MesureRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class QuestionSuivanteRequest(BaseModel):
+    session_id:           str
+    reponses_precedentes: List[dict] = []   # [{question, feature_name, reponse}]
+    constantes:           Optional[dict] = None
+    symptomes:            Optional[str]  = None
+
+
 @app.get("/api/health")
 async def health():
     return {
@@ -598,6 +605,61 @@ async def api_questions(body: QuestionsRequest):
         "statut": "succès",
         "session_id": body.session_id,
         "questions": questions,
+    }
+
+
+# ── Étape 4b : Question adaptative unique (mode question par question) ────────
+
+@app.post("/api/questions/suivante")
+async def api_questions_suivante(body: QuestionSuivanteRequest):
+    """
+    Génère UNE question adaptative en tenant compte de toutes les réponses précédentes.
+    Groq décide de continuer (continuer: true) ou d'arrêter (continuer: false) après 3+ questions.
+    Maximum 5 questions imposé côté serveur.
+    """
+    session      = _get_session(body.session_id)
+    constantes   = body.constantes or session.get("constantes") or {}
+    symptom_text = body.symptomes  or session.get("symptom_text", "")
+    zones_corps  = session.get("zones_corps", [])
+    features_nlp = extraire_features_nlp(symptom_text)
+    num_question = len(body.reponses_precedentes) + 1
+
+    if num_question > 5:
+        return {"continuer": False}
+
+    loop     = asyncio.get_running_loop()
+    resultat = await loop.run_in_executor(
+        None,
+        lambda: generer_question_suivante(
+            constantes,
+            symptom_text,
+            int(session.get("age", 30) or 30),
+            int(session.get("sex", 0)),
+            zones_corps,
+            features_nlp,
+            body.reponses_precedentes,
+            num_question,
+        ),
+    )
+
+    # Stocker la question dans la session pour que le triage puisse l'encoder
+    if resultat.get("continuer", True) and resultat.get("question"):
+        question_obj = {
+            "id":           f"q_{num_question}",
+            "texte":        resultat["question"],
+            "type":         resultat.get("type", "oui_non"),
+            "choix":        resultat.get("choix", []),
+            "feature_name": resultat.get("feature_name", f"q_adaptive_{num_question}"),
+        }
+        session.setdefault("questions", []).append(question_obj)
+
+    return {
+        "continuer":    resultat.get("continuer", False),
+        "question":     resultat.get("question", ""),
+        "type":         resultat.get("type", "oui_non"),
+        "choix":        resultat.get("choix", []),
+        "feature_name": resultat.get("feature_name", ""),
+        "num_question": num_question,
     }
 
 

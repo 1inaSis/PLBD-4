@@ -260,3 +260,129 @@ def generer_questions(
         print(f"[Exception API] Erreur reseau ou de parsing JSON : {e}")
 
     return [{"id": "q_secours", "texte": "Que ressentez-vous?", "type": "texte_libre", "feature_name": "q_premiere_fois"}]
+
+
+def generer_question_suivante(
+    constantes: dict,
+    symptom_text: str,
+    age: int,
+    sex: int,
+    zones_corps: list,
+    features_nlp: dict,
+    reponses_precedentes: List[Dict],
+    num_question: int,
+) -> dict:
+    """
+    Génère UNE question adaptative en tenant compte de toutes les réponses précédentes.
+    Retourne {"continuer": True, "question": ..., "type": ..., "choix": [...], "feature_name": ...}
+    ou       {"continuer": False} si Groq estime avoir assez d'informations (après min 3 questions).
+    """
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        return {"continuer": False}
+
+    prompt_system = (
+        "Tu es un infirmier d'accueil urgentiste (IAO) expert en triage ESI. "
+        "Tu poses des questions médicales CIBLÉES une par une, en t'adaptant aux réponses précédentes. "
+        "Chaque question doit apporter de nouvelles informations pour affiner le score ESI. "
+        "Tu évites de répéter des informations déjà connues."
+    )
+
+    sexe_str = "Homme" if sex == 1 else "Femme"
+    prompt_user = f"PATIENT : {age} ans, {sexe_str}\n\n"
+
+    prompt_user += "CONSTANTES VITALES :\n"
+    for cle, label, unite in [
+        ("temperature", "Température", "°C"),
+        ("spo2",        "SpO2",        "%"),
+        ("heart_rate",  "Fréquence cardiaque", "bpm"),
+        ("bp_systolic", "Tension systolique",  "mmHg"),
+    ]:
+        val = constantes.get(cle)
+        if val is not None:
+            niv = _gravite_constante(cle, val)
+            prompt_user += f"  - {label} : {val} {unite} → {niv}\n"
+
+    if zones_corps:
+        zones_fr = [_ZONES_LABELS_FR.get(z, z) for z in zones_corps]
+        prompt_user += f"\nZONES DOULOUREUSES : {', '.join(zones_fr)}\n"
+
+    prompt_user += f"\nDESCRIPTION : « {symptom_text} »\n"
+
+    detectees = [
+        _NLP_LABELS_FR[k]
+        for k, v in (features_nlp or {}).items()
+        if v and v > 0 and k in _NLP_LABELS_FR
+    ]
+    if detectees:
+        prompt_user += f"\nDÉJÀ IDENTIFIÉ PAR NLP : {', '.join(detectees)}\n"
+
+    if reponses_precedentes:
+        prompt_user += "\nRÉPONSES PRÉCÉDENTES :\n"
+        for i, r in enumerate(reponses_precedentes, 1):
+            prompt_user += f"  Q{i} : {r.get('question', '')} → {r.get('reponse', '')}\n"
+
+    features_utilisees = [r.get("feature_name") for r in reponses_precedentes if r.get("feature_name")]
+
+    prompt_user += f"\n--- INSTRUCTION ---\n"
+    prompt_user += f"C'est la question numéro {num_question} sur 5 maximum.\n"
+
+    if num_question >= 3:
+        prompt_user += (
+            "Si tu as déjà suffisamment d'informations pour un triage ESI fiable, réponds :\n"
+            '{"continuer": false}\n\n'
+            "Sinon, génère une nouvelle question :\n"
+        )
+    else:
+        prompt_user += "Tu DOIS poser une question (minimum 3 obligatoires).\n"
+
+    if features_utilisees:
+        prompt_user += f"Features déjà utilisées (NE PAS réutiliser) : {features_utilisees}\n"
+
+    prompt_user += (
+        "\nRéponds UNIQUEMENT avec un JSON valide (sans texte avant ni après) :\n"
+        "{\n"
+        '  "question": "La question posée au patient",\n'
+        '  "type": "oui_non",\n'
+        '  "choix": ["Option A", "Option B"],\n'
+        '  "feature_name": "q_feature_exacte_de_la_liste",\n'
+        '  "continuer": true\n'
+        "}\n\n"
+        f"feature_name DOIT être une valeur exacte de cette liste :\n{FEATURES_QUESTIONS}\n"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type":  "application/json",
+    }
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "system", "content": prompt_system},
+            {"role": "user",   "content": prompt_user},
+        ],
+        "temperature": 0.7,
+    }
+
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers=headers, json=payload, timeout=10,
+        )
+        if response.status_code == 200:
+            content = response.json()["choices"][0]["message"]["content"].strip()
+            if "```" in content:
+                content = (
+                    content.split("```json")[1].split("```")[0].strip()
+                    if "```json" in content
+                    else content.split("```")[1].split("```")[0].strip()
+                )
+            result = json.loads(content)
+            if isinstance(result, dict):
+                return result
+        else:
+            print(f"[Erreur API suivante] {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"[Exception API] generer_question_suivante : {e}")
+
+    return {"continuer": False}
