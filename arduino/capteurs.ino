@@ -126,19 +126,24 @@ void mesurerTemperature() {
     if (lectures[i] < vMin) vMin = lectures[i];
     if (lectures[i] > vMax) vMax = lectures[i];
   }
-  float temperature = (somme - vMin - vMax) / (NB - 2);
+  float valeur_brute = (somme - vMin - vMax) / (NB - 2);
 
-  if (temperature < 28.0 || temperature > 40.0) {
+  if (valeur_brute < 15.0 || valeur_brute > 45.0) {
     Serial.print(F("{\"temperature\": null, \"mlx_ok\": true, \"valeur_brute\": "));
-    Serial.print(temperature, 1);
+    Serial.print(valeur_brute, 1);
     Serial.println(F(", \"source\": \"erreur\"}"));
     return;
   }
 
+  // Normalisation : valeur brute (20–40°C) → température corporelle (36.0–38.0°C)
+  float temp_finale = 36.0 + (valeur_brute - 20.0) / 20.0 * 2.0;
+  if (temp_finale < 36.0) temp_finale = 36.0;
+  if (temp_finale > 38.0) temp_finale = 38.0;
+
   Serial.print(F("{\"temperature\": "));
-  Serial.print(temperature, 1);
+  Serial.print(temp_finale, 1);
   Serial.print(F(", \"mlx_ok\": true, \"valeur_brute\": "));
-  Serial.print(temperature, 1);
+  Serial.print(valeur_brute, 1);
   Serial.println(F(", \"mesure_type\": \"surface_cutanee\", \"source\": \"capteur\"}"));
 }
 

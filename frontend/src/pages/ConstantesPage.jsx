@@ -1,8 +1,8 @@
 // Étape 3 / 5 — Mesure séquentielle des constantes vitales
 //
 // Flux par étape :
-//   ATTENTE → (valeur valide) → COMPLET
-//   ATTENTE → (null retourné) → message + bouton Réessayer
+//   PRET    → (clic Mesurer) → COMPTE (5→1) → ATTENTE → (valeur valide) → COMPLET
+//   ATTENTE → (null retourné) → message + Réessayer → COMPTE → ATTENTE
 //   ATTENTE → (30s sans valeur) → valeur simulée injectée + COMPLET auto (3s)
 //
 // 3 étapes : Température → Oxymètre (SpO₂ + FC) → Tension (simulée client)
@@ -77,7 +77,7 @@ const CLES_VITALES      = ['temperature', 'spo2', 'heart_rate', 'bp_systolic']
 const TIMEOUT_MESURE_MS = 30_000   // 30s avant injection valeur simulée
 
 const PHASE = { MESURE: 'mesure', RECAP: 'recap' }
-const ETAT  = { ATTENTE: 'attente', COMPLET: 'complet' }
+const ETAT  = { PRET: 'pret', COMPTE: 'compte', ATTENTE: 'attente', COMPLET: 'complet' }
 
 function simulerTension() {
   const sys = Math.round(110 + Math.random() * 30)
@@ -92,12 +92,12 @@ export default function ConstantesPage() {
 
   const [phase, setPhase]                = useState(PHASE.MESURE)
   const [indexEtape, setIndexEtape]      = useState(0)
-  const [etat, setEtat]                  = useState(ETAT.ATTENTE)
+  const [etat, setEtat]                  = useState(ETAT.PRET)
+  const [compte, setCompte]              = useState(null)
   const [constantes, setConstantesLocal] = useState({})
   const [erreur, setErreur]              = useState(null)
   // 'null' = capteur non pointé  |  'timeout' = 30s dépassés  |  null = RAS
   const [messageCapture, setMessageCapture] = useState(null)
-  const [tentative, setTentative]           = useState(0)
 
   const enFetchRef = useRef(false)
 
@@ -109,6 +109,25 @@ export default function ConstantesPage() {
     demarrerArduino().catch(() => {})
     return () => { arreterArduino() }
   }, [])
+
+  // ── Compte à rebours : 5 → 0 puis lance ATTENTE ─────────────────────────────
+  useEffect(() => {
+    if (etat !== ETAT.COMPTE) return
+    if (compte <= 0) {
+      setEtat(ETAT.ATTENTE)
+      return
+    }
+    const t = setTimeout(() => setCompte(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [etat, compte])
+
+  // ── Auto-lancer les étapes simulées (skip PRET/COMPTE) ──────────────────────
+  useEffect(() => {
+    if (etat === ETAT.PRET && etapeActuelle.simulee) {
+      setEtat(ETAT.ATTENTE)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat, indexEtape])
 
   // ── Mesure Arduino (ignorée pour les étapes simulées) ───────────────────────
   useEffect(() => {
@@ -134,7 +153,7 @@ export default function ConstantesPage() {
       .finally(() => { enFetchRef.current = false })
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etat, indexEtape, tentative])
+  }, [etat, indexEtape])
 
   // ── Timeout 30s : injecte valeur simulée si toujours en attente ─────────────
   useEffect(() => {
@@ -149,7 +168,7 @@ export default function ConstantesPage() {
     return () => clearTimeout(timer)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etat, indexEtape, tentative])
+  }, [etat, indexEtape])
 
   // ── Auto-avance 3s après un timeout (valeur simulée affichée brièvement) ────
   useEffect(() => {
@@ -159,7 +178,7 @@ export default function ConstantesPage() {
       setMessageCapture(null)
       if (indexEtape < ETAPES.length - 1) {
         setIndexEtape(i => i + 1)
-        setEtat(ETAT.ATTENTE)
+        setEtat(ETAT.PRET)
       } else {
         setPhase(PHASE.RECAP)
       }
@@ -189,10 +208,17 @@ export default function ConstantesPage() {
     }
   }, [etat, valeurActuelle])
 
-  // ── Réessayer après null ─────────────────────────────────────────────────────
+  // ── Lancer la mesure (clic bouton "Mesurer") ─────────────────────────────────
+  const lancerMesure = () => {
+    setCompte(5)
+    setEtat(ETAT.COMPTE)
+  }
+
+  // ── Réessayer après null (repart du compte à rebours) ───────────────────────
   const reessayer = () => {
     setMessageCapture(null)
-    setTentative(t => t + 1)
+    setCompte(5)
+    setEtat(ETAT.COMPTE)
   }
 
   // ── Passer à l'étape suivante ou au récap ───────────────────────────────────
@@ -200,7 +226,7 @@ export default function ConstantesPage() {
     setMessageCapture(null)
     if (indexEtape < ETAPES.length - 1) {
       setIndexEtape(i => i + 1)
-      setEtat(ETAT.ATTENTE)
+      setEtat(ETAT.PRET)
     } else {
       setPhase(PHASE.RECAP)
     }
@@ -210,10 +236,9 @@ export default function ConstantesPage() {
   const recommencer = () => {
     setConstantesLocal({})
     setIndexEtape(0)
-    setEtat(ETAT.ATTENTE)
+    setEtat(ETAT.PRET)
     setPhase(PHASE.MESURE)
     setMessageCapture(null)
-    setTentative(0)
   }
 
   // ── Continuer vers l'étape 4 ────────────────────────────────────────────────
@@ -232,10 +257,12 @@ export default function ConstantesPage() {
           indexEtape={indexEtape}
           total={ETAPES.length}
           etat={etat}
+          compte={compte}
           valeur={valeurActuelle}
           constantes={constantes}
           erreur={erreur}
           messageCapture={messageCapture}
+          onLancerMesure={lancerMesure}
           onEtapeSuivante={etapeSuivante}
           onReessayer={reessayer}
           onRetour={() => navigate('/questionnaire')}
@@ -255,9 +282,9 @@ export default function ConstantesPage() {
 
 // ═════════════════════════════════════════════════════════════════════════════
 function VueMesure({
-  etape, indexEtape, total, etat, valeur, constantes,
+  etape, indexEtape, total, etat, compte, valeur, constantes,
   erreur, messageCapture,
-  onEtapeSuivante, onReessayer, onRetour,
+  onLancerMesure, onEtapeSuivante, onReessayer, onRetour,
 }) {
   const estSimulee    = !!etape.simulee
   const couleur       = evaluerCouleur(etape.cle, valeur)
@@ -287,19 +314,30 @@ function VueMesure({
           <h2 className="kiosk-titre-sm">{etape.label}</h2>
         </div>
 
-        {/* Illustration (ATTENTE, mesures réelles uniquement) */}
-        {etat === ETAT.ATTENTE && !estSimulee && messageCapture !== 'null' && Illustration && (
-          <div className="illustration-wrapper">
-            <Illustration />
+        {/* PRET : illustration + instruction + bouton Mesurer */}
+        {etat === ETAT.PRET && !estSimulee && (
+          <>
+            {Illustration && (
+              <div className="illustration-wrapper">
+                <Illustration />
+              </div>
+            )}
+            <p className="kiosk-soustitre">{etape.instruction}</p>
+            <button className="kiosk-btn kiosk-btn--primary" onClick={onLancerMesure}>
+              Mesurer
+            </button>
+          </>
+        )}
+
+        {/* COMPTE : compte à rebours 5→1 */}
+        {etat === ETAT.COMPTE && (
+          <div className="seq-attente">
+            <p className="kiosk-soustitre">Préparez-vous…</p>
+            <div className="seq-compte" role="status" aria-live="assertive">{compte}</div>
           </div>
         )}
 
-        {/* Instruction normale */}
-        {!estSimulee && messageCapture !== 'null' && (
-          <p className="kiosk-soustitre">{etape.instruction}</p>
-        )}
-
-        {/* ATTENTE : spinner (mesure en cours, pas encore de retour null) */}
+        {/* ATTENTE : spinner (mesure en cours) */}
         {etat === ETAT.ATTENTE && !estSimulee && messageCapture !== 'null' && (
           <div className="seq-attente">
             <div className="kiosk-spinner" aria-label="Mesure en cours" />
@@ -377,7 +415,7 @@ function VueMesure({
           <div className="kiosk-alerte" role="alert">{erreur}</div>
         )}
 
-        {indexEtape === 0 && etat === ETAT.ATTENTE && messageCapture !== 'null' && (
+        {indexEtape === 0 && etat === ETAT.PRET && (
           <button
             className="kiosk-btn kiosk-btn--secondary"
             onClick={onRetour}
