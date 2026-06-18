@@ -68,14 +68,6 @@ export function mesurerConstante(type, session_id = null) {
   })
 }
 
-// ── Étape 4 : Générer les questions adaptatives (batch, conservé pour compatibilité)
-export function genererQuestions(session_id, constantes = null) {
-  return requete('/questions', {
-    method: 'POST',
-    body: JSON.stringify({ session_id, constantes }),
-  })
-}
-
 // ── Étape 4 : Demander UNE question adaptative (mode question par question) ──
 // reponses_precedentes : [{question, feature_name, reponse}]
 export function demanderQuestionSuivante(session_id, reponses_precedentes = [], constantes = null, symptomes = null) {
