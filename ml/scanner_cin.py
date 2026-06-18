@@ -12,13 +12,20 @@ import base64
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from dotenv import dotenv_values
+
+# Chargement anticipé de la clé avant tout import groq
+# Ordre : env système → backend/.env → .env racine
+try:
+    from dotenv import load_dotenv
+    load_dotenv('/home/touaregs/PLBD-4/backend/.env', override=False)
+    load_dotenv('/home/touaregs/PLBD-4/.env', override=False)
+except ImportError:
+    pass
 
 TIMEOUT_CAPTURE = 4
 _IMG_TMP        = '/tmp/cin.jpg'
 _MODELE_GROQ    = 'llama-3.2-90b-vision-preview'
 
-# Racine du projet = deux niveaux au-dessus de ce fichier (ml/scanner_cin.py)
 _RACINE = Path(__file__).resolve().parent.parent
 
 
@@ -28,12 +35,21 @@ def _charger_api_key() -> str:
     if cle:
         return cle
 
-    for chemin in [_RACINE / 'backend' / '.env', _RACINE / '.env']:
+    # Lecture directe des fichiers .env comme filet de sécurité
+    for chemin in [
+        Path('/home/touaregs/PLBD-4/backend/.env'),
+        Path('/home/touaregs/PLBD-4/.env'),
+        _RACINE / 'backend' / '.env',
+        _RACINE / '.env',
+    ]:
         if chemin.exists():
-            valeur = dotenv_values(chemin).get('GROQ_API_KEY', '').strip()
-            if valeur:
-                print(f"[SCANNER] GROQ_API_KEY chargée depuis {chemin}")
-                return valeur
+            for ligne in chemin.read_text(encoding='utf-8').splitlines():
+                ligne = ligne.strip()
+                if ligne.startswith('GROQ_API_KEY=') and not ligne.startswith('#'):
+                    valeur = ligne.split('=', 1)[1].strip().strip('"').strip("'")
+                    if valeur:
+                        print(f"[SCANNER] GROQ_API_KEY chargée depuis {chemin}")
+                        return valeur
 
     return ''
 
