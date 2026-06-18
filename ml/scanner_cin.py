@@ -1,6 +1,6 @@
 """
 scanner_cin.py — Scanner CIN universel pour HealthGate
-Stratégie : rpicam-still → Groq Vision (llama-3.2-11b-vision-preview) → JSON
+Stratégie : rpicam-still → Groq Vision (llama-3.2-90b-vision-preview) → JSON
 Supporte : Maroc, Côte d'Ivoire, Sénégal, Mali, et toutes cartes africaines
 Si Groq échoue ou image illisible → formulaire_manuel: True
 """
@@ -10,14 +10,32 @@ import re
 import json
 import base64
 import subprocess
+from pathlib import Path
 from datetime import datetime
-from dotenv import load_dotenv
-
-load_dotenv()
+from dotenv import dotenv_values
 
 TIMEOUT_CAPTURE = 4
 _IMG_TMP        = '/tmp/cin.jpg'
-_MODELE_GROQ    = 'llama-3.2-11b-vision-preview'
+_MODELE_GROQ    = 'llama-3.2-90b-vision-preview'
+
+# Racine du projet = deux niveaux au-dessus de ce fichier (ml/scanner_cin.py)
+_RACINE = Path(__file__).resolve().parent.parent
+
+
+def _charger_api_key() -> str:
+    """Cherche GROQ_API_KEY dans : env système → backend/.env → .env racine."""
+    cle = os.environ.get('GROQ_API_KEY', '').strip()
+    if cle:
+        return cle
+
+    for chemin in [_RACINE / 'backend' / '.env', _RACINE / '.env']:
+        if chemin.exists():
+            valeur = dotenv_values(chemin).get('GROQ_API_KEY', '').strip()
+            if valeur:
+                print(f"[SCANNER] GROQ_API_KEY chargée depuis {chemin}")
+                return valeur
+
+    return ''
 
 _PROMPT = (
     "Tu es un expert en lecture de cartes d'identité africaines (Côte d'Ivoire, Maroc, etc.).\n"
@@ -56,9 +74,9 @@ def _encoder_image(chemin: str) -> str:
 
 
 def _analyser_avec_groq(image_path: str) -> dict | None:
-    api_key = os.getenv('GROQ_API_KEY', '').strip()
+    api_key = _charger_api_key()
     if not api_key:
-        print("[SCANNER] GROQ_API_KEY absente")
+        print("[SCANNER] GROQ_API_KEY absente (env, backend/.env, .env racine)")
         return None
 
     try:
