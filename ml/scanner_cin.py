@@ -1,6 +1,6 @@
 """
 scanner_cin.py — Scanner CIN universel pour HealthGate
-Stratégie : rpicam-still → Groq Vision (llama-3.2-90b-vision-preview) → JSON
+Stratégie : rpicam-still → Groq Vision (meta-llama/llama-4-maverick-17b-128e-instruct) → JSON
 Supporte : Maroc, Côte d'Ivoire, Sénégal, Mali, et toutes cartes africaines
 Si Groq échoue ou image illisible → formulaire_manuel: True
 """
@@ -24,7 +24,7 @@ except ImportError:
 
 TIMEOUT_CAPTURE = 4
 _IMG_TMP        = '/tmp/cin.jpg'
-_MODELE_GROQ    = 'llama-3.2-90b-vision-preview'
+_MODELE_GROQ    = 'meta-llama/llama-4-maverick-17b-128e-instruct'
 
 _RACINE = Path(__file__).resolve().parent.parent
 
