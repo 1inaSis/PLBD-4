@@ -1,11 +1,14 @@
 // Étape 3 / 5 — Mesure séquentielle des constantes vitales
 //
-// Flux par étape :
-//   PRET    → (clic Mesurer) → COMPTE (5→1) → ATTENTE → (valeur valide) → COMPLET
+// Flux par étape réelle :
+//   PRET → (clic Mesurer) → COMPTE (5→1) → ATTENTE → (valeur valide) → COMPLET
 //   ATTENTE → (null retourné) → message + Réessayer → COMPTE → ATTENTE
 //   ATTENTE → (30s sans valeur) → valeur simulée injectée + COMPLET auto (3s)
 //
-// 3 étapes : Température → Oxymètre (SpO₂ + FC) → Tension (simulée client)
+// Flux étape simulée (spo2, tension) :
+//   PRET → (auto) → ATTENTE → valeurs générées → COMPLET → passage auto (5s)
+//
+// 3 étapes : Température → Oxymètre (SpO₂ + FC, simulé) → Tension (simulée)
 // Après les 3 étapes → RECAP (BiometrieDisplay complet + "Continuer")
 
 import { useState, useEffect, useRef } from 'react'
@@ -30,6 +33,19 @@ function pireCouleur(...couleurs) {
   )
 }
 
+function simulerSpo2() {
+  return {
+    spo2:       Math.round((96 + Math.random() * 3) * 10) / 10,
+    heart_rate: Math.round(65 + Math.random() * 20),
+  }
+}
+
+function simulerTension() {
+  const sys = Math.round(110 + Math.random() * 30)
+  const dia = Math.round(sys * (0.55 + Math.random() * 0.13))
+  return { bp_systolic: sys, bp_diastolic: dia }
+}
+
 // ── 3 étapes de mesure ────────────────────────────────────────────────────────
 const ETAPES = [
   {
@@ -46,30 +62,32 @@ const ETAPES = [
   },
 
   {
-    cle:          'spo2',
-    typeMesure:   'spo2',
-    double:       true,
-    label:        'Oxymétrie de pouls',
-    instruction:  'Placez votre index sur le capteur de la borne et restez immobile.',
-    messageNull:  'Positionnez bien votre index sur le capteur et maintenez immobile',
-    icone:        '🫁',
-    illustration: IllustrationSpo2,
+    cle:           'spo2',
+    typeMesure:    'spo2',
+    simulee:       true,
+    simulerValeurs: simulerSpo2,
+    messageSimule: 'Capteur MAX30102 non connecté — valeurs simulées',
+    double:        true,
+    label:         'Oxymétrie de pouls',
+    icone:         '🫁',
+    illustration:  IllustrationSpo2,
     valeurs: [
       { cle: 'spo2',       label: 'SpO₂',               unite: '%',   formatter: (v) => Number(v).toFixed(1) },
       { cle: 'heart_rate', label: 'Fréquence cardiaque', unite: 'bpm', formatter: (v) => Math.round(Number(v)) },
     ],
-    fallback: { spo2: 97.0, heart_rate: 75 },
   },
 
   {
-    cle:          'bp_systolic',
-    typeMesure:   'tension',
-    simulee:      true,
-    label:        'Tension artérielle',
-    unite:        'mmHg',
-    icone:        '💉',
-    illustration: IllustrationTension,
-    formatter:    (v, all) => `${Math.round(v)} / ${Math.round(all?.bp_diastolic ?? 0)}`,
+    cle:           'bp_systolic',
+    typeMesure:    'tension',
+    simulee:       true,
+    simulerValeurs: simulerTension,
+    messageSimule: 'Tension artérielle simulée — tensiomètre manuel non connecté',
+    label:         'Tension artérielle',
+    unite:         'mmHg',
+    icone:         '💉',
+    illustration:  IllustrationTension,
+    formatter:     (v, all) => `${Math.round(v)} / ${Math.round(all?.bp_diastolic ?? 0)}`,
   },
 ]
 
@@ -78,12 +96,6 @@ const TIMEOUT_MESURE_MS = 30_000   // 30s avant injection valeur simulée
 
 const PHASE = { MESURE: 'mesure', RECAP: 'recap' }
 const ETAT  = { PRET: 'pret', COMPTE: 'compte', ATTENTE: 'attente', COMPLET: 'complet' }
-
-function simulerTension() {
-  const sys = Math.round(110 + Math.random() * 30)
-  const dia = Math.round(sys * (0.55 + Math.random() * 0.13))
-  return { bp_systolic: sys, bp_diastolic: dia }
-}
 
 // ═════════════════════════════════════════════════════════════════════════════
 export default function ConstantesPage() {
@@ -188,14 +200,22 @@ export default function ConstantesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageCapture, etat, indexEtape])
 
-  // ── Tension simulée : résultat immédiat + passage auto au récap dans 5s ─────
+  // ── Étapes simulées : génère les valeurs puis passage auto en 5s ─────────────
   useEffect(() => {
     if (etat !== ETAT.ATTENTE || !etapeActuelle.simulee) return
 
-    setConstantesLocal(prev => ({ ...prev, ...simulerTension() }))
+    const valeurs = etapeActuelle.simulerValeurs ? etapeActuelle.simulerValeurs() : {}
+    setConstantesLocal(prev => ({ ...prev, ...valeurs }))
     setEtat(ETAT.COMPLET)
 
-    const timer = setTimeout(() => setPhase(PHASE.RECAP), 5000)
+    const timer = setTimeout(() => {
+      if (indexEtape < ETAPES.length - 1) {
+        setIndexEtape(i => i + 1)
+        setEtat(ETAT.PRET)
+      } else {
+        setPhase(PHASE.RECAP)
+      }
+    }, 5000)
     return () => clearTimeout(timer)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,7 +334,7 @@ function VueMesure({
           <h2 className="kiosk-titre-sm">{etape.label}</h2>
         </div>
 
-        {/* PRET : illustration + instruction + bouton Mesurer */}
+        {/* PRET : illustration + instruction + bouton Mesurer (étapes réelles seulement) */}
         {etat === ETAT.PRET && !estSimulee && (
           <>
             {Illustration && (
@@ -361,10 +381,10 @@ function VueMesure({
         {etat === ETAT.COMPLET && (
           <div className="seq-complet">
 
-            {/* Tension simulée */}
+            {/* Étape simulée */}
             {estSimulee && (
               <p className="kiosk-note kiosk-note--info">
-                Tension artérielle simulée — tensiomètre manuel non connecté
+                {etape.messageSimule ?? 'Valeurs simulées'}
               </p>
             )}
 
@@ -402,7 +422,7 @@ function VueMesure({
               </>
             )}
 
-            {/* Auto-avance (tension simulée ou timeout) */}
+            {/* Auto-avance (étape simulée ou timeout) */}
             {(estSimulee || messageCapture === 'timeout') && (
               <p className="kiosk-note" role="status">
                 Passage automatique dans quelques secondes…

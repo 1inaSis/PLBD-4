@@ -511,6 +511,13 @@ async def api_constantes_mesurer(body: MesureRequest):
         sys_  = max(80, min(200, sys_))
         dias  = int(sys_ * random.uniform(0.55, 0.68))
         nouvelles = {"bp_systolic": sys_, "bp_diastolic": dias, "source": "simulation"}
+    elif body.type == "spo2":
+        # MAX30102 non connecté : SpO₂ et FC simulés
+        nouvelles = {
+            "spo2":       round(96 + random.random() * 3, 1),
+            "heart_rate": random.randint(65, 85),
+            "source":     "simulation",
+        }
     else:
         # Déléguer à l'Arduino (bloquant jusqu'à TIMEOUT_MESURE secondes)
         data = await loop.run_in_executor(None, mesurer_capteur, body.type)

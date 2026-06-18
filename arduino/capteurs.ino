@@ -135,10 +135,16 @@ void mesurerTemperature() {
     return;
   }
 
-  // Normalisation : valeur brute (20–40°C) → température corporelle (36.0–38.0°C)
-  float temp_finale = 36.0 + (valeur_brute - 20.0) / 20.0 * 2.0;
-  if (temp_finale < 36.0) temp_finale = 36.0;
-  if (temp_finale > 38.0) temp_finale = 38.0;
+  float temp_finale;
+  if (valeur_brute >= 28.0 && valeur_brute <= 40.0) {
+    // Zone corporelle : normalisation vers 36.0–38.0°C
+    temp_finale = 36.0 + (valeur_brute - 28.0) / 12.0 * 2.0;
+    if (temp_finale < 36.0) temp_finale = 36.0;
+    if (temp_finale > 38.0) temp_finale = 38.0;
+  } else {
+    // Hors zone corporelle (eau chaude/froide, test matériel) : brute directe
+    temp_finale = valeur_brute;
+  }
 
   Serial.print(F("{\"temperature\": "));
   Serial.print(temp_finale, 1);
