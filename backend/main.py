@@ -396,6 +396,56 @@ async def api_scanner(body: ScannerRequest):
     return {"statut": "succès", "session_id": session_id, **resultat}
 
 
+# ── Étape 1b : Saisie manuelle identité (fallback OCR incomplet) ─────────────
+
+class ScannerManuelRequest(BaseModel):
+    session_id:     Optional[str] = None
+    nom:            str
+    prenom:         str
+    date_naissance: Optional[str] = None
+
+
+@app.post("/api/scanner/manuel")
+async def api_scanner_manuel(body: ScannerManuelRequest):
+    """
+    Enregistre l'identité saisie manuellement quand l'OCR est incomplet.
+    Réutilise la session existante si session_id fourni, sinon en crée une.
+    """
+    # Calcul de l'âge depuis la date DD/MM/YYYY
+    age = 30
+    if body.date_naissance:
+        try:
+            j, mo, a = (int(x) for x in body.date_naissance.split('/'))
+            today = datetime.now()
+            age = today.year - a - ((today.month, today.day) < (mo, j))
+            age = max(0, min(age, 120))
+        except Exception:
+            pass
+
+    session_id = body.session_id or str(uuid.uuid4())[:8].upper()
+    patients_session[session_id] = patients_session.get(session_id) or {}
+    patients_session[session_id].update({
+        "session_id":     session_id,
+        "nom":            body.nom.strip().upper(),
+        "prenom":         body.prenom.strip().title(),
+        "age":            age,
+        "sex":            0,
+        "heure_arrivee":  datetime.now().strftime("%H:%M"),
+        "etape":          "scan_ok",
+    })
+
+    return {
+        "statut":          "succès",
+        "session_id":      session_id,
+        "nom":             patients_session[session_id]["nom"],
+        "prenom":          patients_session[session_id]["prenom"],
+        "age":             age,
+        "sexe":            -1,
+        "date_naissance":  body.date_naissance or "",
+        "formulaire_manuel": False,
+    }
+
+
 # ── Étape 2 : Symptômes + NLP ────────────────────────────────────────────────
 
 @app.post("/api/symptomes")
