@@ -200,14 +200,20 @@ export default function ConstantesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageCapture, etat, indexEtape])
 
-  // ── Étapes simulées : génère les valeurs puis passage auto en 5s ─────────────
+  // ── Étapes simulées : génère les valeurs immédiatement ──────────────────────
+  // Séparé du timer : setEtat(COMPLET) dans le même effet annulerait le setTimeout
+  // via le cleanup React avant qu'il ne se déclenche.
   useEffect(() => {
     if (etat !== ETAT.ATTENTE || !etapeActuelle.simulee) return
-
     const valeurs = etapeActuelle.simulerValeurs ? etapeActuelle.simulerValeurs() : {}
     setConstantesLocal(prev => ({ ...prev, ...valeurs }))
     setEtat(ETAT.COMPLET)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat, indexEtape])
 
+  // ── Étapes simulées : passage auto en 5s une fois COMPLET ────────────────────
+  useEffect(() => {
+    if (etat !== ETAT.COMPLET || !etapeActuelle.simulee) return
     const timer = setTimeout(() => {
       if (indexEtape < ETAPES.length - 1) {
         setIndexEtape(i => i + 1)
@@ -217,7 +223,6 @@ export default function ConstantesPage() {
       }
     }, 5000)
     return () => clearTimeout(timer)
-
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])
 
