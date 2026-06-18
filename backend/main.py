@@ -77,7 +77,7 @@ from capteurs_raspberry import (
 from model_trainer import predire_esi
 from nlp_extractor import extraire_features_nlp
 from queue_manager import gestionnaire_file
-from questions_moteur import encoder_reponses, generer_questions, generer_question_suivante
+from questions_moteur import encoder_reponses, generer_question_suivante
 from scanner_cin import scanner_piece_identite
 
 
@@ -623,37 +623,7 @@ async def api_mesures_push(body: ConstantesPushRequest):
 
 # ── Étape 4 : Questions adaptatives ──────────────────────────────────────────
 
-@app.post("/api/questions")
-async def api_questions(body: QuestionsRequest):
-    """
-    Génère 4 questions médicales adaptatives via Groq/Llama-3.3 en fonction
-    des constantes vitales et du texte de symptômes.
-    Stocke les questions dans la session pour l'encodage lors du triage.
-    """
-    session = _get_session(body.session_id)
-    constantes = body.constantes or session.get("constantes") or {}
-
-    features_nlp_q = extraire_features_nlp(session.get("symptom_text", ""))
-    questions = generer_questions(
-        constantes=constantes,
-        symptom_text=session.get("symptom_text", ""),
-        age=int(session.get("age", 30) or 30),
-        sex=int(session.get("sex", 0)),
-        zones_corps=session.get("zones_corps", []),
-        features_nlp=features_nlp_q,
-    )
-
-    session["questions"] = questions
-    session["etape"] = "questions_ok"
-
-    return {
-        "statut": "succès",
-        "session_id": body.session_id,
-        "questions": questions,
-    }
-
-
-# ── Étape 4b : Question adaptative unique (mode question par question) ────────
+# ── Étape 4 : Question adaptative unique (mode question par question) ─────────
 
 @app.post("/api/questions/suivante")
 async def api_questions_suivante(body: QuestionSuivanteRequest):
@@ -801,12 +771,30 @@ async def api_triage(body: TriageRequest):
         **features_questions,
     }
 
+    # ── Diagnostic ESI — logs complets ───────────────────────────────────────
+    print(f"\n{'='*60}")
+    print(f"[TRIAGE] session={body.session_id}")
+    print(f"[TRIAGE] questions en session : {len(questions)}")
+    print(f"[TRIAGE] question_reponses reçues : {body.question_reponses}")
+    print(f"[TRIAGE] features_questions encodées ({len(features_questions)}) :")
+    actives = {k: v for k, v in features_questions.items() if v != 0}
+    print(f"  non-nulles : {actives if actives else '(toutes à 0)'}")
+    print(f"[TRIAGE] constantes vitales dans vecteur :")
+    for cle in ("temperature", "spo2", "heart_rate", "bp_systolic", "bp_diastolic"):
+        print(f"  {cle} = {donnees_modele.get(cle)}")
+    print(f"[TRIAGE] vecteur complet ({len(donnees_modele)} features) :")
+    for k, v in sorted(donnees_modele.items()):
+        if k != "symptom_text":
+            print(f"  {k}: {v}")
+    print('='*60)
+
     try:
         resultat = predire_esi(donnees_modele)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur modèle ML : {e}")
 
     esi_predit: int = resultat["esi_predit"]
+    print(f"[TRIAGE] ESI prédit : {esi_predit} | confiance : {resultat.get('confiance', '?')}")
     medecin_id = _attribuer_medecin(session.get("age", 30))
     patient_id = f"PT-{body.session_id}"
 
