@@ -196,12 +196,7 @@ async def _periodic_queue_broadcast() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Confirmer que doctr est prêt au démarrage (init unique au chargement du module)
-    from scanner_cin import _model, DOCTR_DISPONIBLE
-    if DOCTR_DISPONIBLE and _model is not None:
-        print("[BACKEND] doctr prêt (instance globale réutilisée)")
-    else:
-        print("[BACKEND] doctr non disponible — mode simulation actif")
+    print("[BACKEND] Scanner Groq Vision prêt")
 
     # Le queue_manager a son propre thread de mise à jour des scores
     gestionnaire_file.demarrer_mise_a_jour_auto(intervalle=60)
