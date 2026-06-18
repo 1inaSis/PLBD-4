@@ -771,22 +771,25 @@ async def api_triage(body: TriageRequest):
         **features_questions,
     }
 
-    # ── Diagnostic ESI — logs complets ───────────────────────────────────────
-    print(f"\n{'='*60}")
-    print(f"[TRIAGE] session={body.session_id}")
-    print(f"[TRIAGE] questions en session : {len(questions)}")
-    print(f"[TRIAGE] question_reponses reçues : {body.question_reponses}")
-    print(f"[TRIAGE] features_questions encodées ({len(features_questions)}) :")
-    actives = {k: v for k, v in features_questions.items() if v != 0}
-    print(f"  non-nulles : {actives if actives else '(toutes à 0)'}")
-    print(f"[TRIAGE] constantes vitales dans vecteur :")
-    for cle in ("temperature", "spo2", "heart_rate", "bp_systolic", "bp_diastolic"):
-        print(f"  {cle} = {donnees_modele.get(cle)}")
-    print(f"[TRIAGE] vecteur complet ({len(donnees_modele)} features) :")
-    for k, v in sorted(donnees_modele.items()):
-        if k != "symptom_text":
-            print(f"  {k}: {v}")
-    print('='*60)
+    # ── Diagnostic ESI ───────────────────────────────────────────────────────
+    _fq_actives = {k: v for k, v in features_questions.items() if v != 0}
+    print(f"[TRIAGE] features_questions non-nulles : {_fq_actives if _fq_actives else '(toutes à 0)'}")
+    print(f"[TRIAGE] constantes : "
+          f"temp={donnees_modele.get('temperature')} "
+          f"spo2={donnees_modele.get('spo2')} "
+          f"fc={donnees_modele.get('heart_rate')} "
+          f"bp={donnees_modele.get('bp_systolic')} "
+          f"pain={donnees_modele.get('pain_score')}")
+    print(f"[TRIAGE] features binaires : "
+          f"chest_pain={donnees_modele.get('chest_pain')} "
+          f"dyspnea={donnees_modele.get('dyspnea')} "
+          f"fever={donnees_modele.get('fever')} "
+          f"abdominal_pain={donnees_modele.get('abdominal_pain')} "
+          f"trauma={donnees_modele.get('trauma')} "
+          f"neurological={donnees_modele.get('neurological_symptoms')} "
+          f"bleeding={donnees_modele.get('severe_bleeding')} "
+          f"loc={donnees_modele.get('loss_of_consciousness')}")
+    print(f"[TRIAGE] age={donnees_modele.get('age')} sex={donnees_modele.get('sex')}")
 
     try:
         resultat = predire_esi(donnees_modele)
