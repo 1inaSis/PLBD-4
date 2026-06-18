@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 import requests
 from dotenv import load_dotenv
 from typing import List, Dict
@@ -9,6 +10,15 @@ from nlp_extractor import normaliser_texte, extraire_features_nlp
 
 # Chargement automatique des cles API depuis le fichier .env
 load_dotenv()
+
+_ENV_FILE = Path(__file__).resolve().parent.parent / "backend" / ".env"
+if _ENV_FILE.exists():
+    with open(_ENV_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
 
 # Toutes les features que le modèle ML attend pour les réponses encodées.
 FEATURES_QUESTIONS = [
