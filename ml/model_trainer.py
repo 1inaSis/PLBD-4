@@ -524,13 +524,32 @@ def predire_esi(donnees_patient: dict) -> dict:
     X = X.fillna(0)
     X_scaled = scaler.transform(X)
 
-    # Prédiction
+    # Prédiction RF
     esi_predit = int(modele.predict(X_scaled)[0])
     probas = modele.predict_proba(X_scaled)[0]
     confiance = float(round(max(probas) * 100, 1))
 
+    # Post-processing : règles cliniques prioritaires sur le RF
+    _spo2  = float(donnees_patient.get("spo2", 99))
+    _bpsys = float(donnees_patient.get("bp_systolic", 120))
+    _fc    = float(donnees_patient.get("heart_rate", 75))
+    _pain  = float(donnees_patient.get("pain_score", 0))
+    _chest = int(donnees_patient.get("chest_pain", 0))
+    _loc   = int(donnees_patient.get("loss_of_consciousness", 0))
+    _bleed = int(donnees_patient.get("severe_bleeding", 0))
+
+    regle_clinique = False
+    if _spo2 < 85 or _bpsys < 80 or _fc > 150:
+        esi_predit, regle_clinique = 1, True
+    elif _loc or _bleed:
+        esi_predit, regle_clinique = 1, True
+    elif _chest and (_pain >= 7 or _spo2 < 92 or _fc > 120 or _bpsys < 90):
+        if esi_predit > 2:
+            esi_predit, regle_clinique = 2, True
+
     return {
         "esi_predit":   esi_predit,
+        "regle_clinique": regle_clinique,
         "diagnostic_probable": diagnostic_probable,
         "diagnostic_encode": int(diagnostic_encode),
         "probabilites": {

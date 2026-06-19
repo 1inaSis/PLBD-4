@@ -791,13 +791,35 @@ async def api_triage(body: TriageRequest):
           f"loc={donnees_modele.get('loss_of_consciousness')}")
     print(f"[TRIAGE] age={donnees_modele.get('age')} sex={donnees_modele.get('sex')}")
 
+    # ── Règles cliniques de surcharge (prioritaires sur le modèle ML) ────────
+    _spo2  = float(donnees_modele.get("spo2", 99))
+    _bpsys = float(donnees_modele.get("bp_systolic", 120))
+    _fc    = float(donnees_modele.get("heart_rate", 75))
+    _pain  = float(donnees_modele.get("pain_score", 0))
+    _chest = int(donnees_modele.get("chest_pain", 0))
+    _loc   = int(donnees_modele.get("loss_of_consciousness", 0))
+    _bleed = int(donnees_modele.get("severe_bleeding", 0))
+    _esi_force: Optional[int] = None
+
+    if _spo2 < 85 or _bpsys < 80 or _fc > 150:
+        _esi_force = 1
+    elif _loc or _bleed:
+        _esi_force = 1
+    elif _chest and (_pain >= 7 or _spo2 < 92 or _fc > 120 or _bpsys < 90):
+        _esi_force = 2
+
     try:
         resultat = predire_esi(donnees_modele)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur modèle ML : {e}")
 
     esi_predit: int = resultat["esi_predit"]
-    print(f"[TRIAGE] ESI prédit : {esi_predit} | confiance : {resultat.get('confiance', '?')}")
+    if _esi_force is not None and _esi_force < esi_predit:
+        print(f"[TRIAGE] Regle clinique : ESI {esi_predit} -> force ESI {_esi_force}")
+        esi_predit = _esi_force
+        resultat["esi_predit"] = esi_predit
+        resultat["regle_clinique"] = True
+    print(f"[TRIAGE] ESI predit : {esi_predit} | confiance : {resultat.get('confiance', '?')} | regle_clinique={resultat.get('regle_clinique', False)}")
     medecin_id = _attribuer_medecin(session.get("age", 30))
     patient_id = f"PT-{body.session_id}"
 
@@ -862,6 +884,7 @@ async def api_triage(body: TriageRequest):
         "statut": "succès",
         "patient_id": patient_id,
         "esi_predit": esi_predit,
+        "regle_clinique": resultat.get("regle_clinique", False),
         "niveau_urgence": _libelle_urgence(esi_predit),
         "confiance": resultat.get("confiance", 0),
         "position_file": position,
