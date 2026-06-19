@@ -269,11 +269,11 @@ def _construire_etat_global() -> dict:
             {
                 **p.to_dict(),
                 "position": i + 1,
-                "nom": patients_session.get(p.patient_id, {}).get("nom", "Patient"),
-                "prenom": patients_session.get(p.patient_id, {}).get("prenom", ""),
-                "medecin_id": patients_session.get(p.patient_id, {}).get("medecin_id", ""),
-                "symptom_text": patients_session.get(p.patient_id, {}).get("symptom_text", ""),
-                "zones_corps": patients_session.get(p.patient_id, {}).get("zones_corps", []),
+                "nom": patients_session.get(p.patient_id.replace("PT-", "", 1), {}).get("nom", "Patient"),
+                "prenom": patients_session.get(p.patient_id.replace("PT-", "", 1), {}).get("prenom", ""),
+                "medecin_id": patients_session.get(p.patient_id.replace("PT-", "", 1), {}).get("medecin_id", ""),
+                "symptom_text": patients_session.get(p.patient_id.replace("PT-", "", 1), {}).get("symptom_text", ""),
+                "zones_corps": patients_session.get(p.patient_id.replace("PT-", "", 1), {}).get("zones_corps", []),
             }
             for i, p in enumerate(file_triee)
         ],
@@ -284,8 +284,8 @@ def _construire_etat_global() -> dict:
         "alertes": [
             {
                 **p.to_dict(),
-                "nom": patients_session.get(p.patient_id, {}).get("nom", "Patient"),
-                "prenom": patients_session.get(p.patient_id, {}).get("prenom", ""),
+                "nom": patients_session.get(p.patient_id.replace("PT-", "", 1), {}).get("nom", "Patient"),
+                "prenom": patients_session.get(p.patient_id.replace("PT-", "", 1), {}).get("prenom", ""),
             }
             for p in gestionnaire_file.get_alertes_actives()
         ],
@@ -920,7 +920,7 @@ async def api_prise_en_charge(body: PriseEnChargeRequest):
     if body.patient_id in MEDECINS[body.medecin_id]["patients"]:
         MEDECINS[body.medecin_id]["patients"].remove(body.patient_id)
 
-    session = patients_session.get(body.patient_id, {})
+    session = patients_session.get(body.patient_id.replace("PT-", "", 1), {})
     historique_patients.append({
         **session,
         "pris_en_charge_par": MEDECINS[body.medecin_id]["nom"],
@@ -981,7 +981,7 @@ async def api_degradation(body: DegradationRequest):
     if not succes:
         raise HTTPException(status_code=404, detail="Patient non trouvé dans la file")
 
-    session = patients_session.get(body.patient_id, {})
+    session = patients_session.get(body.patient_id.replace("PT-", "", 1), {})
     ancien_esi = session.get("esi_predit", "?")
     session["esi_predit"] = body.nouvel_esi
     session["niveau_urgence"] = _libelle_urgence(body.nouvel_esi)

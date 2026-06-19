@@ -45,7 +45,7 @@ export default function ResultatPage() {
   const positionFile  = res.position_file ?? '—'
   const attente       = res.attente_estimee ?? config?.delai ?? '—'
   const medecin       = res.medecin_assigne ?? null
-  const confiance     = res.confiance != null ? Math.round(res.confiance * 100) : null
+  const confiance     = res.confiance != null ? Math.round(res.confiance) : null
 
   const nouvelleConsultation = () => {
     reinitialiser()

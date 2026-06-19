@@ -158,7 +158,7 @@ def enrichir_features_questions(df: pd.DataFrame) -> pd.DataFrame:
         default=0,
     )
     df["q_dyspnee_aggrave_effort"] = ((dyspnea > 0) & ((fr > 22) | (spo2 < 94))).astype(int)
-    df["q_antecedent_asthme"] = (
+    df["q_asthme_poumon"] = (
         comorbs.str.contains("asthme|bpc|bpco|tuberculose|pneumonie", regex=True)
         | diag.str.contains("asthme|bpc|bpco|tuberculose|pneumonie", regex=True)
     ).astype(int)
@@ -168,8 +168,8 @@ def enrichir_features_questions(df: pd.DataFrame) -> pd.DataFrame:
         [2, 1, 1],
         default=0,
     )
-    df["q_frissons_sueurs"] = ((fever > 0) | (temp >= 38.8) | diag.str.contains("palud|typho|infection", regex=True)).astype(int)
-    df["q_voyage_paludisme"] = (
+    df["q_frissons_fievre"] = ((fever > 0) | (temp >= 38.8) | diag.str.contains("palud|typho|infection", regex=True)).astype(int)
+    df["q_voyage_fievre"] = (
         diag.str.contains("palud|malaria", regex=True)
         | texte.str.contains("voyage|village|campagne|zone de paludisme")
     ).astype(int)
@@ -180,17 +180,17 @@ def enrichir_features_questions(df: pd.DataFrame) -> pd.DataFrame:
         | comorbs.str.contains("hypertension|hta", regex=True)
         | diag.str.contains("hypertension|crise hypertensive", regex=True)
     ).astype(int)
-    df["q_medicaments_tension"] = (
+    df["q_traitement_tension"] = (
         df["q_hypertension_connue"] > 0
     ).astype(int)
-    df["q_maux_tete_vision"] = (
+    df["q_vision_hypertension"] = (
         (ta_sys >= 170)
         | diag.str.contains("hypertension|avc|crise hypertensive", regex=True)
         | texte.str.contains("maux de tête|tête|vision|vertige")
     ).astype(int)
 
-    df["q_a_mange_aujourdhui"] = (glucose < 70).astype(int)
-    df["q_insuline_pris"] = (
+    df["q_mange_diabete"] = (glucose < 70).astype(int)
+    df["q_traitement_diabete"] = (
         (glucose < 70)
         | comorbs.str.contains("diabète|diabet", regex=True)
         | diag.str.contains("diabète|hypoglycémie", regex=True)
@@ -211,8 +211,8 @@ def enrichir_features_questions(df: pd.DataFrame) -> pd.DataFrame:
         & (texte.str.contains("vomit|vomiss|naus", regex=True) | diag.str.contains("appendic|gastro", regex=True))
     ).astype(int)
 
-    df["q_trauma_perte_conscience"] = ((trauma > 0) & (loss > 0)).astype(int)
-    df["q_trauma_saignement"] = ((trauma > 0) & (bleed > 0)).astype(int)
+    df["q_perte_conscience_trauma"] = ((trauma > 0) & (loss > 0)).astype(int)
+    df["q_saignement_trauma"] = ((trauma > 0) & (bleed > 0)).astype(int)
     df["q_trauma_zone"] = np.select(
         [
             trauma > 0,
@@ -228,7 +228,7 @@ def enrichir_features_questions(df: pd.DataFrame) -> pd.DataFrame:
     df["q_neuro_parole"] = ((neuro > 0) & (texte.str.contains("parle|parole|mots", regex=True) | diag.str.contains("avc|aphasie", regex=True))).astype(int)
     df["q_neuro_confusion"] = ((neuro > 0) & (texte.str.contains("confus|désorient|desorient|ne sait plus", regex=True) | diag.str.contains("méning|mening|avc", regex=True))).astype(int)
 
-    df["q_pediatrie_hydratation"] = ((age < 5) & ((fever > 0) | (dyspnea > 0) | (abdominal > 0))).astype(int)
+    df["q_hydratation_pediatrie"] = ((age < 5) & ((fever > 0) | (dyspnea > 0) | (abdominal > 0))).astype(int)
     df["q_grossesse_possible"] = ((sex == 0) & (age.between(12, 55)) & ((abdominal > 0) | (fever > 0) | texte.str.contains("saign", regex=True))).astype(int)
 
     df["q_antecedent_symptome"] = (

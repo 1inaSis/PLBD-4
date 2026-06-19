@@ -54,7 +54,6 @@ from typing import Optional
 from datetime import datetime
  
 from sensor_manager import SensorManager
-from alertes import AlertManager
  
  
 # =============================================================================
@@ -76,7 +75,7 @@ logger = logging.getLogger(__name__)
 # CONSTANTES
 # =============================================================================
  
-BACKEND_URL = "http://localhost:8080/api/mesures"
+BACKEND_URL = "http://localhost:8000/api/mesures"
  
 # Durée de stabilisation en secondes avant de prendre la mesure finale
 DUREE_STABILISATION = 20
@@ -137,7 +136,6 @@ class Daemon:
  
     def __init__(self):
         self.sensor = SensorManager()
-        self.alert_manager = AlertManager()
         self.session = PatientSession()
         logger.info("Daemon Health Gate démarré — en attente d'un patient")
  
@@ -266,16 +264,7 @@ class Daemon:
         # ------------------------------------------------------------------
         elif self.session.etat == EtatSession.MESURE_PRISE:
  
-            # Envoi au backend Java
             self._envoyer_au_backend(self.session.spo2_finale, self.session.fc_finale)
- 
-            # Analyse des alertes critiques
-            self.alert_manager.evaluer_mesures(
-                spo2=self.session.spo2_finale,
-                fc=self.session.fc_finale,
-                patient_id=self.session.patient_id
-            )
- 
             self.session.etat = EtatSession.TERMINEE
  
         # ------------------------------------------------------------------

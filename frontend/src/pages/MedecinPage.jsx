@@ -467,7 +467,7 @@ function VueDossier({ patient, medecinId, enPriseEnCharge, onPriseEnCharge, onRe
         </div>
         <div className="dossier-esi-meta">
           <span>Confiance modèle : {patient.confiance_modele != null
-            ? `${Math.round(patient.confiance_modele * 100)} %`
+            ? `${Math.round(patient.confiance_modele)} %`
             : '—'
           }</span>
           <span>Score priorité : {patient.score_priorite ?? '—'}</span>

@@ -81,7 +81,11 @@ export function PatientProvider({ children }) {
 
     ws.onopen  = () => console.log('[WS borne] Connectée')
     ws.onerror = (e) => console.error('[WS borne] Erreur', e)
-    ws.onclose = () => console.log('[WS borne] Déconnectée')
+    ws.onclose = () => {
+      console.log('[WS borne] Déconnectée — reconnexion dans 5s')
+      wsRef.current = null
+      setTimeout(() => connecterBorne(onEvenement), 5000)
+    }
 
     if (onEvenement) {
       ws.onmessage = (e) => {
