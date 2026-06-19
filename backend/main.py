@@ -53,7 +53,7 @@ for _p in (_BACKEND_DIR, _ML_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -187,11 +187,15 @@ async def _periodic_queue_broadcast() -> None:
     """Diffuse l'état de la file toutes les 60 s aux écrans de surveillance."""
     while True:
         await asyncio.sleep(60)
-        await manager.broadcast_to(
-            "file_mise_a_jour",
-            _construire_etat_global(),
-            ["salle", "medecin_M1", "medecin_M2"],
-        )
+        try:
+            await manager.broadcast_to(
+                "file_mise_a_jour",
+                _construire_etat_global(),
+                ["salle", "medecin_M1", "medecin_M2"],
+            )
+        except Exception as e:
+            print(f"[WARN] _periodic_queue_broadcast : {e}")
+            await asyncio.sleep(5)
 
 
 # Patients ESI 2 déjà alertés pour attente > 15 min (évite répétition)
@@ -201,60 +205,64 @@ _alertes_esi2_envoyees: set = set()
 async def _verifier_degradations_auto() -> None:
     """Reclassification automatique si attente excessive (toutes les 5 min)."""
     while True:
-        await asyncio.sleep(300)
-        file_courante = gestionnaire_file.get_file_triee()
-        for patient in file_courante:
-            attente = patient.temps_attente_minutes()
-            esi_actuel = patient.esi_actuel
-            session_id = patient.patient_id.replace("PT-", "", 1)
-            session = patients_session.get(session_id, {})
+        try:
+            await asyncio.sleep(300)
+            file_courante = gestionnaire_file.get_file_triee()
+            for patient in file_courante:
+                attente = patient.temps_attente_minutes()
+                esi_actuel = patient.esi_actuel
+                session_id = patient.patient_id.replace("PT-", "", 1)
+                session = patients_session.get(session_id, {})
 
-            # Dégradation ESI 3→2 (>30 min) ou ESI 4→3 (>60 min)
-            nouvel_esi = None
-            if esi_actuel == 3 and attente > 30:
-                nouvel_esi = 2
-            elif esi_actuel == 4 and attente > 60:
-                nouvel_esi = 3
+                # Dégradation ESI 3→2 (>30 min) ou ESI 4→3 (>60 min)
+                nouvel_esi = None
+                if esi_actuel == 3 and attente > 30:
+                    nouvel_esi = 2
+                elif esi_actuel == 4 and attente > 60:
+                    nouvel_esi = 3
 
-            if nouvel_esi:
-                gestionnaire_file.signaler_degradation(patient.patient_id, {}, nouvel_esi)
-                session["esi_predit"] = nouvel_esi
-                session["niveau_urgence"] = _libelle_urgence(nouvel_esi)
-                await manager.broadcast_to(
-                    "degradation",
-                    {
-                        "patient_id": patient.patient_id,
-                        "nom": session.get("nom", ""),
-                        "ancien_esi": esi_actuel,
-                        "nouvel_esi": nouvel_esi,
-                        "nouveau_libelle": _libelle_urgence(nouvel_esi),
-                        "temps_attente": round(attente),
-                        "auto": True,
-                    },
-                    ["salle", "medecin_M1", "medecin_M2"],
-                )
-                await manager.broadcast_to(
-                    "file_mise_a_jour",
-                    _construire_etat_global(),
-                    ["salle", "medecin_M1", "medecin_M2"],
-                )
+                if nouvel_esi:
+                    gestionnaire_file.signaler_degradation(patient.patient_id, {}, nouvel_esi)
+                    session["esi_predit"] = nouvel_esi
+                    session["niveau_urgence"] = _libelle_urgence(nouvel_esi)
+                    await manager.broadcast_to(
+                        "degradation",
+                        {
+                            "patient_id": patient.patient_id,
+                            "nom": session.get("nom", ""),
+                            "ancien_esi": esi_actuel,
+                            "nouvel_esi": nouvel_esi,
+                            "nouveau_libelle": _libelle_urgence(nouvel_esi),
+                            "temps_attente": round(attente),
+                            "auto": True,
+                        },
+                        ["salle", "medecin_M1", "medecin_M2"],
+                    )
+                    await manager.broadcast_to(
+                        "file_mise_a_jour",
+                        _construire_etat_global(),
+                        ["salle", "medecin_M1", "medecin_M2"],
+                    )
 
-            # ESI 2 en attente > 15 min → alerte critique (une seule fois)
-            elif esi_actuel == 2 and attente > 15 and patient.patient_id not in _alertes_esi2_envoyees:
-                medecin_id = session.get("medecin_id", "")
-                groupe = f"medecin_{medecin_id}" if medecin_id in ("M1", "M2") else "medecin_M1"
-                await manager.broadcast_to(
-                    "alerte_critique",
-                    {
-                        "patient_id": patient.patient_id,
-                        "nom": session.get("nom", ""),
-                        "prenom": session.get("prenom", ""),
-                        "esi": 2,
-                        "temps_attente": round(attente),
-                    },
-                    [groupe],
-                )
-                _alertes_esi2_envoyees.add(patient.patient_id)
+                # ESI 2 en attente > 15 min → alerte critique (une seule fois)
+                elif esi_actuel == 2 and attente > 15 and patient.patient_id not in _alertes_esi2_envoyees:
+                    medecin_id = session.get("medecin_id", "")
+                    groupe = f"medecin_{medecin_id}" if medecin_id in ("M1", "M2") else "medecin_M1"
+                    await manager.broadcast_to(
+                        "alerte_critique",
+                        {
+                            "patient_id": patient.patient_id,
+                            "nom": session.get("nom", ""),
+                            "prenom": session.get("prenom", ""),
+                            "esi": 2,
+                            "temps_attente": round(attente),
+                        },
+                        [groupe],
+                    )
+                    _alertes_esi2_envoyees.add(patient.patient_id)
+        except Exception as e:
+            print(f"[WARN] _verifier_degradations_auto : {e}")
+            await asyncio.sleep(5)
 
 
 @asynccontextmanager
@@ -357,7 +365,7 @@ def _construire_etat_global() -> dict:
 
 
 def _construire_rapport(patient_id: str) -> dict:
-    session = patients_session.get(patient_id, {})
+    session = patients_session.get(patient_id.replace("PT-", "", 1), {})
     en_file = gestionnaire_file.file.get(patient_id)
     features_nlp = extraire_features_nlp(session.get("symptom_text", ""))
     return {
@@ -976,7 +984,7 @@ async def api_file():
 
 @app.get("/api/rapport/{patient_id}")
 async def api_rapport(patient_id: str):
-    if patient_id not in patients_session:
+    if patient_id.replace("PT-", "", 1) not in patients_session:
         raise HTTPException(status_code=404, detail="Patient non trouvé")
     return {"statut": "succès", "rapport": _construire_rapport(patient_id)}
 
@@ -1029,7 +1037,7 @@ async def api_patients_medecin(medecin_id: str):
 
     rapports = []
     for pid in MEDECINS[medecin_id]["patients"]:
-        if pid not in patients_session:
+        if pid.replace("PT-", "", 1) not in patients_session:
             continue
         rapport = _construire_rapport(pid)
         en_file = gestionnaire_file.file.get(pid)
@@ -1209,8 +1217,10 @@ _DEMO_SCENARIOS = {
 
 
 @app.post("/api/demo/scenario")
-async def api_demo_scenario(body: DemoScenarioRequest):
+async def api_demo_scenario(body: DemoScenarioRequest, x_admin_token: str = Header(None)):
     """Lance un scénario de démonstration complet — crée la session, calcule l'ESI, insère en file."""
+    if x_admin_token != "healthgate-demo":
+        raise HTTPException(status_code=403, detail="Non autorisé")
     sc = _DEMO_SCENARIOS.get(body.scenario_id)
     if not sc:
         raise HTTPException(status_code=404, detail="Scénario inconnu")
@@ -1263,7 +1273,6 @@ async def api_demo_scenario(body: DemoScenarioRequest):
         esi_predit=esi_predit,
         age=sc["age"],
         constantes=constantes,
-        binaires=sc["binaires"],
     )
     MEDECINS[medecin_id]["patients"].append(patient_id)
     position = gestionnaire_file.get_position_patient(patient_id)
@@ -1296,8 +1305,10 @@ async def api_demo_scenario(body: DemoScenarioRequest):
 
 
 @app.post("/api/admin/reset")
-async def api_admin_reset():
+async def api_admin_reset(x_admin_token: str = Header(None)):
     """Vide la file, les sessions et l'historique — usage démo uniquement."""
+    if x_admin_token != "healthgate-demo":
+        raise HTTPException(status_code=403, detail="Non autorisé")
     patients_session.clear()
     historique_patients.clear()
     with gestionnaire_file._verrou:

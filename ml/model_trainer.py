@@ -493,23 +493,26 @@ _LIBELLES_FEATURES = {
 
 
 def _generer_explications(vecteur: dict, importances: np.ndarray, noms: list, top_n: int = 3) -> list:
-    scores = []
-    for i, feat in enumerate(noms):
-        val = float(vecteur.get(feat, 0))
-        score = importances[i] * (abs(val) if val != 0 else 0)
-        if score > 0 and feat in _LIBELLES_FEATURES:
-            libelle = _LIBELLES_FEATURES[feat](val)
-            if libelle:
-                scores.append((score, libelle))
-    scores.sort(reverse=True)
-    seen, result = set(), []
-    for _, label in scores:
-        if label not in seen:
-            seen.add(label)
-            result.append(label)
-        if len(result) >= top_n:
-            break
-    return result
+    try:
+        scores = []
+        for i, feat in enumerate(noms):
+            val = float(vecteur.get(feat, 0))
+            score = importances[i] * (abs(val) if val != 0 else 0)
+            if score > 0 and feat in _LIBELLES_FEATURES:
+                libelle = _LIBELLES_FEATURES[feat](val)
+                if libelle:
+                    scores.append((score, libelle))
+        scores.sort(reverse=True)
+        seen, result = set(), []
+        for _, label in scores:
+            if label not in seen:
+                seen.add(label)
+                result.append(label)
+            if len(result) >= top_n:
+                break
+        return result
+    except Exception:
+        return []
 
 
 def predire_esi(donnees_patient: dict) -> dict:

@@ -116,11 +116,18 @@ void mesurerTemperature() {
   }
 
   float temp_finale;
+  bool fievre = false;
   if (valeur_brute >= 28.0 && valeur_brute <= 40.0) {
-    // Zone corporelle : normalisation vers 36.0–38.0°C
-    temp_finale = 36.0 + (valeur_brute - 28.0) / 12.0 * 2.0;
-    if (temp_finale < 36.0) temp_finale = 36.0;
-    if (temp_finale > 38.0) temp_finale = 38.0;
+    if (valeur_brute > 37.5) {
+      // Fièvre réelle détectable : ne pas normaliser pour préserver le signal clinique
+      temp_finale = valeur_brute;
+      fievre = true;
+    } else {
+      // Zone corporelle normale : normalisation vers 36.0–38.0°C
+      temp_finale = 36.0 + (valeur_brute - 28.0) / 12.0 * 2.0;
+      if (temp_finale < 36.0) temp_finale = 36.0;
+      if (temp_finale > 38.0) temp_finale = 38.0;
+    }
   } else {
     // Hors zone corporelle (eau chaude/froide, test matériel) : brute directe
     temp_finale = valeur_brute;
@@ -130,6 +137,9 @@ void mesurerTemperature() {
   Serial.print(temp_finale, 1);
   Serial.print(F(", \"mlx_ok\": true, \"valeur_brute\": "));
   Serial.print(valeur_brute, 1);
+  if (fievre) {
+    Serial.print(F(", \"fievre\": true"));
+  }
   Serial.println(F(", \"mesure_type\": \"surface_cutanee\", \"source\": \"capteur\"}"));
 }
 

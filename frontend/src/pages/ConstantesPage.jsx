@@ -56,9 +56,9 @@ const ETAPES = [
   {
     cle:          'temperature',
     typeMesure:   'temperature',
-    label:        'Température',
-    instruction:  'Placez le capteur thermique sur votre front et restez immobile.',
-    messageNull:  'Veuillez pointer le capteur face à votre front à 2-3 cm',
+    label:        'const_temp_label',
+    instruction:  'const_temp_instruction',
+    messageNull:  'const_temp_null',
     unite:        '°C',
     icone:        '🌡️',
     illustration: IllustrationThermometre,
@@ -71,14 +71,14 @@ const ETAPES = [
     typeMesure:    'spo2',
     simulee:       true,
     simulerValeurs: simulerSpo2,
-    messageSimule: 'Capteur MAX30102 non connecté — valeurs simulées',
+    messageSimule: 'const_spo2_sim',
     double:        true,
-    label:         'Oxymétrie de pouls',
+    label:         'const_spo2_label',
     icone:         '🫁',
     illustration:  IllustrationSpo2,
     valeurs: [
-      { cle: 'spo2',       label: 'SpO₂',               unite: '%',   formatter: (v) => Number(v).toFixed(1) },
-      { cle: 'heart_rate', label: 'Fréquence cardiaque', unite: 'bpm', formatter: (v) => Math.round(Number(v)) },
+      { cle: 'spo2',       label: 'bio_spo2',    unite: '%',   formatter: (v) => Number(v).toFixed(1) },
+      { cle: 'heart_rate', label: 'const_fc_label', unite: 'bpm', formatter: (v) => Math.round(Number(v)) },
     ],
   },
 
@@ -87,8 +87,8 @@ const ETAPES = [
     typeMesure:    'tension',
     simulee:       true,
     simulerValeurs: simulerTension,
-    messageSimule: 'Tension artérielle simulée — tensiomètre manuel non connecté',
-    label:         'Tension artérielle',
+    messageSimule: 'const_bp_sim',
+    label:         'const_bp_label',
     unite:         'mmHg',
     icone:         '💉',
     illustration:  IllustrationTension,
@@ -116,7 +116,7 @@ export default function ConstantesPage() {
   const [phase, setPhase]                = useState(PHASE.MESURE)
   const [indexEtape, setIndexEtape]      = useState(0)
   const [etat, setEtat]                  = useState(ETAT.PRET)
-  const [compte, setCompte]              = useState(null)
+  const [compteRebours, setCompteRebours] = useState(null)
   const [constantes, setConstantesLocal] = useState({})
   const [erreur, setErreur]              = useState(null)
   const [messageCapture, setMessageCapture] = useState(null)
@@ -158,13 +158,13 @@ export default function ConstantesPage() {
   // ── Compte à rebours : 5 → 0 puis lance ATTENTE ─────────────────────────────
   useEffect(() => {
     if (etat !== ETAT.COMPTE) return
-    if (compte <= 0) {
+    if (compteRebours <= 0) {
       setEtat(ETAT.ATTENTE)
       return
     }
-    const t = setTimeout(() => setCompte(c => c - 1), 1000)
-    return () => clearTimeout(t)
-  }, [etat, compte])
+    const timer = setTimeout(() => setCompteRebours(c => c - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [etat, compteRebours])
 
   // ── Auto-lancer les étapes simulées (skip PRET/COMPTE) ──────────────────────
   useEffect(() => {
@@ -268,14 +268,14 @@ export default function ConstantesPage() {
 
   // ── Lancer la mesure (clic bouton "Mesurer") ─────────────────────────────────
   const lancerMesure = () => {
-    setCompte(5)
+    setCompteRebours(5)
     setEtat(ETAT.COMPTE)
   }
 
   // ── Réessayer après null (repart du compte à rebours) ───────────────────────
   const reessayer = () => {
     setMessageCapture(null)
-    setCompte(5)
+    setCompteRebours(5)
     setEtat(ETAT.COMPTE)
   }
 
@@ -325,7 +325,7 @@ export default function ConstantesPage() {
           indexEtape={indexEtape}
           total={ETAPES.length}
           etat={etat}
-          compte={compte}
+          compte={compteRebours}
           valeur={valeurActuelle}
           constantes={constantes}
           erreur={erreur}
@@ -354,6 +354,7 @@ function VueMesure({
   erreur, messageCapture,
   onLancerMesure, onEtapeSuivante, onReessayer, onRetour,
 }) {
+  const { t } = useTranslation()
   const estSimulee    = !!etape.simulee
   const couleur       = evaluerCouleur(etape.cle, valeur)
   const affichee      = !etape.double && valeur != null
@@ -373,13 +374,13 @@ function VueMesure({
       <div className="kiosk-card constante-sequentielle">
 
         <div className="seq-header">
-          <span className="eyebrow">Étape 3 / 5 · Constantes vitales</span>
+          <span className="eyebrow">{t('const_etape_titre')}</span>
           <span className="seq-compteur">{indexEtape + 1} / {total}</span>
         </div>
 
         <div className="seq-titre-wrapper">
           <span className="seq-icone" aria-hidden="true">{etape.icone}</span>
-          <h2 className="kiosk-titre-sm">{etape.label}</h2>
+          <h2 className="kiosk-titre-sm">{t(etape.label)}</h2>
         </div>
 
         {/* PRET : illustration + instruction + bouton Mesurer (étapes réelles seulement) */}
@@ -390,9 +391,9 @@ function VueMesure({
                 <Illustration />
               </div>
             )}
-            <p className="kiosk-soustitre">{etape.instruction}</p>
+            <p className="kiosk-soustitre">{t(etape.instruction)}</p>
             <button className="kiosk-btn kiosk-btn--primary" onClick={onLancerMesure}>
-              Mesurer
+              {t('const_mesurer')}
             </button>
           </>
         )}
@@ -400,7 +401,7 @@ function VueMesure({
         {/* COMPTE : compte à rebours 5→1 */}
         {etat === ETAT.COMPTE && (
           <div className="seq-attente">
-            <p className="kiosk-soustitre">Préparez-vous…</p>
+            <p className="kiosk-soustitre">{t('const_preparez')}</p>
             <div className="seq-compte" role="status" aria-live="assertive">{compte}</div>
           </div>
         )}
@@ -408,8 +409,8 @@ function VueMesure({
         {/* ATTENTE : spinner (mesure en cours) */}
         {etat === ETAT.ATTENTE && !estSimulee && messageCapture !== 'null' && (
           <div className="seq-attente">
-            <div className="kiosk-spinner" aria-label="Mesure en cours" />
-            <p className="kiosk-note">Mesure en cours…</p>
+            <div className="kiosk-spinner" aria-label={t('const_mesure_cours')} />
+            <p className="kiosk-note">{t('const_mesure_cours')}</p>
           </div>
         )}
 
@@ -417,10 +418,10 @@ function VueMesure({
         {etat === ETAT.ATTENTE && messageCapture === 'null' && (
           <div className="seq-attente">
             <div className="kiosk-alerte" role="alert">
-              {etape.messageNull ?? 'Vérifiez le positionnement du capteur'}
+              {etape.messageNull ? t(etape.messageNull) : t('const_capteur_verif')}
             </div>
             <button className="kiosk-btn kiosk-btn--primary" onClick={onReessayer}>
-              Réessayer
+              {t('const_reessayer')}
             </button>
           </div>
         )}
@@ -432,14 +433,14 @@ function VueMesure({
             {/* Étape simulée */}
             {estSimulee && (
               <p className="kiosk-note kiosk-note--info">
-                {etape.messageSimule ?? 'Valeurs simulées'}
+                {etape.messageSimule ? t(etape.messageSimule) : t('const_sim_default')}
               </p>
             )}
 
             {/* Timeout : valeur simulée injectée */}
             {messageCapture === 'timeout' && (
               <p className="kiosk-alerte" role="alert">
-                Mesure impossible — valeur simulée utilisée
+                {t('const_sim_timeout')}
               </p>
             )}
 
@@ -457,15 +458,15 @@ function VueMesure({
             {/* Badge couleur */}
             <div className={`bio-badge bio-badge--${couleurBadge}`}>
               <span className="bio-badge-dot" />
-              {LIBELLES_COULEUR[couleurBadge]}
+              {t(LIBELLES_COULEUR[couleurBadge])}
             </div>
 
             {/* Mesure réelle réussie : confirmation + bouton */}
             {!estSimulee && messageCapture !== 'timeout' && (
               <>
-                <div className="seq-ok" role="status">✓ Mesure effectuée</div>
+                <div className="seq-ok" role="status">{t('const_mesure_ok')}</div>
                 <button className="kiosk-btn kiosk-btn--primary" onClick={onEtapeSuivante}>
-                  {estDerniere ? 'Voir le bilan des mesures →' : 'Mesurer la constante suivante →'}
+                  {estDerniere ? t('const_voir_bilan') : t('const_suivante')}
                 </button>
               </>
             )}
@@ -473,7 +474,7 @@ function VueMesure({
             {/* Auto-avance (étape simulée ou timeout) */}
             {(estSimulee || messageCapture === 'timeout') && (
               <p className="kiosk-note" role="status">
-                Passage automatique dans quelques secondes…
+                {t('const_auto_passage')}
               </p>
             )}
           </div>
@@ -489,7 +490,7 @@ function VueMesure({
             onClick={onRetour}
             style={{ alignSelf: 'flex-start' }}
           >
-            ← Retour
+            {t('retour')}
           </button>
         )}
       </div>
@@ -499,6 +500,7 @@ function VueMesure({
 
 // ═════════════════════════════════════════════════════════════════════════════
 function ValeursDouble({ valeurs, constantes, avecCouleur = false }) {
+  const { t } = useTranslation()
   return (
     <div className="seq-double-valeurs">
       {valeurs.map(({ cle, label, unite, formatter }) => {
@@ -508,7 +510,7 @@ function ValeursDouble({ valeurs, constantes, avecCouleur = false }) {
 
         return (
           <div key={cle} className="seq-double-item">
-            <span className="seq-double-label">{label}</span>
+            <span className="seq-double-label">{t(label)}</span>
             <div className={`seq-valeur-grande${couleur ? ` seq-valeur-grande--${couleur}` : ''}`}>
               {fmt}
               <span className="seq-unite">{unite}</span>
@@ -522,6 +524,7 @@ function ValeursDouble({ valeurs, constantes, avecCouleur = false }) {
 
 // ═════════════════════════════════════════════════════════════════════════════
 function VueRecap({ constantes, onContinuer, onRecommencer }) {
+  const { t } = useTranslation()
   const alerteCritique = CLES_VITALES.some(
     cle => evaluerCouleur(cle, constantes?.[cle]) === 'rouge'
   )
@@ -530,18 +533,18 @@ function VueRecap({ constantes, onContinuer, onRecommencer }) {
     <div className="constantes-layout">
 
       <div className="constantes-header">
-        <span className="eyebrow">Étape 3 / 5 · Constantes vitales</span>
-        <h2 className="kiosk-titre-sm">Bilan des mesures</h2>
-        <p className="kiosk-soustitre">Toutes les constantes ont été enregistrées.</p>
+        <span className="eyebrow">{t('const_etape_titre')}</span>
+        <h2 className="kiosk-titre-sm">{t('const_bilan_titre')}</h2>
+        <p className="kiosk-soustitre">{t('const_bilan_sous_titre')}</p>
       </div>
 
       <div className="stabilisation-ok" role="status">
-        ✅ Toutes les mesures sont complètes
+        {t('const_bilan_complet')}
       </div>
 
       {alerteCritique && (
         <div className="kiosk-alerte kiosk-alerte--urgence" role="alert">
-          ⚠️ Valeur critique détectée — le personnel soignant est alerté automatiquement.
+          {t('const_alerte_critique')}
         </div>
       )}
 
@@ -549,10 +552,10 @@ function VueRecap({ constantes, onContinuer, onRecommencer }) {
 
       <div className="kiosk-actions constantes-actions">
         <button className="kiosk-btn kiosk-btn--primary" onClick={onContinuer}>
-          Continuer →
+          {t('continuer')}
         </button>
         <button className="kiosk-btn kiosk-btn--secondary" onClick={onRecommencer}>
-          ↩ Refaire les mesures
+          {t('const_refaire')}
         </button>
       </div>
 

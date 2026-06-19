@@ -2,6 +2,7 @@
 // Usage jury / soutenance : lance les 3 scénarios prédéfinis en un clic.
 
 import { useState } from 'react'
+import { postDemoScenario } from '../services/api'
 import '../styles/demo.css'
 
 const SCENARIOS = [
@@ -67,16 +68,6 @@ const ETAPES = [
   'Calcul de l\'ESI',
 ]
 
-async function lancerScenarioAPI(scenarioId) {
-  const resp = await fetch('/api/demo/scenario', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scenario_id: scenarioId }),
-  })
-  if (!resp.ok) throw new Error(`Erreur ${resp.status}`)
-  return resp.json()
-}
-
 function delai(ms) {
   return new Promise(r => setTimeout(r, ms))
 }
@@ -117,7 +108,7 @@ export default function DemoPage() {
       }
 
       // Appel API réel
-      const res = await lancerScenarioAPI(id)
+      const res = await postDemoScenario(id)
 
       avancer(ETAPES.length - 1)
       await delai(300)

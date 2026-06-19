@@ -117,12 +117,23 @@ export function getStats() {
 }
 
 // ── Démo / Admin ──────────────────────────────────────────────────────────────
+const ADMIN_TOKEN = 'healthgate-demo'
+const ADMIN_HEADERS = { 'Content-Type': 'application/json', 'X-Admin-Token': ADMIN_TOKEN }
+
 export function demarrerDemo() {
   return requete('/demo/patient', { method: 'POST' })
 }
 
+export function postDemoScenario(scenario_id) {
+  return requete('/demo/scenario', {
+    method: 'POST',
+    headers: ADMIN_HEADERS,
+    body: JSON.stringify({ scenario_id }),
+  })
+}
+
 export function reinitialiserFile() {
-  return requete('/admin/reset', { method: 'POST' })
+  return requete('/admin/reset', { method: 'POST', headers: ADMIN_HEADERS })
 }
 
 export function modifierESI(patient_id, nouveau_esi, raison = '') {

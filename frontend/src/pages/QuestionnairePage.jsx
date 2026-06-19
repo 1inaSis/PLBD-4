@@ -110,7 +110,7 @@ export default function QuestionnairePage() {
             {/* Chips des zones sélectionnées */}
             {zonesSelectionnees.length > 0 ? (
               <div className="zones-choisies">
-                <p className="zones-choisies-titre">Zones sélectionnées :</p>
+                <p className="zones-choisies-titre">{t('zones_select')}</p>
                 <div className="zones-tags">
                   {zonesSelectionnees.map(id => (
                     <button

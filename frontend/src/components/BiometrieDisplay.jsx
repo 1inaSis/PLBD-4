@@ -1,6 +1,8 @@
 // Affiche les 4 constantes vitales mesurées avec leur badge couleur.
 // Seuils issus de hardware/alertes.py (SpO2/FC) et backend/triage_engine.py (temp/tension).
 
+import { useTranslation } from '../hooks/useTranslation'
+
 // ── Seuils médicaux ───────────────────────────────────────────────────────────
 function evaluerCouleur(cle, valeur) {
   if (valeur == null || isNaN(Number(valeur))) return 'gris'
@@ -35,40 +37,41 @@ function evaluerCouleur(cle, valeur) {
   }
 }
 
+// Valeurs = clés de traduction (utilisées via t() dans le rendu)
 const LIBELLES_COULEUR = {
-  vert:   'Normal',
-  jaune:  'Vigilance',
-  orange: 'Alerte',
-  rouge:  'Critique',
-  gris:   'En attente',
+  vert:   'bio_normal',
+  jaune:  'bio_vigilance',
+  orange: 'bio_alerte',
+  rouge:  'bio_critique',
+  gris:   'bio_attente',
 }
 
 // ── Configuration des 4 constantes affichées ──────────────────────────────────
 const CONSTANTES_CONFIG = [
   {
     cle:      'temperature',
-    label:    'Température',
+    label:    'bio_temp',
     unite:    '°C',
     icone:    '🌡️',
     formatter: (v) => v != null ? Number(v).toFixed(1) : '—',
   },
   {
     cle:      'spo2',
-    label:    'SpO₂',
+    label:    'bio_spo2',
     unite:    '%',
     icone:    '🫁',
     formatter: (v) => v != null ? Number(v).toFixed(1) : '—',
   },
   {
     cle:      'heart_rate',
-    label:    'Fréq. cardiaque',
+    label:    'bio_fc',
     unite:    'bpm',
     icone:    '❤️',
     formatter: (v) => v != null ? Math.round(Number(v)) : '—',
   },
   {
     cle:      'bp_systolic',
-    label:    'Tension art.',
+    label:    'bio_bp',
     unite:    'mmHg',
     icone:    '💉',
     // La tension s'affiche sys/dias, la couleur est évaluée sur la systolique
@@ -82,6 +85,7 @@ const CONSTANTES_CONFIG = [
  * @param {boolean}     enCours      - true = mesure en cours (spinner sur chaque carte)
  */
 export default function BiometrieDisplay({ constantes, enCours }) {
+  const { t } = useTranslation()
   return (
     <div className="bio-grille">
       {CONSTANTES_CONFIG.map(({ cle, label, unite, icone, formatter }) => {
@@ -93,21 +97,21 @@ export default function BiometrieDisplay({ constantes, enCours }) {
           <div
             key={cle}
             className={`bio-carte bio-carte--${couleur}`}
-            aria-label={`${label} : ${affichee} ${unite}`}
+            aria-label={`${t(label)} : ${affichee} ${unite}`}
           >
             <div className="bio-icone" aria-hidden="true">{icone}</div>
-            <div className="bio-label">{label}</div>
+            <div className="bio-label">{t(label)}</div>
 
             <div className="bio-valeur">
               {enCours && valeur == null
-                ? <span className="bio-spinner" aria-label="Mesure en cours" />
+                ? <span className="bio-spinner" aria-label={t('const_mesure_cours')} />
                 : <>{affichee} <span className="bio-unite">{unite}</span></>
               }
             </div>
 
             <div className={`bio-badge bio-badge--${couleur}`}>
               <span className="bio-badge-dot" />
-              {LIBELLES_COULEUR[couleur]}
+              {t(LIBELLES_COULEUR[couleur])}
             </div>
           </div>
         )
