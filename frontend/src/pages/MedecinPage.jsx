@@ -42,6 +42,25 @@ const NLP_LABELS = {
 // Compteur toast
 let _toastId = 0
 
+// ── Génère un bip via Web Audio API ──────────────────────────────────────────
+function jouerBip(nbFois = 1) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    for (let i = 0; i < nbFois; i++) {
+      const osc  = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.value = i % 2 === 0 ? 880 : 660
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + i * 0.5)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.5 + 0.3)
+      osc.start(ctx.currentTime + i * 0.5)
+      osc.stop(ctx.currentTime + i * 0.5 + 0.4)
+    }
+  } catch { /* AudioContext non disponible */ }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 export default function MedecinPage() {
   const { id: medecinId } = useParams()   // 'M1' ou 'M2'
@@ -68,9 +87,19 @@ export default function MedecinPage() {
   // WebSocket état
   const [wsEtat, setWsEtat]               = useState('connexion')
 
+  // Alerte sonore
+  const [sonActif, setSonActif]           = useState(true)
+  const sonActifRef                       = useRef(true)
+
   const wsRef    = useRef(null)
   const pingRef  = useRef(null)
   const monteRef = useRef(true)
+
+  const basculerSon = () => {
+    const val = !sonActifRef.current
+    sonActifRef.current = val
+    setSonActif(val)
+  }
 
   // ── Chargement de la liste patients ────────────────────────────────────────
   const chargerPatients = useCallback(async () => {
@@ -121,16 +150,21 @@ export default function MedecinPage() {
             `Nouveau patient : ${data.prenom} ${data.nom} — ESI ${data.esi}`,
             'nouveau',
           )
+          if (sonActifRef.current && document.visibilityState === 'visible' && data.esi <= 2) {
+            jouerBip(data.esi === 1 ? 3 : 1)
+          }
         }
         break
 
       // ALERTE CRITIQUE (ESI ≤ 2) — modal persistant, envoyé au médecin assigné uniquement
       case 'alerte_critique':
         setAlertesCritiques(prev => {
-          // Évite les doublons par patient_id
           if (prev.some(a => a.patient_id === data.patient_id)) return prev
           return [...prev, data]
         })
+        if (sonActifRef.current && document.visibilityState === 'visible') {
+          jouerBip(3)
+        }
         break
 
       // Dégradation clinique → toast d'alerte
@@ -234,6 +268,18 @@ export default function MedecinPage() {
           <span className="medecin-specialite">{medecin?.specialite ?? ''}</span>
         </div>
         <div className="medecin-header-droite">
+          <button
+            onClick={basculerSon}
+            title={sonActif ? 'Couper le son' : 'Activer le son'}
+            style={{
+              background: sonActif ? 'rgba(20,184,166,0.12)' : 'rgba(148,163,184,0.10)',
+              border: `1px solid ${sonActif ? 'rgba(20,184,166,0.3)' : 'rgba(148,163,184,0.2)'}`,
+              borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+              color: sonActif ? '#2dd4bf' : '#64748b', fontSize: '0.82rem', fontWeight: 600,
+            }}
+          >
+            {sonActif ? '🔔 Son actif' : '🔇 Son coupé'}
+          </button>
           <span className="medecin-nb-patients">
             {patients.length} patient{patients.length !== 1 ? 's' : ''} assigné{patients.length !== 1 ? 's' : ''}
           </span>

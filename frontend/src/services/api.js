@@ -107,6 +107,11 @@ export function prendreEnCharge(patient_id, medecin_id) {
   })
 }
 
+// ── Statistiques ──────────────────────────────────────────────────────────────
+export function getStats() {
+  return requete('/stats')
+}
+
 // ── Démo / Admin ──────────────────────────────────────────────────────────────
 export function demarrerDemo() {
   return requete('/demo/patient', { method: 'POST' })

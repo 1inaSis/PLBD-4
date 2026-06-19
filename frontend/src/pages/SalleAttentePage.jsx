@@ -8,8 +8,25 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { creerWebSocket, envoyerCommande } from '../services/websocket'
-import { reinitialiserFile } from '../services/api'
+import { reinitialiserFile, getStats } from '../services/api'
 import '../styles/kiosk.css'
+
+// ── Calcul temps d'attente depuis heure "HH:MM" ───────────────────────────────
+function minutesEcoulees(heureArrivee) {
+  if (!heureArrivee) return null
+  const [h, m] = heureArrivee.split(':').map(Number)
+  const arrivee = new Date()
+  arrivee.setHours(h, m, 0, 0)
+  const diff = Math.floor((Date.now() - arrivee.getTime()) / 60000)
+  return diff < 0 ? 0 : diff
+}
+
+function classeAttente(min) {
+  if (min == null) return ''
+  if (min < 15) return 'attente-vert'
+  if (min < 30) return 'attente-orange'
+  return 'attente-rouge'
+}
 
 // ── Configuration des niveaux ESI (couleurs + libellés) ──────────────────────
 const ESI_CONFIG = {
@@ -44,6 +61,13 @@ export default function SalleAttentePage() {
   const [wsEtat, setWsEtat]         = useState('connexion')  // connexion | connecte | deconnecte
   const [heureLive, setHeureLive]   = useState(heureLocale())
   const [resetEnCours, setResetEnCours] = useState(false)
+  const [tempsCourant, setTempsCourant] = useState(Date.now())
+  const [stats, setStats]           = useState({
+    patients_en_attente: 0,
+    patients_traites_aujourd_hui: 0,
+    temps_moyen_attente_minutes: 0,
+    esi_critique_actifs: 0,
+  })
 
   const wsRef    = useRef(null)
   const pingRef  = useRef(null)
@@ -52,6 +76,20 @@ export default function SalleAttentePage() {
   // ── Horloge en direct (toutes les 10 s) ────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => setHeureLive(heureLocale()), 10_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // ── Stats + temps d'attente en direct (toutes les 30 s) ─────────────────────
+  useEffect(() => {
+    const rafraichir = async () => {
+      try {
+        const s = await getStats()
+        if (monteRef.current) setStats(s)
+      } catch { /* silencieux */ }
+      if (monteRef.current) setTempsCourant(Date.now())
+    }
+    rafraichir()
+    const id = setInterval(rafraichir, 30_000)
     return () => clearInterval(id)
   }, [])
 
@@ -197,12 +235,32 @@ export default function SalleAttentePage() {
         </div>
       </header>
 
-      {/* ── Bande compteur patients ──────────────────────────────── */}
-      <div className="salle-compteur-bande">
-        <span className="salle-compteur-nb">{nbPatients}</span>
-        <span className="salle-compteur-label">
-          patient{nbPatients !== 1 ? 's' : ''} en attente
-        </span>
+      {/* ── Bande statistiques temps réel ────────────────────────── */}
+      <div className="salle-stats-bande">
+        <div className="salle-stat-item">
+          <span className="salle-stat-valeur">{nbPatients}</span>
+          <span className="salle-stat-label">En attente</span>
+        </div>
+        <div className="salle-stat-sep" />
+        <div className="salle-stat-item">
+          <span className="salle-stat-valeur">{stats.patients_traites_aujourd_hui}</span>
+          <span className="salle-stat-label">Traités aujourd'hui</span>
+        </div>
+        <div className="salle-stat-sep" />
+        <div className="salle-stat-item">
+          <span className="salle-stat-valeur">
+            {stats.temps_moyen_attente_minutes > 0 ? `${stats.temps_moyen_attente_minutes} min` : '—'}
+          </span>
+          <span className="salle-stat-label">Temps moyen</span>
+        </div>
+        {stats.esi_critique_actifs > 0 && (
+          <>
+            <div className="salle-stat-sep" />
+            <div className="salle-stat-badge-critique">
+              🚨 {stats.esi_critique_actifs} ESI CRITIQUE{stats.esi_critique_actifs > 1 ? 'S' : ''}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Alertes priorité maximale (ESI 1 / 2 actifs) ────────── */}
@@ -237,7 +295,7 @@ export default function SalleAttentePage() {
 
             {/* Une ligne par patient */}
             {file.map(p => (
-              <LignePatient key={p.patient_id} patient={p} />
+              <LignePatient key={p.patient_id} patient={p} tempsCourant={tempsCourant} />
             ))}
           </div>
         )}
@@ -276,11 +334,15 @@ export default function SalleAttentePage() {
 // ═════════════════════════════════════════════════════════════════════════════
 // Ligne d'un patient dans la file
 // ═════════════════════════════════════════════════════════════════════════════
-function LignePatient({ patient }) {
-  const esi    = patient.esi_actuel ?? patient.esi_predit ?? 5
-  const cfg    = ESI_CONFIG[esi]   ?? ESI_CONFIG[5]
+function LignePatient({ patient, tempsCourant }) {
+  const esi     = patient.esi_actuel ?? patient.esi_predit ?? 5
+  const cfg     = ESI_CONFIG[esi]   ?? ESI_CONFIG[5]
   const medecin = NOM_MEDECIN[patient.medecin_id] ?? '—'
-  const attente = patient.temps_attente_min
+  // Temps d'attente calculé en direct depuis heure_arrivee
+  // tempsCourant est mis à jour toutes les 30s pour forcer le re-render
+  void tempsCourant
+  const attente = minutesEcoulees(patient.heure_arrivee)
+  const classeA = classeAttente(attente)
 
   return (
     <div
@@ -313,10 +375,10 @@ function LignePatient({ patient }) {
       {/* Prénom du patient (affiché publiquement) */}
       <span className="salle-col-patient">{patient.prenom || '—'}</span>
 
-      {/* Temps d'attente depuis l'arrivée */}
-      <span className="salle-col-attente">
-        {attente != null && attente > 0
-          ? `${Math.round(attente)} min`
+      {/* Temps d'attente en direct depuis l'arrivée */}
+      <span className={`salle-col-attente ${classeA}`}>
+        {attente != null
+          ? `${attente} min`
           : patient.heure_arrivee
             ? `Arrivé à ${patient.heure_arrivee}`
             : '—'

@@ -12,6 +12,12 @@
   padding: 28px 40px;
   gap: 24px;
   position: relative;
+  animation: fadeInUp 0.4s ease both;
+}
+
+.kiosk-shell.page-exit {
+  animation: fadeOutUp 0.35s ease both !important;
+  pointer-events: none;
 }
 
 /* ── Centrage vertical du contenu ──────────────────────────── */
@@ -257,7 +263,7 @@
   font-weight: 700;
   font-size: 0.95rem;
   flex-shrink: 0;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.3s ease, color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .etape--terminee .etape-bulle {
@@ -271,6 +277,7 @@
   color: #fff;
   border: 2px solid #14b8a6;
   box-shadow: 0 0 0 5px rgba(20, 184, 166, 0.18);
+  transform: scale(1.12);
 }
 
 .etape--a-venir .etape-bulle {
@@ -846,6 +853,86 @@
 /* Sur tablette/mobile : réduire légèrement */
 @media (max-width: 600px) {
   .illustration-geste { width: 150px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Animations de page — fadeInUp (entrée) / fadeOutUp (sortie)
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOutUp {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-15px); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Couleurs temps d'attente (salle d'attente)
+   ═══════════════════════════════════════════════════════════════ */
+.attente-vert   { color: #34d399 !important; font-weight: 700; }
+.attente-orange { color: #fb923c !important; font-weight: 700; }
+.attente-rouge  { color: #f87171 !important; font-weight: 700; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Bande statistiques salle d'attente
+   ═══════════════════════════════════════════════════════════════ */
+.salle-stats-bande {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 14px 40px;
+  background: rgba(15, 23, 42, 0.50);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.salle-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.salle-stat-valeur {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.salle-stat-label {
+  font-size: 0.70rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.salle-stat-sep {
+  width: 1px;
+  height: 36px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.salle-stat-badge-critique {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  padding: 6px 14px;
+  color: #f87171;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  animation: pulseCritique 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseCritique {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
 }
 
 /* ═══════════════════════════════════════════════════════════════

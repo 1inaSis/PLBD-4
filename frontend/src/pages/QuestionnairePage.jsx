@@ -3,7 +3,7 @@
 // et décrit librement ses symptômes. POST /api/symptomes envoie
 // le texte + les zones ; le NLP extrait les features côté serveur.
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import { soumettreSymptomes } from '../services/api'
@@ -20,6 +20,12 @@ export default function QuestionnairePage() {
   const [enChargement, setEnChargement]   = useState(false)
   const [erreur, setErreur]               = useState(null)
   const [urgenceDetectee, setUrgenceDetectee] = useState(false)
+  const [sortie, setSortie]               = useState(false)
+
+  const navigerVers = useCallback((path, opts) => {
+    setSortie(true)
+    setTimeout(() => navigate(path, opts), 350)
+  }, [navigate])
 
   // Le bouton Continuer est actif si au moins une zone OU 3+ caractères de texte
   const peutContinuer = zonesSelectionnees.length > 0 || texteSymptome.trim().length >= 3
@@ -53,11 +59,10 @@ export default function QuestionnairePage() {
       setSymptomes(texteEnvoye, zonesSelectionnees)
 
       if (res.urgence_detectee) {
-        // Afficher l'alerte 2,5 s puis naviguer automatiquement
         setUrgenceDetectee(true)
-        setTimeout(() => navigate('/constantes'), 2500)
+        setTimeout(() => navigerVers('/constantes'), 2500)
       } else {
-        navigate('/constantes')
+        navigerVers('/constantes')
       }
     } catch (err) {
       setErreur(`Erreur : ${err.message}`)
@@ -67,7 +72,7 @@ export default function QuestionnairePage() {
   }
 
   return (
-    <div className="kiosk-shell">
+    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`}>
       <IndicateurEtape etapeCourante={2} />
 
       <div className="questionnaire-layout">

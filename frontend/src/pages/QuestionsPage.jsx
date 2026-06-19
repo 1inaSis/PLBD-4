@@ -30,6 +30,12 @@ export default function QuestionsPage() {
   const { patient, setResultatTriage } = usePatient()
 
   const [phase, setPhase]                 = useState(PHASE.CHARGEMENT)
+  const [sortie, setSortie]               = useState(false)
+
+  const navigerVers = useCallback((path) => {
+    setSortie(true)
+    setTimeout(() => navigate(path), 350)
+  }, [navigate])
   const [questionCourante, setQ]          = useState(null)
   const [numQuestion, setNumQuestion]     = useState(0)
   const [repsCumulees, setRepsCumulees]   = useState([])  // [{question, feature_name, reponse}]
@@ -80,12 +86,12 @@ export default function QuestionsPage() {
       const res = await lancerTriage(patient.session_id, patient.constantes ?? null, reponsesFinales)
       setResultatTriage(res)
       completedRef.current = true
-      navigate('/resultat')
+      navigerVers('/resultat')
     } catch (err) {
       setErreurTriage(`Erreur lors du calcul du triage : ${err.message}`)
       setPhase(PHASE.ERREUR_TRIAGE)
     }
-  }, [patient.session_id, patient.constantes, setResultatTriage, navigate])
+  }, [patient.session_id, patient.constantes, setResultatTriage, navigerVers])
 
   lancerTriageRef.current = lancerTriageAvec
 
@@ -158,7 +164,7 @@ export default function QuestionsPage() {
 
   // ── Rendu ────────────────────────────────────────────────────────────────────
   return (
-    <div className="kiosk-shell">
+    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`}>
       <IndicateurEtape etapeCourante={4} />
 
       {phase === PHASE.CHARGEMENT && (

@@ -11,7 +11,7 @@
 // 3 étapes : Température → Oxymètre (SpO₂ + FC, simulé) → Tension (simulée)
 // Après les 3 étapes → RECAP (BiometrieDisplay complet + "Continuer")
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import { demarrerArduino, arreterArduino, mesurerConstante } from '../services/api'
@@ -108,11 +108,16 @@ export default function ConstantesPage() {
   const [compte, setCompte]              = useState(null)
   const [constantes, setConstantesLocal] = useState({})
   const [erreur, setErreur]              = useState(null)
-  // 'null' = capteur non pointé  |  'timeout' = 30s dépassés  |  null = RAS
   const [messageCapture, setMessageCapture] = useState(null)
+  const [sortie, setSortie]              = useState(false)
 
   const enFetchRef   = useRef(false)
   const completedRef = useRef(false)
+
+  const navigerVers = useCallback((path) => {
+    setSortie(true)
+    setTimeout(() => navigate(path), 350)
+  }, [navigate])
 
   // Abandon si le visiteur quitte avant d'avoir terminé les constantes
   useEffect(() => {
@@ -287,11 +292,11 @@ export default function ConstantesPage() {
   const continuer = () => {
     completedRef.current = true
     setConstantes(constantes)
-    navigate('/questions')
+    navigerVers('/questions')
   }
 
   return (
-    <div className="kiosk-shell">
+    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`}>
       <IndicateurEtape etapeCourante={3} />
 
       {phase === PHASE.MESURE && (

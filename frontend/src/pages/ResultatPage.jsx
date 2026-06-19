@@ -1,7 +1,7 @@
 // Étape 5 / 5 — Résultat du triage ESI
 // Affiche : niveau ESI coloré, ticket patient, position en file, temps d'attente.
 
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import IndicateurEtape from '../components/IndicateurEtape'
@@ -27,6 +27,12 @@ const COULEURS_ESI = {
 export default function ResultatPage() {
   const navigate  = useNavigate()
   const { patient, reinitialiser } = usePatient()
+  const [sortie, setSortie] = useState(false)
+
+  const navigerVers = useCallback((path, opts) => {
+    setSortie(true)
+    setTimeout(() => navigate(path, opts), 350)
+  }, [navigate])
 
   const res    = patient.resultat_triage
   const esi    = res?.esi_predit ?? null
@@ -49,11 +55,11 @@ export default function ResultatPage() {
 
   const nouvelleConsultation = () => {
     reinitialiser()
-    navigate('/', { replace: true })
+    navigerVers('/', { replace: true })
   }
 
   return (
-    <div className="kiosk-shell">
+    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`}>
       <IndicateurEtape etapeCourante={5} />
 
       <div className="kiosk-center">

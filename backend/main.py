@@ -1003,6 +1003,23 @@ async def api_degradation(body: DegradationRequest):
     return {"statut": "succès", "message": "Dégradation enregistrée et diffusée"}
 
 
+# ── Statistiques temps réel ──────────────────────────────────────────────────
+
+@app.get("/api/stats")
+async def api_stats():
+    """Statistiques en temps réel pour l'écran salle d'attente."""
+    file_triee = gestionnaire_file.get_file_triee()
+    attentes = [p.temps_attente_minutes() for p in file_triee]
+    temps_moyen = round(sum(attentes) / len(attentes), 1) if attentes else 0
+    esi_critique = sum(1 for p in file_triee if p.esi_actuel <= 2)
+    return {
+        "patients_en_attente": len(file_triee),
+        "patients_traites_aujourd_hui": len(historique_patients),
+        "temps_moyen_attente_minutes": temps_moyen,
+        "esi_critique_actifs": esi_critique,
+    }
+
+
 # ── Démo / Admin ─────────────────────────────────────────────────────────────
 
 @app.post("/api/demo/patient")
