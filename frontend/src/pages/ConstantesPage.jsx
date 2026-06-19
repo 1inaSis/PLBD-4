@@ -408,11 +408,11 @@ function VueMesure({
           />
         )}
 
-        {/* COMPTE : compte à rebours 5→1 */}
+        {/* COMPTE : compte à rebours SVG circulaire 5→1 */}
         {etat === ETAT.COMPTE && (
           <div className="seq-attente">
             <p className="kiosk-soustitre">{t('const_preparez')}</p>
-            <div className="seq-compte" role="status" aria-live="assertive">{compte}</div>
+            <CompteReboursCirculaire compte={compte ?? 5} role="status" aria-live="assertive" />
           </div>
         )}
 
@@ -653,6 +653,35 @@ function SaisieTension({ instruction, onValider, t }) {
       >
         {t('const_bp_valider')}
       </button>
+    </div>
+  )
+}
+
+// ── Compte à rebours SVG circulaire ──────────────────────────────────────────
+const CDR_R = 42
+const CDR_CIRC = 2 * Math.PI * CDR_R  // ≈ 263.9
+
+function CompteReboursCirculaire({ compte, ...props }) {
+  const pct = Math.max(0, Math.min(compte, 5)) / 5
+  const dashoffset = CDR_CIRC * (1 - pct)
+  return (
+    <div className="countdown-svg-wrap" {...props}>
+      <svg width="140" height="140" viewBox="0 0 100 100" className="countdown-ring">
+        <defs>
+          <linearGradient id="cdr-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#00d4ff" />
+            <stop offset="100%" stopColor="#7c3aed" />
+          </linearGradient>
+        </defs>
+        <circle className="countdown-ring__track" cx="50" cy="50" r={CDR_R} />
+        <circle
+          className="countdown-ring__circle"
+          cx="50" cy="50" r={CDR_R}
+          strokeDasharray={CDR_CIRC}
+          strokeDashoffset={dashoffset}
+        />
+      </svg>
+      <span className="countdown-svg-num">{compte}</span>
     </div>
   )
 }

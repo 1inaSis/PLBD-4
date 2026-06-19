@@ -47,9 +47,9 @@ const NOM_MEDECIN = {
 // ── Compteur d'ID pour les toasts ─────────────────────────────────────────────
 let _toastId = 0
 
-// ── Heure locale HH:MM ────────────────────────────────────────────────────────
+// ── Heure locale HH:MM:SS ─────────────────────────────────────────────────────
 function heureLocale() {
-  return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -75,9 +75,9 @@ export default function SalleAttentePage() {
   const pingRef  = useRef(null)
   const monteRef = useRef(true)   // false après le démontage du composant
 
-  // ── Horloge en direct (toutes les 10 s) ────────────────────────────────────
+  // ── Horloge en direct (toutes les secondes) ─────────────────────────────────
   useEffect(() => {
-    const id = setInterval(() => setHeureLive(heureLocale()), 10_000)
+    const id = setInterval(() => setHeureLive(heureLocale()), 1_000)
     return () => clearInterval(id)
   }, [])
 
@@ -344,7 +344,7 @@ export default function SalleAttentePage() {
         onClick={reinitialiser}
         disabled={resetEnCours}
         style={{
-          position: 'fixed', bottom: 12, left: 12,
+          position: 'fixed', bottom: 52, left: 12,
           padding: '4px 10px', fontSize: '0.72rem',
           background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)',
           borderRadius: 6, color: 'rgba(255,255,255,0.4)', cursor: 'pointer',
@@ -353,6 +353,29 @@ export default function SalleAttentePage() {
       >
         {resetEnCours ? 'Réinitialisation…' : 'Réinitialiser la file'}
       </button>
+
+      {/* ── Vague décorative ─────────────────────────────────────── */}
+      <div className="salle-vague" aria-hidden="true">
+        <svg viewBox="0 0 1440 70" preserveAspectRatio="none" className="salle-vague-svg">
+          <path
+            d="M0,35 C240,70 480,0 720,35 C960,70 1200,10 1440,35 L1440,70 L0,70 Z"
+            fill="rgba(0,212,255,0.04)"
+          />
+          <path
+            d="M0,50 C300,15 600,65 900,30 C1100,10 1300,50 1440,40 L1440,70 L0,70 Z"
+            fill="rgba(124,58,237,0.03)"
+          />
+        </svg>
+      </div>
+
+      {/* ── Ticker défilant ───────────────────────────────────────── */}
+      <div className="salle-ticker" aria-hidden="true">
+        <div className="salle-ticker-track">
+          <span className="salle-ticker-texte">
+            HealthGate — Système de triage intelligent — École Centrale Casablanca — HealthGate — Système de triage intelligent — École Centrale Casablanca — HealthGate — Système de triage intelligent — École Centrale Casablanca
+          </span>
+        </div>
+      </div>
 
     </div>
   )
@@ -386,7 +409,7 @@ function LignePatient({ patient, tempsCourant }) {
       {/* Badge ESI + libellé */}
       <span className="salle-col-esi">
         <span
-          className="salle-esi-badge"
+          className={`salle-esi-badge salle-esi-badge--${esi}`}
           style={{ borderColor: cfg.bordure, color: cfg.texte }}
         >
           {esi}

@@ -570,7 +570,10 @@ export default function MedecinPage() {
             </div>
 
             {onglet === 'attente' && (
-              <VueListe patients={patients} onOuvrirDossier={ouvrirDossier} />
+              <>
+                <GraphiqueESI patients={patients} />
+                <VueListe patients={patients} onOuvrirDossier={ouvrirDossier} />
+              </>
             )}
             {onglet === 'historique' && (
               <VueHistorique
@@ -700,6 +703,40 @@ function VueListe({ patients, onOuvrirDossier }) {
   )
 }
 
+// ── Graphique ESI temps réel (barres animées) ─────────────────────────────────
+const ESI_COLORS = { 1:'#ef4444', 2:'#f97316', 3:'#fbbf24', 4:'#34d399', 5:'#38bdf8' }
+
+function GraphiqueESI({ patients }) {
+  if (!patients.length) return null
+  const counts = { 1:0, 2:0, 3:0, 4:0, 5:0 }
+  patients.forEach(p => { const e = p.esi_predit ?? 5; counts[e] = (counts[e] || 0) + 1 })
+  const max = Math.max(...Object.values(counts), 1)
+  return (
+    <div style={{ padding:'0 16px 10px', display:'flex', flexDirection:'column', gap:4 }}>
+      <span style={{ fontSize:'0.7rem', color:'rgba(255,255,255,0.38)', textTransform:'uppercase', letterSpacing:'0.1em' }}>
+        Répartition ESI
+      </span>
+      <div className="medecin-esi-chart">
+        {[1,2,3,4,5].map(e => (
+          <div key={e} className="medecin-esi-bar-col">
+            <span className="medecin-esi-chart-num">{counts[e]}</span>
+            <div
+              className="medecin-esi-bar"
+              style={{
+                height: `${Math.max(4, (counts[e]/max)*64)}px`,
+                background: ESI_COLORS[e],
+                animationDelay: `${(e-1)*0.1}s`,
+                opacity: counts[e] ? 1 : 0.25,
+              }}
+            />
+            <span className="medecin-esi-chart-label">ESI{e}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Carte résumé patient ──────────────────────────────────────────────────────
 function CartePatient({ patient, onOuvrirDossier }) {
   const esi = patient.esi_predit ?? 5
@@ -716,7 +753,8 @@ function CartePatient({ patient, onOuvrirDossier }) {
 
   return (
     <div
-      className="medecin-carte"
+      className="medecin-carte medecin-patient-card"
+      data-esi={esi}
       style={{ borderLeftColor: cfg.bordure, background: cfg.fond }}
       role="article"
       aria-label={`Patient ${patient.prenom} ${patient.nom} — ESI ${esi}`}
