@@ -2103,6 +2103,70 @@
   .dossier-esi-meta { display: none; }
 }
 
+/* ── Bouton plein écran ────────────────────────────────────────────────────── */
+.btn-plein-ecran {
+  position: fixed;
+  top: 12px;
+  left: 16px;
+  z-index: 200;
+  background: rgba(15,23,42,0.75);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.45);
+  font-size: 1.1rem;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: all 0.18s;
+}
+
+.btn-plein-ecran:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+.btn-plein-ecran--actif { color: #2dd4bf; border-color: rgba(20,184,166,0.4); }
+
+/* Dans SalleAttentePage et MedecinPage (pas fixed — dans le header) */
+.salle-header .btn-plein-ecran,
+.medecin-header .btn-plein-ecran {
+  position: static;
+}
+
+/* ── Explications ESI (ResultatPage) ───────────────────────────────────────── */
+.resultat-explications {
+  width: 100%;
+  padding: 14px 18px;
+  background: rgba(45,212,191,0.06);
+  border: 1px solid rgba(45,212,191,0.18);
+  border-radius: 14px;
+  margin-top: 4px;
+}
+
+.resultat-expl-titre {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: rgba(148,163,184,0.65);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.resultat-expl-liste {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.resultat-expl-item { font-size: 0.9rem; color: rgba(226,232,240,0.85); }
+.resultat-expl-check { color: #2dd4bf; margin-right: 6px; font-weight: 700; }
+
+/* ── Explications ESI (VueDossier médecin) ─────────────────────────────────── */
+.dossier-explications { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.dossier-expl-item { font-size: 0.85rem; color: rgba(226,232,240,0.8); }
+.dossier-expl-check { color: #2dd4bf; margin-right: 6px; font-weight: 700; }
+
 /* ── Sélecteur de langue ────────────────────────────────────────────────────  */
 .selecteur-langue {
   position: fixed;

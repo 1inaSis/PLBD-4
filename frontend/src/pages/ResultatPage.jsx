@@ -62,6 +62,7 @@ export default function ResultatPage() {
   const attente       = res.attente_estimee ?? config?.delai ?? '—'
   const medecin       = res.medecin_assigne ?? null
   const confiance     = res.confiance != null ? Math.round(res.confiance) : null
+  const explications  = res.explications ?? []
 
   const nouvelleConsultation = () => {
     reinitialiser()
@@ -106,6 +107,20 @@ export default function ResultatPage() {
           {/* Ligne de statut (niveau_urgence du backend) */}
           {res.niveau_urgence && (
             <p className="resultat-statut">{res.niveau_urgence}</p>
+          )}
+
+          {/* Explications ESI */}
+          {explications.length > 0 && (
+            <div className="resultat-explications">
+              <p className="resultat-expl-titre">Facteurs ayant influencé votre niveau de priorité :</p>
+              <ul className="resultat-expl-liste">
+                {explications.map((e, i) => (
+                  <li key={i} className="resultat-expl-item">
+                    <span className="resultat-expl-check">✓</span> {e}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {/* Méta-informations : file / attente / médecin */}

@@ -468,6 +468,50 @@ def _enrichir_q_pour_inference(patient: dict) -> dict:
     return {c: int(row_enrichi.iloc[0][c]) for c in row_enrichi.columns if c.startswith("q_")}
 
 
+_LIBELLES_FEATURES = {
+    "chest_pain":            lambda v: "Douleur thoracique détectée" if v >= 1 else None,
+    "pain_score":            lambda v: f"Douleur intense (score {int(v)}/10)" if v >= 7 else (f"Douleur modérée (score {int(v)}/10)" if v >= 4 else None),
+    "spo2":                  lambda v: f"Saturation en oxygène critique ({int(v)}%)" if v < 88 else (f"Saturation basse ({int(v)}%)" if v < 94 else None),
+    "fever":                 lambda v: "Fièvre détectée" if v >= 1 else None,
+    "heart_rate":            lambda v: f"Fréquence cardiaque élevée ({int(v)} bpm)" if v > 110 else (f"Bradycardie ({int(v)} bpm)" if v < 50 else None),
+    "bp_systolic":           lambda v: f"Tension artérielle basse ({int(v)} mmHg)" if v < 90 else (f"Hypertension ({int(v)} mmHg)" if v > 160 else None),
+    "temperature":           lambda v: f"Hyperthermie ({v:.1f} °C)" if v >= 38.5 else (f"Hypothermie ({v:.1f} °C)" if v < 36.0 else None),
+    "dyspnea":               lambda v: "Dyspnée (difficultés respiratoires) détectée" if v >= 1 else None,
+    "loss_of_consciousness": lambda v: "Perte de conscience signalée" if v >= 1 else None,
+    "severe_bleeding":       lambda v: "Saignement sévère signalé" if v >= 1 else None,
+    "neurological_symptoms": lambda v: "Symptômes neurologiques détectés" if v >= 1 else None,
+    "abdominal_pain":        lambda v: "Douleur abdominale signalée" if v >= 1 else None,
+    "trauma":                lambda v: "Traumatisme signalé" if v >= 1 else None,
+    "respiratory_rate":      lambda v: f"Fréquence respiratoire élevée ({int(v)}/min)" if v > 20 else (f"Hypoventilation ({int(v)}/min)" if v < 12 else None),
+    "glucose":               lambda v: f"Hyperglycémie ({int(v)} mg/dL)" if v > 200 else (f"Hypoglycémie ({int(v)} mg/dL)" if v < 60 else None),
+    "nlp_chest_pain":        lambda v: "Douleur thoracique mentionnée" if v >= 1 else None,
+    "nlp_dyspnea":           lambda v: "Essoufflement mentionné" if v >= 1 else None,
+    "nlp_fever":             lambda v: "Fièvre mentionnée" if v >= 1 else None,
+    "nlp_pain":              lambda v: "Douleur signalée" if v >= 1 else None,
+    "nlp_urgence_critique":  lambda v: "Terme d'urgence critique détecté" if v >= 1 else None,
+}
+
+
+def _generer_explications(vecteur: dict, importances: np.ndarray, noms: list, top_n: int = 3) -> list:
+    scores = []
+    for i, feat in enumerate(noms):
+        val = float(vecteur.get(feat, 0))
+        score = importances[i] * (abs(val) if val != 0 else 0)
+        if score > 0 and feat in _LIBELLES_FEATURES:
+            libelle = _LIBELLES_FEATURES[feat](val)
+            if libelle:
+                scores.append((score, libelle))
+    scores.sort(reverse=True)
+    seen, result = set(), []
+    for _, label in scores:
+        if label not in seen:
+            seen.add(label)
+            result.append(label)
+        if len(result) >= top_n:
+            break
+    return result
+
+
 def predire_esi(donnees_patient: dict) -> dict:
     """
     Prédit le niveau ESI d'un patient à partir de ses données brutes.
@@ -547,6 +591,8 @@ def predire_esi(donnees_patient: dict) -> dict:
         if esi_predit > 2:
             esi_predit, regle_clinique = 2, True
 
+    explications = _generer_explications(vecteur, modele.feature_importances_, noms_features)
+
     return {
         "esi_predit":   esi_predit,
         "regle_clinique": regle_clinique,
@@ -557,6 +603,7 @@ def predire_esi(donnees_patient: dict) -> dict:
             for i, p in enumerate(probas)
         },
         "confiance":    confiance,
+        "explications": explications,
     }
 
 

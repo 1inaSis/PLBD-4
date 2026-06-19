@@ -8,8 +8,10 @@ import { IllustrationScanCIN } from '../components/IllustrationsGestes'
 import SelecteurLangue from '../components/SelecteurLangue'
 import GuideEtape from '../components/GuideEtape'
 import ModalInactivite from '../components/ModalInactivite'
+import BoutonPleinEcran from '../components/BoutonPleinEcran'
 import { useTranslation } from '../hooks/useTranslation'
 import { useInactivite } from '../hooks/useInactivite'
+import { useFullscreen } from '../hooks/useFullscreen'
 import '../styles/kiosk.css'
 
 const VUE = {
@@ -38,6 +40,7 @@ export default function AccueilPage() {
     navigate('/')
   }, [patient.session_id, reinitialiser, navigate])
   const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
+  const { enterFullscreen } = useFullscreen()
 
   // Session créée côté backend même si OCR incomplet
   const [sessionManuelId, setSessionManuelId] = useState(null)
@@ -75,6 +78,7 @@ export default function AccueilPage() {
 
   // ── Scan CIN ─────────────────────────────────────────────────────────────
   const lancerScan = async () => {
+    enterFullscreen()
     setVue(VUE.SCAN)
     setErreur(null)
     setErreurForm(null)
@@ -136,6 +140,7 @@ export default function AccueilPage() {
 
   // ── Mode démo ─────────────────────────────────────────────────────────────
   const lancerDemo = async () => {
+    enterFullscreen()
     setErreur(null)
     try {
       const data = await demarrerDemo()
@@ -177,6 +182,7 @@ export default function AccueilPage() {
     <div className="kiosk-shell" dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={1} />
       <SelecteurLangue />
+      <BoutonPleinEcran />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
 
       <div className={`ws-badge ${wsConnecte ? 'ws-badge--ok' : 'ws-badge--off'}`}>

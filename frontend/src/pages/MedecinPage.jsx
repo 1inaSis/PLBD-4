@@ -15,6 +15,7 @@ import { getPatientsMedecin, prendreEnCharge, getHistoriqueMedecin, getRapportPa
 import { creerWebSocket, envoyerCommande } from '../services/websocket'
 import BiometrieDisplay, { evaluerCouleur } from '../components/BiometrieDisplay'
 import { ZONES_MAP } from '../components/CorpsHumain'
+import BoutonPleinEcran from '../components/BoutonPleinEcran'
 import '../styles/kiosk.css'
 
 // ── Configuration niveaux ESI ─────────────────────────────────────────────────
@@ -332,6 +333,7 @@ export default function MedecinPage() {
           <span className="medecin-specialite">{medecin?.specialite ?? ''}</span>
         </div>
         <div className="medecin-header-droite">
+          <BoutonPleinEcran />
           <button
             onClick={basculerSon}
             title={sonActif ? 'Couper le son' : 'Activer le son'}
@@ -654,6 +656,20 @@ function VueDossier({ patient, medecinId, enPriseEnCharge, onPriseEnCharge, onMo
               </div>
             )}
           </section>
+
+          {/* Explications décision ESI */}
+          {(patient.explications ?? []).length > 0 && (
+            <section className="dossier-section">
+              <h3 className="dossier-section-titre">Facteurs ayant influencé l'ESI</h3>
+              <ul className="dossier-explications">
+                {patient.explications.map((e, i) => (
+                  <li key={i} className="dossier-expl-item">
+                    <span className="dossier-expl-check">✓</span> {e}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {/* Analyse NLP */}
           {nlpActifs.length > 0 && (

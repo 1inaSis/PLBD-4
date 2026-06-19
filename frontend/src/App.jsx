@@ -8,6 +8,7 @@ import ResultatPage      from './pages/ResultatPage'
 import FileAttentePage   from './pages/FileAttentePage'
 import SalleAttentePage  from './pages/SalleAttentePage'
 import MedecinPage       from './pages/MedecinPage'
+import DemoPage          from './pages/DemoPage'
 
 export default function App() {
   return (
@@ -37,6 +38,9 @@ export default function App() {
 
           {/* Interface médecin — dossiers patients assignés */}
           <Route path="/medecin/:id"   element={<MedecinPage />} />
+
+          {/* Interface de démonstration jury */}
+          <Route path="/demo"          element={<DemoPage />} />
 
           {/* Redirection fallback */}
           <Route path="*"              element={<Navigate to="/" replace />} />

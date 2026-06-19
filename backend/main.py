@@ -373,6 +373,7 @@ def _construire_rapport(patient_id: str) -> dict:
         "esi_predit": session.get("esi_predit", "?"),
         "niveau_urgence": session.get("niveau_urgence", "?"),
         "confiance_modele": session.get("confiance", "?"),
+        "explications": session.get("explications", []),
         "features_nlp_actives": {k: v for k, v in features_nlp.items() if v > 0},
         "score_priorite": round(en_file.score, 1) if en_file else "?",
         "temps_attente_min": round(en_file.temps_attente_minutes(), 1) if en_file else "?",
@@ -899,6 +900,7 @@ async def api_triage(body: TriageRequest):
         "esi_predit": esi_predit,
         "niveau_urgence": _libelle_urgence(esi_predit),
         "confiance": resultat.get("confiance", 0),
+        "explications": resultat.get("explications", []),
         "medecin_id": medecin_id,
         "etape": "triage_ok",
     })
@@ -957,6 +959,7 @@ async def api_triage(body: TriageRequest):
         "regle_clinique": resultat.get("regle_clinique", False),
         "niveau_urgence": _libelle_urgence(esi_predit),
         "confiance": resultat.get("confiance", 0),
+        "explications": resultat.get("explications", []),
         "position_file": position,
         "attente_estimee": _attente_estimee(esi_predit),
         "medecin_assigne": MEDECINS[medecin_id]["nom"],
@@ -1168,6 +1171,128 @@ async def api_demo_patient():
         "etape": "scan_ok",
     }
     return {"session_id": session_id, "nom": "DEMO", "prenom": "Patient", "age": 35, "sexe": 0}
+
+
+class DemoScenarioRequest(BaseModel):
+    scenario_id: int  # 1, 2, ou 3
+
+
+_DEMO_SCENARIOS = {
+    1: {
+        "nom": "DURAND", "prenom": "Michel", "age": 45, "sex": 1,
+        "symptom_text": "douleur thoracique sévère irradiant dans le bras gauche, sueurs froides, essoufflement",
+        "zones_corps": ["chest", "left_arm"],
+        "constantes": {"temperature": 37.2, "heart_rate": 128, "bp_systolic": 88, "bp_diastolic": 58, "spo2": 91.0, "respiratory_rate": 22, "glucose": 110},
+        "binaires": {"chest_pain": 1, "dyspnea": 1, "loss_of_consciousness": 0, "severe_bleeding": 0, "neurological_symptoms": 0, "abdominal_pain": 0, "fever": 0, "trauma": 0},
+        "titre": "Urgence cardiaque",
+        "description": "Homme 45 ans — douleur thoracique, FC 128, TA 88/58, SpO₂ 91 %",
+    },
+    2: {
+        "nom": "BENALI", "prenom": "Sara", "age": 30, "sex": 0,
+        "symptom_text": "fièvre depuis 2 jours, maux de tête, courbatures, fatigue intense",
+        "zones_corps": ["head"],
+        "constantes": {"temperature": 38.8, "heart_rate": 98, "bp_systolic": 118, "bp_diastolic": 76, "spo2": 97.0, "respiratory_rate": 18, "glucose": 85},
+        "binaires": {"chest_pain": 0, "dyspnea": 0, "loss_of_consciousness": 0, "severe_bleeding": 0, "neurological_symptoms": 0, "abdominal_pain": 0, "fever": 1, "trauma": 0},
+        "titre": "Fièvre modérée",
+        "description": "Femme 30 ans — fièvre 38.8 °C, maux de tête, courbatures",
+    },
+    3: {
+        "nom": "MARTIN", "prenom": "Léa", "age": 25, "sex": 0,
+        "symptom_text": "léger mal de tête depuis ce matin, légère fatigue, aucune fièvre",
+        "zones_corps": ["head"],
+        "constantes": {"temperature": 36.8, "heart_rate": 72, "bp_systolic": 118, "bp_diastolic": 74, "spo2": 99.0, "respiratory_rate": 15, "glucose": 88},
+        "binaires": {"chest_pain": 0, "dyspnea": 0, "loss_of_consciousness": 0, "severe_bleeding": 0, "neurological_symptoms": 0, "abdominal_pain": 0, "fever": 0, "trauma": 0},
+        "titre": "Consultation simple",
+        "description": "Femme 25 ans — céphalée légère, constantes normales",
+    },
+}
+
+
+@app.post("/api/demo/scenario")
+async def api_demo_scenario(body: DemoScenarioRequest):
+    """Lance un scénario de démonstration complet — crée la session, calcule l'ESI, insère en file."""
+    sc = _DEMO_SCENARIOS.get(body.scenario_id)
+    if not sc:
+        raise HTTPException(status_code=404, detail="Scénario inconnu")
+
+    session_id = f"DEMO{body.scenario_id}{str(uuid.uuid4())[:4].upper()}"
+    patients_session[session_id] = {
+        "session_id": session_id,
+        "nom": sc["nom"],
+        "prenom": sc["prenom"],
+        "age": sc["age"],
+        "sex": sc["sex"],
+        "symptom_text": sc["symptom_text"],
+        "zones_corps": sc["zones_corps"],
+        "heure_arrivee": datetime.now().strftime("%H:%M"),
+        "etape": "scan_ok",
+    }
+
+    constantes = sc["constantes"]
+    donnees_modele = {
+        "age": sc["age"],
+        "sex": sc["sex"],
+        "symptom_text": sc["symptom_text"],
+        **constantes,
+        **sc["binaires"],
+        "pain_score": 8 if sc["binaires"].get("chest_pain") else (2 if sc["binaires"].get("fever") else 1),
+    }
+
+    try:
+        resultat = predire_esi(donnees_modele)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur modèle : {e}")
+
+    esi_predit = resultat["esi_predit"]
+    medecin_id = _attribuer_medecin(sc["age"])
+    patient_id = f"PT-{session_id}"
+
+    patients_session[session_id].update({
+        "patient_id": patient_id,
+        "constantes": constantes,
+        "esi_predit": esi_predit,
+        "niveau_urgence": _libelle_urgence(esi_predit),
+        "confiance": resultat.get("confiance", 0),
+        "explications": resultat.get("explications", []),
+        "medecin_id": medecin_id,
+        "etape": "triage_ok",
+    })
+
+    gestionnaire_file.ajouter_patient(
+        patient_id=patient_id,
+        esi_predit=esi_predit,
+        age=sc["age"],
+        constantes=constantes,
+        binaires=sc["binaires"],
+    )
+    MEDECINS[medecin_id]["patients"].append(patient_id)
+    position = gestionnaire_file.get_position_patient(patient_id)
+
+    etat = _construire_etat_global()
+    await manager.broadcast_to("file_mise_a_jour", etat, ["salle", "medecin_M1", "medecin_M2"])
+    await manager.broadcast_to(
+        "nouveau_patient",
+        {"patient_id": patient_id, "prenom": sc["prenom"], "esi": esi_predit, "niveau_urgence": _libelle_urgence(esi_predit), "position": position, "attente_estimee": _attente_estimee(esi_predit), "medecin_id": medecin_id},
+        ["salle", f"medecin_{medecin_id}"],
+    )
+
+    return {
+        "statut": "succès",
+        "scenario_id": body.scenario_id,
+        "patient_id": patient_id,
+        "nom": sc["nom"],
+        "prenom": sc["prenom"],
+        "age": sc["age"],
+        "constantes": constantes,
+        "esi_predit": esi_predit,
+        "niveau_urgence": _libelle_urgence(esi_predit),
+        "confiance": resultat.get("confiance", 0),
+        "explications": resultat.get("explications", []),
+        "position_file": position,
+        "attente_estimee": _attente_estimee(esi_predit),
+        "medecin_assigne": MEDECINS[medecin_id]["nom"],
+        "regle_clinique": resultat.get("regle_clinique", False),
+    }
 
 
 @app.post("/api/admin/reset")

@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { creerWebSocket, envoyerCommande } from '../services/websocket'
 import { reinitialiserFile, getStats } from '../services/api'
+import BoutonPleinEcran from '../components/BoutonPleinEcran'
 import '../styles/kiosk.css'
 
 // ── Calcul temps d'attente depuis heure "HH:MM" ───────────────────────────────
@@ -228,6 +229,7 @@ export default function SalleAttentePage() {
           </span>
         </div>
         <div className="salle-header-droite">
+          <BoutonPleinEcran />
           <div className="salle-header-infos">
             <span className="salle-heure">{heureLive}</span>
             <span className={`salle-ws-badge salle-ws-badge--${wsEtat}`}>
