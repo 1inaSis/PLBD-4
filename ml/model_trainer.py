@@ -364,15 +364,24 @@ def sauvegarder_artefacts(modele, scaler, noms_features) -> None:
             pickle.dump({}, f)
         print(f"[WARN] Encodeur diagnostic par défaut sauvegardé → {CHEMIN_DIAGNOSTIC_ENCODER}")
 
+    print("\n[OK] MODELE SAUVEGARDE AVEC SUCCES")
+
 
 def sauvegarder(modele, scaler, noms_features) -> None:
     """Alias requis pour compatibilite avec le contrat projet."""
     sauvegarder_artefacts(modele, scaler, noms_features)
 
 
-import streamlit as st
+try:
+    import streamlit as st
+    def _st_cache(fn):
+        return st.cache_resource(show_spinner=False)(fn)
+except ImportError:
+    def _st_cache(fn):
+        return fn
 
-@st.cache_resource(show_spinner=False)
+
+@_st_cache
 def charger_modele():
     """Charge le modèle entraîné depuis le disque. Mis en cache pour Streamlit / Raspberry Pi."""
     with open(CHEMIN_MODELE, "rb") as f:
@@ -541,8 +550,15 @@ def main():
     print("=" * 60)
 
     # 1. Chargement et préparation
-    source = CHEMIN_DB_UNIFIE if os.path.exists(CHEMIN_DB_UNIFIE) else CHEMIN_DATA
-    df = charger_et_preparer_donnees(source)
+    print(f"\n[SOURCE] {CHEMIN_DATA}")
+    df_raw = pd.read_csv(CHEMIN_DATA)
+    print("\n[DISTRIBUTION ESI — donnees brutes]")
+    dist = df_raw["esi_level"].value_counts().sort_index()
+    for esi_niveau, count in dist.items():
+        barre = "|" * (count // 500)
+        print(f"  ESI {esi_niveau} : {count:>6} patients  {barre}")
+    print()
+    df = charger_et_preparer_donnees(CHEMIN_DATA)
 
     # 2. Construction des features
     print("[3/5] Construction de la matrice de features...")
@@ -582,3 +598,39 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    print("\n" + "=" * 60)
+    print("TESTS CAS LIMITES — predire_esi()")
+    print("=" * 60)
+
+    _cas_limites = [
+        {
+            "label": "CAS CRITIQUE (ESI 1 ou 2 attendu)",
+            "data": {
+                "chest_pain": 1, "pain_score": 10, "spo2": 85,
+                "bp_systolic": 80, "heart_rate": 130,
+            },
+        },
+        {
+            "label": "CAS MODERE (ESI 2 ou 3 attendu)",
+            "data": {
+                "fever": 1, "pain_score": 6, "heart_rate": 110,
+                "temperature": 38.5,
+            },
+        },
+        {
+            "label": "CAS LEGER (ESI 4 ou 5 attendu)",
+            "data": {
+                "pain_score": 2, "temperature": 37.0, "spo2": 98,
+                "heart_rate": 75,
+            },
+        },
+    ]
+
+    for _cas in _cas_limites:
+        print(f"\n{_cas['label']}")
+        print(f"  Donnees : {_cas['data']}")
+        _res = predire_esi(_cas["data"])
+        print(f"  -> ESI predit : {_res['esi_predit']} | Confiance : {_res['confiance']}% | {_res['diagnostic_probable']}")
+        _p = _res["probabilites"]
+        print("  -> Probabilites : " + " | ".join(f"ESI{k[-1]}={v}%" for k, v in _p.items()))
