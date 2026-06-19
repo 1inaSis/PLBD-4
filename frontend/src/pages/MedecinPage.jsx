@@ -44,39 +44,44 @@ const NLP_LABELS = {
 // Compteur toast
 let _toastId = 0
 
-// ── Bip doux pour nouveau message chat ────────────────────────────────────────
-function jouerBipChat() {
+// ── Audio via AudioContext partagé (initialisé après interaction utilisateur) ──
+function jouerBipChat(audioCtxRef) {
+  const ctx = audioCtxRef?.current
+  if (!ctx) return
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const osc  = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.type = 'sine'
-    osc.frequency.value = 440   // La3 — ton doux, différent des alertes ESI
-    gain.gain.setValueAtTime(0.12, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45)
-    osc.start(ctx.currentTime)
-    osc.stop(ctx.currentTime + 0.5)
-  } catch { /* AudioContext non disponible */ }
-}
-
-// ── Génère un bip via Web Audio API ──────────────────────────────────────────
-function jouerBip(nbFois = 1) {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    for (let i = 0; i < nbFois; i++) {
+    ctx.resume().then(() => {
       const osc  = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.connect(gain)
       gain.connect(ctx.destination)
       osc.type = 'sine'
-      osc.frequency.value = i % 2 === 0 ? 880 : 660
-      gain.gain.setValueAtTime(0.35, ctx.currentTime + i * 0.5)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.5 + 0.3)
-      osc.start(ctx.currentTime + i * 0.5)
-      osc.stop(ctx.currentTime + i * 0.5 + 0.4)
-    }
+      osc.frequency.value = 440
+      gain.gain.setValueAtTime(0.12, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45)
+      osc.start(ctx.currentTime)
+      osc.stop(ctx.currentTime + 0.5)
+    })
+  } catch { /* AudioContext non disponible */ }
+}
+
+function jouerBip(nbFois = 1, audioCtxRef) {
+  const ctx = audioCtxRef?.current
+  if (!ctx) return
+  try {
+    ctx.resume().then(() => {
+      for (let i = 0; i < nbFois; i++) {
+        const osc  = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.type = 'sine'
+        osc.frequency.value = i % 2 === 0 ? 880 : 660
+        gain.gain.setValueAtTime(0.35, ctx.currentTime + i * 0.5)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.5 + 0.3)
+        osc.start(ctx.currentTime + i * 0.5)
+        osc.stop(ctx.currentTime + i * 0.5 + 0.4)
+      }
+    })
   } catch { /* AudioContext non disponible */ }
 }
 
@@ -126,6 +131,10 @@ export default function MedecinPage() {
   const chatOuvertRef                     = useRef(false)
   const chatFinRef                        = useRef(null)
 
+  // ── Audio — initialisé après première interaction utilisateur ───────────────
+  const audioCtxRef                       = useRef(null)
+  const [sonDebloque, setSonDebloque]     = useState(false)
+
   const wsRef    = useRef(null)
   const pingRef  = useRef(null)
   const monteRef = useRef(true)
@@ -156,6 +165,25 @@ export default function MedecinPage() {
     }))
     setChatInput('')
   }
+
+  // ── Init AudioContext au premier clic/touch ────────────────────────────────
+  useEffect(() => {
+    const initAudio = () => {
+      if (audioCtxRef.current) return
+      try {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+        if (monteRef.current) setSonDebloque(true)
+      } catch {}
+      document.removeEventListener('click', initAudio)
+      document.removeEventListener('touchstart', initAudio)
+    }
+    document.addEventListener('click', initAudio)
+    document.addEventListener('touchstart', initAudio)
+    return () => {
+      document.removeEventListener('click', initAudio)
+      document.removeEventListener('touchstart', initAudio)
+    }
+  }, [])
 
   // Scroll vers le bas quand de nouveaux messages arrivent
   useEffect(() => {
@@ -225,7 +253,7 @@ export default function MedecinPage() {
             'nouveau',
           )
           if (sonActifRef.current && document.visibilityState === 'visible' && data.esi <= 2) {
-            jouerBip(data.esi === 1 ? 3 : 1)
+            jouerBip(data.esi === 1 ? 3 : 1, audioCtxRef)
           }
         }
         break
@@ -237,7 +265,7 @@ export default function MedecinPage() {
           return [...prev, data]
         })
         if (sonActifRef.current && document.visibilityState === 'visible') {
-          jouerBip(3)
+          jouerBip(3, audioCtxRef)
         }
         // Notification push si la page est en arrière-plan
         if (document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -253,7 +281,7 @@ export default function MedecinPage() {
       case 'message_medecin':
         setChatMessages(prev => [...prev.slice(-49), data])
         if (!chatOuvertRef.current) setChatNonLus(n => n + 1)
-        if (sonActifRef.current) jouerBipChat()
+        if (sonActifRef.current) jouerBipChat(audioCtxRef)
         break
 
       // Priorité modifiée manuellement → toast + reload
@@ -431,6 +459,26 @@ export default function MedecinPage() {
           >
             {sonActif ? '🔊 Son actif' : '🔇 Son coupé'}
           </button>
+          <button
+            onClick={() => {
+              if (!audioCtxRef.current) {
+                try {
+                  audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+                  setSonDebloque(true)
+                } catch {}
+              }
+              if (sonActif) jouerBip(1, audioCtxRef)
+            }}
+            title="Tester le son"
+            style={{
+              background: 'rgba(148,163,184,0.10)',
+              border: '1px solid rgba(148,163,184,0.2)',
+              borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+              color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600,
+            }}
+          >
+            🔊 Test
+          </button>
           <span className="medecin-nb-patients">
             {patients.length} patient{patients.length !== 1 ? 's' : ''} assigné{patients.length !== 1 ? 's' : ''}
           </span>
@@ -441,6 +489,13 @@ export default function MedecinPage() {
           </span>
         </div>
       </header>
+
+      {/* ── Hint activation son ──────────────────────────────────── */}
+      {!sonDebloque && (
+        <div className="medecin-audio-hint" role="status" aria-live="polite">
+          🔈 Cliquez n'importe où pour activer le son des alertes
+        </div>
+      )}
 
       {/* ── Alertes critiques — banner modal persistant ──────────── */}
       {alertesCritiques.map(alerte => (

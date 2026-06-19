@@ -45,12 +45,6 @@ function simulerSpo2() {
   }
 }
 
-function simulerTension() {
-  const sys = Math.round(110 + Math.random() * 30)
-  const dia = Math.round(sys * (0.55 + Math.random() * 0.13))
-  return { bp_systolic: sys, bp_diastolic: dia }
-}
-
 // ── 3 étapes de mesure ────────────────────────────────────────────────────────
 const ETAPES = [
   {
@@ -71,28 +65,27 @@ const ETAPES = [
     typeMesure:    'spo2',
     simulee:       true,
     simulerValeurs: simulerSpo2,
-    messageSimule: 'const_spo2_sim',
+    messageSimule: 'const_fc_sim',
     double:        true,
     label:         'const_spo2_label',
     icone:         '🫁',
     illustration:  IllustrationSpo2,
     valeurs: [
-      { cle: 'spo2',       label: 'bio_spo2',    unite: '%',   formatter: (v) => Number(v).toFixed(1) },
-      { cle: 'heart_rate', label: 'const_fc_label', unite: 'bpm', formatter: (v) => Math.round(Number(v)) },
+      { cle: 'spo2',       label: 'bio_spo2',       unite: '%',   formatter: (v) => Number(v).toFixed(1) },
+      { cle: 'heart_rate', label: 'const_fc_label',  unite: 'bpm', formatter: (v) => Math.round(Number(v)), simule: true },
     ],
   },
 
   {
-    cle:           'bp_systolic',
-    typeMesure:    'tension',
-    simulee:       true,
-    simulerValeurs: simulerTension,
-    messageSimule: 'const_bp_sim',
-    label:         'const_bp_label',
-    unite:         'mmHg',
-    icone:         '💉',
-    illustration:  IllustrationTension,
-    formatter:     (v, all) => `${Math.round(v)} / ${Math.round(all?.bp_diastolic ?? 0)}`,
+    cle:         'bp_systolic',
+    typeMesure:  'tension',
+    manuelle:    true,
+    instruction: 'const_bp_guide',
+    label:       'const_bp_label',
+    unite:       'mmHg',
+    icone:       '💉',
+    illustration: IllustrationTension,
+    formatter:   (v, all) => `${Math.round(v)} / ${Math.round(all?.bp_diastolic ?? 0)}`,
   },
 ]
 
@@ -244,7 +237,7 @@ export default function ConstantesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])
 
-  // ── Étapes simulées : passage auto en 5s une fois COMPLET ────────────────────
+  // ── Étapes simulées : passage auto en 3s une fois COMPLET ────────────────────
   useEffect(() => {
     if (etat !== ETAT.COMPLET || !etapeActuelle.simulee) return
     const timer = setTimeout(() => {
@@ -254,7 +247,7 @@ export default function ConstantesPage() {
       } else {
         setPhase(PHASE.RECAP)
       }
-    }, 5000)
+    }, 3000)
     return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])
@@ -277,6 +270,12 @@ export default function ConstantesPage() {
     setMessageCapture(null)
     setCompteRebours(5)
     setEtat(ETAT.COMPTE)
+  }
+
+  // ── Valider tension saisie manuelle ─────────────────────────────────────────
+  const validerTensionManuelle = ({ bp_systolic, bp_diastolic }) => {
+    setConstantesLocal(prev => ({ ...prev, bp_systolic, bp_diastolic }))
+    setEtat(ETAT.COMPLET)
   }
 
   // ── Passer à l'étape suivante ou au récap ───────────────────────────────────
@@ -333,6 +332,7 @@ export default function ConstantesPage() {
           onLancerMesure={lancerMesure}
           onEtapeSuivante={etapeSuivante}
           onReessayer={reessayer}
+          onValiderManuel={validerTensionManuelle}
           onRetour={() => navigate('/questionnaire')}
         />
       )}
@@ -352,10 +352,11 @@ export default function ConstantesPage() {
 function VueMesure({
   etape, indexEtape, total, etat, compte, valeur, constantes,
   erreur, messageCapture,
-  onLancerMesure, onEtapeSuivante, onReessayer, onRetour,
+  onLancerMesure, onEtapeSuivante, onReessayer, onValiderManuel, onRetour,
 }) {
   const { t } = useTranslation()
   const estSimulee    = !!etape.simulee
+  const estManuelle   = !!etape.manuelle
   const couleur       = evaluerCouleur(etape.cle, valeur)
   const affichee      = !etape.double && valeur != null
     ? etape.formatter(valeur, constantes)
@@ -383,8 +384,8 @@ function VueMesure({
           <h2 className="kiosk-titre-sm">{t(etape.label)}</h2>
         </div>
 
-        {/* PRET : illustration + instruction + bouton Mesurer (étapes réelles seulement) */}
-        {etat === ETAT.PRET && !estSimulee && (
+        {/* PRET : illustration + instruction + bouton Mesurer (température) */}
+        {etat === ETAT.PRET && !estSimulee && !estManuelle && (
           <>
             {Illustration && (
               <div className="illustration-wrapper">
@@ -396,6 +397,15 @@ function VueMesure({
               {t('const_mesurer')}
             </button>
           </>
+        )}
+
+        {/* PRET : saisie manuelle tension artérielle */}
+        {etat === ETAT.PRET && estManuelle && (
+          <SaisieTension
+            instruction={t(etape.instruction ?? 'const_bp_guide')}
+            onValider={onValiderManuel}
+            t={t}
+          />
         )}
 
         {/* COMPTE : compte à rebours 5→1 */}
@@ -503,7 +513,7 @@ function ValeursDouble({ valeurs, constantes, avecCouleur = false }) {
   const { t } = useTranslation()
   return (
     <div className="seq-double-valeurs">
-      {valeurs.map(({ cle, label, unite, formatter }) => {
+      {valeurs.map(({ cle, label, unite, formatter, simule }) => {
         const v       = constantes?.[cle]
         const fmt     = v != null ? formatter(v) : '…'
         const couleur = avecCouleur ? evaluerCouleur(cle, v) : null
@@ -515,6 +525,12 @@ function ValeursDouble({ valeurs, constantes, avecCouleur = false }) {
               {fmt}
               <span className="seq-unite">{unite}</span>
             </div>
+            {simule && (
+              <div className="bio-badge bio-badge--gris" style={{ alignSelf: 'center', marginTop: 4 }}>
+                <span className="bio-badge-dot" />
+                {t('sim_badge')}
+              </div>
+            )}
           </div>
         )
       })}
@@ -559,6 +575,84 @@ function VueRecap({ constantes, onContinuer, onRecommencer }) {
         </button>
       </div>
 
+    </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Saisie manuelle de la tension artérielle
+// ═════════════════════════════════════════════════════════════════════════════
+function evaluerCouleurTension(sys, dia) {
+  if (sys > 160 || sys < 90 || dia > 100 || dia < 60) return 'rouge'
+  if (sys >= 130 || dia >= 85) return 'orange'
+  return 'vert'
+}
+
+function SaisieTension({ instruction, onValider, t }) {
+  const [sys, setSys] = useState('')
+  const [dia, setDia] = useState('')
+
+  const sysN = Number(sys)
+  const diaN = Number(dia)
+  const peutValider = sys !== '' && dia !== '' && sysN > 0 && diaN > 0
+  const couleur = peutValider ? evaluerCouleurTension(sysN, diaN) : null
+
+  const LIBELLES_TENSION = { vert: 'Normal', orange: 'Attention', rouge: 'Critique' }
+
+  return (
+    <div className="tension-manuelle">
+      <p className="kiosk-soustitre">{instruction}</p>
+
+      <div className="tension-inputs">
+        <div className="tension-input-groupe">
+          <label className="tension-input-label" htmlFor="tension-sys">
+            Systolique (mmHg)
+          </label>
+          <input
+            id="tension-sys"
+            type="number"
+            className="tension-input"
+            placeholder="120"
+            value={sys}
+            onChange={e => setSys(e.target.value)}
+            min={40} max={300}
+            inputMode="numeric"
+          />
+        </div>
+
+        <span className="tension-separateur">/</span>
+
+        <div className="tension-input-groupe">
+          <label className="tension-input-label" htmlFor="tension-dia">
+            Diastolique (mmHg)
+          </label>
+          <input
+            id="tension-dia"
+            type="number"
+            className="tension-input"
+            placeholder="80"
+            value={dia}
+            onChange={e => setDia(e.target.value)}
+            min={20} max={200}
+            inputMode="numeric"
+          />
+        </div>
+      </div>
+
+      {couleur && (
+        <div className={`bio-badge bio-badge--${couleur}`} style={{ alignSelf: 'center' }}>
+          <span className="bio-badge-dot" />
+          {LIBELLES_TENSION[couleur]}
+        </div>
+      )}
+
+      <button
+        className="kiosk-btn kiosk-btn--primary"
+        disabled={!peutValider}
+        onClick={() => onValider({ bp_systolic: sysN, bp_diastolic: diaN })}
+      >
+        {t('const_bp_valider')}
+      </button>
     </div>
   )
 }

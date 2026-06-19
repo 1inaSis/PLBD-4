@@ -2699,3 +2699,75 @@
 }
 
 .medecin-chat-envoyer:hover { background: rgba(20,184,166,0.34); }
+
+/* ── Hint activation son (médecin) ──────────────────────────────────────── */
+.medecin-audio-hint {
+  text-align: center;
+  padding: 6px 20px;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.38);
+  background: rgba(148,163,184,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  letter-spacing: 0.02em;
+}
+
+/* ── Saisie manuelle tension artérielle ──────────────────────────────────── */
+.tension-manuelle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.tension-inputs {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.tension-input-groupe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tension-input-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+.tension-input {
+  width: 120px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.06);
+  border: 2px solid rgba(148,163,184,0.2);
+  border-radius: 14px;
+  color: #e2e8f0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+  -moz-appearance: textfield;
+}
+
+.tension-input::-webkit-outer-spin-button,
+.tension-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.tension-input:focus { border-color: rgba(20,184,166,0.55); }
+.tension-input::placeholder { color: rgba(255,255,255,0.2); font-size: 1.2rem; }
+
+.tension-separateur {
+  font-size: 2.2rem;
+  font-weight: 300;
+  color: rgba(255,255,255,0.3);
+  line-height: 1;
+  padding-bottom: 12px;
+}

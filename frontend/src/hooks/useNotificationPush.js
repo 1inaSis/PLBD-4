@@ -17,6 +17,12 @@ export function useNotificationPush() {
       navigator.serviceWorker.register('/sw.js').catch(() => {})
     }
     setPermission(Notification.permission)
+    // Demande automatique si pas encore décidé (évite d'oublier)
+    if (Notification.permission === 'default') {
+      Notification.requestPermission()
+        .then(perm => setPermission(perm))
+        .catch(() => {})
+    }
   }, [supported])
 
   const demander = useCallback(async () => {

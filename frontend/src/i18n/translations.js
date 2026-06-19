@@ -98,6 +98,11 @@ export const TRANSLATIONS = {
     mic_dicter:    'Appuyez pour dicter',
     mic_ecoute:    'Parlez maintenant…',
     mic_arret:     'Arrêter la dictée',
+    // Tension manuelle + FC simulée
+    const_bp_guide:   'Mesurez avec le tensiomètre manuel et saisissez les valeurs',
+    const_bp_valider: 'Valider la tension',
+    const_fc_sim:     'Fréquence cardiaque simulée — capteur MAX30102 en attente',
+    sim_badge:        'Simulé',
   },
 
   en: {
@@ -187,6 +192,10 @@ export const TRANSLATIONS = {
     mic_dicter:    'Tap to dictate',
     mic_ecoute:    'Speak now…',
     mic_arret:     'Stop dictation',
+    const_bp_guide:   'Measure with the manual blood pressure cuff and enter the values',
+    const_bp_valider: 'Confirm blood pressure',
+    const_fc_sim:     'Simulated heart rate — MAX30102 sensor pending',
+    sim_badge:        'Simulated',
   },
 
   ar: {
@@ -276,5 +285,9 @@ export const TRANSLATIONS = {
     mic_dicter:    'اضغط للإملاء',
     mic_ecoute:    'تحدث الآن…',
     mic_arret:     'إيقاف الإملاء',
+    const_bp_guide:   'قس بجهاز ضغط الدم اليدوي وأدخل القيم',
+    const_bp_valider: 'تأكيد ضغط الدم',
+    const_fc_sim:     'معدل ضربات القلب محاكى — المستشعر في الانتظار',
+    sim_badge:        'محاكى',
   },
 }
