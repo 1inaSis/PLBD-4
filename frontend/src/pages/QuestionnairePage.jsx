@@ -3,7 +3,7 @@
 // et décrit librement ses symptômes. POST /api/symptomes envoie
 // le texte + les zones ; le NLP extrait les features côté serveur.
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import { soumettreSymptomes, abandonnerSession } from '../services/api'
@@ -32,6 +32,38 @@ export default function QuestionnairePage() {
   const [erreur, setErreur]               = useState(null)
   const [urgenceDetectee, setUrgenceDetectee] = useState(false)
   const [sortie, setSortie]               = useState(false)
+
+  // ── Reconnaissance vocale ─────────────────────────────────────────────────
+  const [ecouteVocale, setEcouteVocale]   = useState(false)
+  const reconnaissanceRef                 = useRef(null)
+  const supporteVocal = typeof window !== 'undefined' &&
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+  const LANG_VOCAL = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
+
+  const basculerDictee = () => {
+    if (!ecouteVocale) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+      const reco = new SR()
+      reco.lang = LANG_VOCAL[langue] ?? 'fr-FR'
+      reco.continuous = true
+      reco.interimResults = true
+      reco.onresult = (e) => {
+        let finals = ''
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) finals += e.results[i][0].transcript + ' '
+        }
+        if (finals.trim()) setTexteSymptome(prev => (prev ? prev.trimEnd() + ' ' : '') + finals.trim())
+      }
+      reco.onend = () => { reconnaissanceRef.current = null; setEcouteVocale(false) }
+      reco.onerror = () => { reconnaissanceRef.current = null; setEcouteVocale(false) }
+      reco.start()
+      reconnaissanceRef.current = reco
+      setEcouteVocale(true)
+    } else {
+      reconnaissanceRef.current?.stop()
+      reconnaissanceRef.current = null
+    }
+  }
 
   const navigerVers = useCallback((path, opts) => {
     setSortie(true)
@@ -136,15 +168,28 @@ export default function QuestionnairePage() {
               <label className="symptome-label" htmlFor="symptome-texte">
                 {t('symptomes_label')} <span className="symptome-optionnel">{t('symptomes_opt')}</span>
               </label>
-              <textarea
-                id="symptome-texte"
-                className="symptome-input"
-                placeholder={t('symptomes_ph')}
-                value={texteSymptome}
-                onChange={e => setTexteSymptome(e.target.value)}
-                rows={4}
-                maxLength={500}
-              />
+              <div className="symptome-textarea-wrap">
+                <textarea
+                  id="symptome-texte"
+                  className="symptome-input"
+                  placeholder={ecouteVocale ? t('mic_ecoute') : t('symptomes_ph')}
+                  value={texteSymptome}
+                  onChange={e => setTexteSymptome(e.target.value)}
+                  rows={4}
+                  maxLength={500}
+                />
+                {supporteVocal && (
+                  <button
+                    type="button"
+                    className={`mic-btn${ecouteVocale ? ' mic-btn--actif' : ''}`}
+                    onClick={basculerDictee}
+                    title={ecouteVocale ? t('mic_arret') : t('mic_dicter')}
+                    aria-label={ecouteVocale ? t('mic_arret') : t('mic_dicter')}
+                  >
+                    {ecouteVocale ? '⏹' : '🎤'}
+                  </button>
+                )}
+              </div>
               <span className="symptome-compteur">{texteSymptome.length} / 500</span>
             </div>
 

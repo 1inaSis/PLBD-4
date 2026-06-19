@@ -13,6 +13,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { getPatientsMedecin, prendreEnCharge, getHistoriqueMedecin, getRapportPatient, modifierESI } from '../services/api'
 import { creerWebSocket, envoyerCommande } from '../services/websocket'
+import { useNotificationPush } from '../hooks/useNotificationPush'
 import BiometrieDisplay, { evaluerCouleur } from '../components/BiometrieDisplay'
 import { ZONES_MAP } from '../components/CorpsHumain'
 import BoutonPleinEcran from '../components/BoutonPleinEcran'
@@ -43,6 +44,23 @@ const NLP_LABELS = {
 // Compteur toast
 let _toastId = 0
 
+// ── Bip doux pour nouveau message chat ────────────────────────────────────────
+function jouerBipChat() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const osc  = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.type = 'sine'
+    osc.frequency.value = 440   // La3 — ton doux, différent des alertes ESI
+    gain.gain.setValueAtTime(0.12, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45)
+    osc.start(ctx.currentTime)
+    osc.stop(ctx.currentTime + 0.5)
+  } catch { /* AudioContext non disponible */ }
+}
+
 // ── Génère un bip via Web Audio API ──────────────────────────────────────────
 function jouerBip(nbFois = 1) {
   try {
@@ -65,6 +83,9 @@ function jouerBip(nbFois = 1) {
 // ═════════════════════════════════════════════════════════════════════════════
 export default function MedecinPage() {
   const { id: medecinId } = useParams()   // 'M1' ou 'M2'
+
+  // ── Notifications push ──────────────────────────────────────────────────────
+  const { permission: notifPermission, demander: demanderNotif } = useNotificationPush()
 
   // ── État principal ──────────────────────────────────────────────────────────
   const [medecin, setMedecin]             = useState(null)
@@ -97,6 +118,14 @@ export default function MedecinPage() {
   const [historique, setHistorique]       = useState([])
   const [chargHistorique, setChargH]      = useState(false)
 
+  // ── Chat inter-médecins ─────────────────────────────────────────────────────
+  const [chatOuvert, setChatOuvert]       = useState(false)
+  const [chatMessages, setChatMessages]   = useState([])
+  const [chatInput, setChatInput]         = useState('')
+  const [chatNonLus, setChatNonLus]       = useState(0)
+  const chatOuvertRef                     = useRef(false)
+  const chatFinRef                        = useRef(null)
+
   const wsRef    = useRef(null)
   const pingRef  = useRef(null)
   const monteRef = useRef(true)
@@ -106,6 +135,34 @@ export default function MedecinPage() {
     sonActifRef.current = val
     setSonActif(val)
   }
+
+  // ── Chat inter-médecins ─────────────────────────────────────────────────────
+  const autreMedecinId = medecinId === 'M1' ? 'M2' : 'M1'
+
+  const basculerChat = () => {
+    const v = !chatOuvertRef.current
+    chatOuvertRef.current = v
+    setChatOuvert(v)
+    if (v) setChatNonLus(0)
+  }
+
+  const envoyerMessageChat = () => {
+    const texte = chatInput.trim()
+    if (!texte || wsRef.current?.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({
+      action: 'message',
+      destinataire: autreMedecinId,
+      texte,
+    }))
+    setChatInput('')
+  }
+
+  // Scroll vers le bas quand de nouveaux messages arrivent
+  useEffect(() => {
+    if (chatOuvert && chatFinRef.current) {
+      chatFinRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [chatMessages, chatOuvert])
 
   // ── Chargement de la liste patients ────────────────────────────────────────
   const chargerPatients = useCallback(async () => {
@@ -182,6 +239,21 @@ export default function MedecinPage() {
         if (sonActifRef.current && document.visibilityState === 'visible') {
           jouerBip(3)
         }
+        // Notification push si la page est en arrière-plan
+        if (document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const titre = data.esi <= 1 ? '🚨 URGENCE ESI 1 — HealthGate' : '⚠️ Priorité ESI 2 — HealthGate'
+          const corps = data.esi <= 1
+            ? `Patient ${data.prenom} ${data.nom} nécessite une prise en charge immédiate`
+            : `${data.prenom} ${data.nom} en attente`
+          try { new Notification(titre, { body: corps, icon: '/favicon.ico', requireInteraction: true, tag: `alerte-${data.patient_id}` }) } catch {}
+        }
+        break
+
+      // Message inter-médecins
+      case 'message_medecin':
+        setChatMessages(prev => [...prev.slice(-49), data])
+        if (!chatOuvertRef.current) setChatNonLus(n => n + 1)
+        if (sonActifRef.current) jouerBipChat()
         break
 
       // Priorité modifiée manuellement → toast + reload
@@ -335,6 +407,19 @@ export default function MedecinPage() {
         <div className="medecin-header-droite">
           <BoutonPleinEcran />
           <button
+            onClick={notifPermission !== 'granted' ? demanderNotif : undefined}
+            title={notifPermission === 'granted' ? 'Notifications push activées' : 'Activer les notifications push (ESI 1/2)'}
+            style={{
+              background: notifPermission === 'granted' ? 'rgba(20,184,166,0.12)' : 'rgba(148,163,184,0.10)',
+              border: `1px solid ${notifPermission === 'granted' ? 'rgba(20,184,166,0.3)' : 'rgba(148,163,184,0.2)'}`,
+              borderRadius: 8, padding: '5px 12px',
+              cursor: notifPermission !== 'granted' ? 'pointer' : 'default',
+              color: notifPermission === 'granted' ? '#2dd4bf' : '#64748b', fontSize: '0.82rem', fontWeight: 600,
+            }}
+          >
+            {notifPermission === 'granted' ? '🔔 Notifs activées' : '🔕 Notifs désactivées'}
+          </button>
+          <button
             onClick={basculerSon}
             title={sonActif ? 'Couper le son' : 'Activer le son'}
             style={{
@@ -344,7 +429,7 @@ export default function MedecinPage() {
               color: sonActif ? '#2dd4bf' : '#64748b', fontSize: '0.82rem', fontWeight: 600,
             }}
           >
-            {sonActif ? '🔔 Son actif' : '🔇 Son coupé'}
+            {sonActif ? '🔊 Son actif' : '🔇 Son coupé'}
           </button>
           <span className="medecin-nb-patients">
             {patients.length} patient{patients.length !== 1 ? 's' : ''} assigné{patients.length !== 1 ? 's' : ''}
@@ -465,6 +550,74 @@ export default function MedecinPage() {
           ))}
         </div>
       )}
+
+      {/* ── Chat inter-médecins ──────────────────────────────────── */}
+      <div className="medecin-chat-container">
+        {chatOuvert && (
+          <div className="medecin-chat-panel">
+            <div className="medecin-chat-header">
+              <span className="medecin-chat-titre">
+                💬 Dr. {autreMedecinId === 'M1' ? 'El Amrani' : 'Bensouda'}
+              </span>
+              <button
+                className="medecin-chat-fermer"
+                onClick={basculerChat}
+                aria-label="Fermer le chat"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="medecin-chat-messages">
+              {chatMessages.length === 0 && (
+                <p className="medecin-chat-vide">Aucun message — démarrez la conversation</p>
+              )}
+              {chatMessages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`chat-bubble chat-bubble--${msg.de === medecinId ? 'moi' : 'autre'}`}
+                >
+                  <div className="chat-bubble-meta">
+                    <span className="chat-bubble-emetteur">Dr. {msg.de}</span>
+                    <span className="chat-bubble-heure">{msg.horodatage}</span>
+                  </div>
+                  <div className="chat-bubble-texte">{msg.texte}</div>
+                </div>
+              ))}
+              <div ref={chatFinRef} />
+            </div>
+
+            <div className="medecin-chat-saisie">
+              <input
+                type="text"
+                className="medecin-chat-input"
+                placeholder="Message…"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && envoyerMessageChat()}
+                maxLength={500}
+              />
+              <button
+                className="medecin-chat-envoyer"
+                onClick={envoyerMessageChat}
+              >
+                Envoyer
+              </button>
+            </div>
+          </div>
+        )}
+
+        <button
+          className="medecin-chat-toggle"
+          onClick={basculerChat}
+          aria-label={chatOuvert ? 'Fermer le chat' : 'Ouvrir le chat inter-médecins'}
+        >
+          💬
+          {chatNonLus > 0 && !chatOuvert && (
+            <span className="chat-badge">{chatNonLus}</span>
+          )}
+        </button>
+      </div>
 
     </div>
   )

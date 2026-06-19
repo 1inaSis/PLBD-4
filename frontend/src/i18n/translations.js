@@ -94,6 +94,10 @@ export const TRANSLATIONS = {
     bio_spo2:      'SpO₂',
     bio_fc:        'Fréq. cardiaque',
     bio_bp:        'Tension art.',
+    // Reconnaissance vocale
+    mic_dicter:    'Appuyez pour dicter',
+    mic_ecoute:    'Parlez maintenant…',
+    mic_arret:     'Arrêter la dictée',
   },
 
   en: {
@@ -180,6 +184,9 @@ export const TRANSLATIONS = {
     bio_spo2:      'SpO₂',
     bio_fc:        'Heart rate',
     bio_bp:        'Blood pressure',
+    mic_dicter:    'Tap to dictate',
+    mic_ecoute:    'Speak now…',
+    mic_arret:     'Stop dictation',
   },
 
   ar: {
@@ -266,5 +273,8 @@ export const TRANSLATIONS = {
     bio_spo2:      'SpO₂',
     bio_fc:        'معدل ضربات القلب',
     bio_bp:        'ضغط الدم',
+    mic_dicter:    'اضغط للإملاء',
+    mic_ecoute:    'تحدث الآن…',
+    mic_arret:     'إيقاف الإملاء',
   },
 }

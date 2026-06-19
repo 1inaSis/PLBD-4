@@ -1380,6 +1380,19 @@ async def websocket_endpoint(
                 await manager.send_one(ws, "pong", {"ts": datetime.now().isoformat()})
             elif action == "get_file":
                 await manager.send_one(ws, "file_mise_a_jour", _construire_etat_global())
+            elif action == "message" and group.startswith("medecin_"):
+                dest = msg.get("destinataire", "").strip()
+                texte = msg.get("texte", "").strip()
+                if dest and texte:
+                    expediteur = group.replace("medecin_", "", 1)
+                    payload = {
+                        "de": expediteur,
+                        "a": dest,
+                        "texte": texte,
+                        "horodatage": datetime.now().strftime("%H:%M"),
+                    }
+                    # Diffuser aux deux médecins (expéditeur et destinataire)
+                    await manager.broadcast_to("message_medecin", payload, [group, f"medecin_{dest}"])
 
     except WebSocketDisconnect:
         manager.disconnect(ws, group)
