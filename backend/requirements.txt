@@ -1,0 +1,30 @@
+# HealthGate — Dépendances Python (serveur FastAPI + ML + Arduino)
+# Projet HealthGate | Centrale Casablanca | PLBD-4 | 2025-2026
+#
+# Installation standard :
+#   pip install -r backend/requirements.txt
+#
+# Sur Raspberry Pi, ajouter ensuite :
+#   pip install pyserial RPi.GPIO
+
+# ── Serveur FastAPI ──────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+websockets>=12.0
+pydantic>=2.7.0
+
+# ── Machine Learning ─────────────────────────────────────────────────────────
+scikit-learn>=1.4.0
+pandas>=2.2.0
+numpy>=1.26.0
+
+# ── IA (scan CIN Groq Vision + questions adaptatives) ───────────────────────
+groq>=0.9.0
+requests>=2.31.0
+
+# ── Utilitaires ──────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── Arduino / Raspberry Pi (optionnel, ignorer l'erreur sur PC) ─────────────
+# pyserial>=3.5

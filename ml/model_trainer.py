@@ -384,6 +384,12 @@ except ImportError:
 @_st_cache
 def charger_modele():
     """Charge le modèle entraîné depuis le disque. Mis en cache pour Streamlit / Raspberry Pi."""
+    manquants = [p for p in (CHEMIN_MODELE, CHEMIN_SCALER, CHEMIN_FEATURES) if not os.path.exists(p)]
+    if manquants:
+        raise RuntimeError(
+            f"Fichiers modèle introuvables : {manquants}\n"
+            "Lancez d'abord : cd ml && python model_trainer.py"
+        )
     with open(CHEMIN_MODELE, "rb") as f:
         modele = pickle.load(f)
     with open(CHEMIN_SCALER, "rb") as f:

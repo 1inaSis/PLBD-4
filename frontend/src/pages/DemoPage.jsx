@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { postDemoScenario } from '../services/api'
+import '../styles/kiosk.css'
 import '../styles/demo.css'
 
 const SCENARIOS = [

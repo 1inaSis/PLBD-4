@@ -3453,3 +3453,48 @@ body {
 .kiosk-shell > *:not(:first-child):not(:last-child) {
   animation: fadeInUp 0.3s ease both;
 }
+
+/* ── will-change : promotion GPU pour les animations les plus lourdes ──────── */
+.kiosk-shell::before,
+.kiosk-shell::after,
+.salle-shell::before,
+.salle-shell::after { will-change: transform; }
+
+.salle-ticker-track { will-change: transform; }
+.salle-esi-badge--1 { will-change: transform, box-shadow; }
+.kiosk-btn--primary { will-change: transform, box-shadow; }
+
+/* ── Respect du paramètre système "réduire les animations" (Raspberry Pi) ── */
+@media (prefers-reduced-motion: reduce) {
+  /* Désactive toutes les animations infinies de fond */
+  .kiosk-shell::before,
+  .kiosk-shell::after,
+  .salle-shell::before,
+  .salle-shell::after { animation: none !important; }
+
+  /* Désactive les shimmer headers */
+  .salle-header,
+  .medecin-header,
+  .kiosk-shell > header { animation: none !important; }
+
+  /* Désactive le ticker défilant */
+  .salle-ticker-track { animation: none !important; }
+
+  /* Désactive la vague */
+  .salle-vague-svg { animation: none !important; }
+
+  /* Simplifie les animations ESI : uniquement opacité, pas de transform */
+  .salle-esi-badge--1 { animation: esi45-breathe 2s ease-in-out infinite !important; }
+  .salle-esi-badge--2,
+  .salle-esi-badge--3 { animation: esi45-breathe 3s ease-in-out infinite !important; }
+
+  /* Désactive le pulse indicateur étape */
+  .etape--active .etape-bulle { animation: none !important; }
+
+  /* Désactive l'alerte critique clignotante (réduit à couleur fixe) */
+  .salle-alerte-critique { animation: none !important; background: rgba(239,68,68,0.18) !important; }
+  .medecin-patient-card[data-esi="1"] { animation: none !important; }
+
+  /* Garde les animations one-shot (badge-appear, slide-in) */
+  .salle-ligne:not(.salle-ligne--entete) { animation: none !important; }
+}
