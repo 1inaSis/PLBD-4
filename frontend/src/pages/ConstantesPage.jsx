@@ -14,7 +14,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
-import { demarrerArduino, arreterArduino, mesurerConstante } from '../services/api'
+import { demarrerArduino, arreterArduino, mesurerConstante, abandonnerSession } from '../services/api'
 import IndicateurEtape from '../components/IndicateurEtape'
 import BiometrieDisplay, { evaluerCouleur, LIBELLES_COULEUR } from '../components/BiometrieDisplay'
 import {
@@ -22,6 +22,11 @@ import {
   IllustrationSpo2,
   IllustrationTension,
 } from '../components/IllustrationsGestes'
+import SelecteurLangue from '../components/SelecteurLangue'
+import GuideEtape from '../components/GuideEtape'
+import ModalInactivite from '../components/ModalInactivite'
+import { useTranslation } from '../hooks/useTranslation'
+import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
 const PRIORITE_COULEUR = { rouge: 5, orange: 4, jaune: 3, vert: 2, gris: 1 }
@@ -100,7 +105,13 @@ const ETAT  = { PRET: 'pret', COMPTE: 'compte', ATTENTE: 'attente', COMPLET: 'co
 // ═════════════════════════════════════════════════════════════════════════════
 export default function ConstantesPage() {
   const navigate = useNavigate()
-  const { patient, setConstantes } = usePatient()
+  const { patient, setConstantes, reinitialiser } = usePatient()
+  const { t, langue } = useTranslation()
+  const handleExpiration = useCallback(async () => {
+    if (patient.session_id) await abandonnerSession(patient.session_id)
+    reinitialiser(); navigate('/')
+  }, [patient.session_id, reinitialiser, navigate])
+  const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
 
   const [phase, setPhase]                = useState(PHASE.MESURE)
   const [indexEtape, setIndexEtape]      = useState(0)
@@ -296,8 +307,17 @@ export default function ConstantesPage() {
   }
 
   return (
-    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`}>
+    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={3} />
+      <SelecteurLangue />
+      <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
+      <GuideEtape
+        etape={3}
+        sousEtape={
+          etapeActuelle?.cle === 'temperature' ? 'temp' :
+          etapeActuelle?.cle === 'spo2'        ? 'spo2' : 'tension'
+        }
+      />
 
       {phase === PHASE.MESURE && (
         <VueMesure

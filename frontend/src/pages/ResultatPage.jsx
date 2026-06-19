@@ -5,6 +5,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import IndicateurEtape from '../components/IndicateurEtape'
+import SelecteurLangue from '../components/SelecteurLangue'
+import GuideEtape from '../components/GuideEtape'
+import ModalInactivite from '../components/ModalInactivite'
+import { useTranslation } from '../hooks/useTranslation'
+import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
 // ── Configuration des niveaux ESI ────────────────────────────────────────────
@@ -27,7 +32,12 @@ const COULEURS_ESI = {
 export default function ResultatPage() {
   const navigate  = useNavigate()
   const { patient, reinitialiser } = usePatient()
+  const { t, langue } = useTranslation()
   const [sortie, setSortie] = useState(false)
+
+  const { avertissement, compte, reset } = useInactivite({
+    onExpiration: () => { reinitialiser(); navigate('/') },
+  })
 
   const navigerVers = useCallback((path, opts) => {
     setSortie(true)
@@ -59,15 +69,18 @@ export default function ResultatPage() {
   }
 
   return (
-    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`}>
+    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={5} />
+      <SelecteurLangue />
+      <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
+      <GuideEtape etape={5} />
 
       <div className="kiosk-center">
         <div className="resultat-carte kiosk-card">
 
           {/* Ticket numéroté */}
           <div className="resultat-ticket-wrapper">
-            <span className="eyebrow">Votre ticket</span>
+            <span className="eyebrow">{t('votre_ticket')}</span>
             <span className="resultat-ticket">{numeroTicket}</span>
           </div>
 
@@ -98,31 +111,29 @@ export default function ResultatPage() {
           {/* Méta-informations : file / attente / médecin */}
           <div className="resultat-meta">
             <div className="resultat-meta-item">
-              <span className="resultat-meta-label">Position en file</span>
+              <span className="resultat-meta-label">{t('position_file')}</span>
               <span className="resultat-meta-valeur">{positionFile}</span>
             </div>
             <div className="resultat-meta-item">
-              <span className="resultat-meta-label">Temps d'attente</span>
+              <span className="resultat-meta-label">{t('temps_attente')}</span>
               <span className="resultat-meta-valeur">{attente}</span>
             </div>
             {medecin && (
               <div className="resultat-meta-item">
-                <span className="resultat-meta-label">Médecin assigné</span>
+                <span className="resultat-meta-label">{t('medecin_assigne')}</span>
                 <span className="resultat-meta-valeur">{medecin}</span>
               </div>
             )}
             {confiance != null && (
               <div className="resultat-meta-item">
-                <span className="resultat-meta-label">Fiabilité IA</span>
+                <span className="resultat-meta-label">{t('fiabilite_ia')}</span>
                 <span className="resultat-meta-valeur">{confiance} %</span>
               </div>
             )}
           </div>
 
           {/* Message de guidage */}
-          <div className="resultat-instruction">
-            Veuillez prendre place en salle d'attente. Un soignant vous appellera par votre prénom.
-          </div>
+          <div className="resultat-instruction">{t('instruction_att')}</div>
 
           {/* Bouton nouvelle consultation */}
           <div className="kiosk-actions">
@@ -130,7 +141,7 @@ export default function ResultatPage() {
               className="kiosk-btn kiosk-btn--secondary"
               onClick={nouvelleConsultation}
             >
-              Nouvelle consultation ↩
+              {t('nvlle_consult')}
             </button>
           </div>
 

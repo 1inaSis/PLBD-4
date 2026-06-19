@@ -6,14 +6,25 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
-import { soumettreSymptomes } from '../services/api'
+import { soumettreSymptomes, abandonnerSession } from '../services/api'
 import IndicateurEtape from '../components/IndicateurEtape'
 import CorpsHumain, { ZONES_MAP } from '../components/CorpsHumain'
+import SelecteurLangue from '../components/SelecteurLangue'
+import GuideEtape from '../components/GuideEtape'
+import ModalInactivite from '../components/ModalInactivite'
+import { useTranslation } from '../hooks/useTranslation'
+import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
 export default function QuestionnairePage() {
   const navigate = useNavigate()
-  const { patient, setSymptomes } = usePatient()
+  const { patient, setSymptomes, reinitialiser } = usePatient()
+  const { t, langue } = useTranslation()
+  const handleExpiration = useCallback(async () => {
+    if (patient.session_id) await abandonnerSession(patient.session_id)
+    reinitialiser(); navigate('/')
+  }, [patient.session_id, reinitialiser, navigate])
+  const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
 
   const [zonesSelectionnees, setZonesSelectionnees] = useState([])
   const [texteSymptome, setTexteSymptome] = useState('')
@@ -72,8 +83,11 @@ export default function QuestionnairePage() {
   }
 
   return (
-    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`}>
+    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={2} />
+      <SelecteurLangue />
+      <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
+      <GuideEtape etape={2} />
 
       <div className="questionnaire-layout">
 
@@ -90,7 +104,7 @@ export default function QuestionnairePage() {
           <div className="kiosk-card">
             <span className="eyebrow">Étape 2 / 5 · Symptômes</span>
             <h2 className="kiosk-titre-sm">
-              {patient.prenom ? `Où avez-vous mal, ${patient.prenom} ?` : 'Où avez-vous mal ?'}
+              {patient.prenom ? `${t('ou_mal').replace('?', ',')} ${patient.prenom} ?` : t('ou_mal')}
             </h2>
 
             {/* Chips des zones sélectionnées */}
@@ -120,12 +134,12 @@ export default function QuestionnairePage() {
             {/* Champ de description libre */}
             <div className="symptome-groupe">
               <label className="symptome-label" htmlFor="symptome-texte">
-                Décrivez vos symptômes <span className="symptome-optionnel">(optionnel si zones sélectionnées)</span>
+                {t('symptomes_label')} <span className="symptome-optionnel">{t('symptomes_opt')}</span>
               </label>
               <textarea
                 id="symptome-texte"
                 className="symptome-input"
-                placeholder="Ex : j'ai très mal à la poitrine depuis ce matin, j'ai du mal à respirer…"
+                placeholder={t('symptomes_ph')}
                 value={texteSymptome}
                 onChange={e => setTexteSymptome(e.target.value)}
                 rows={4}
@@ -151,14 +165,14 @@ export default function QuestionnairePage() {
                 onClick={continuer}
                 disabled={!peutContinuer || enChargement}
               >
-                {enChargement ? 'Envoi en cours…' : 'Continuer →'}
+                {enChargement ? '…' : t('continuer')}
               </button>
               <button
                 className="kiosk-btn kiosk-btn--secondary"
                 onClick={() => navigate('/')}
                 disabled={enChargement}
               >
-                ← Retour
+                {t('retour')}
               </button>
             </div>
           </div>

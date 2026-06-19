@@ -377,6 +377,7 @@ def _construire_rapport(patient_id: str) -> dict:
         "score_priorite": round(en_file.score, 1) if en_file else "?",
         "temps_attente_min": round(en_file.temps_attente_minutes(), 1) if en_file else "?",
         "medecin_assigne": MEDECINS.get(session.get("medecin_id", ""), {}).get("nom", "?"),
+        "historique_esi": session.get("historique_esi", []),
         "horodatage_rapport": datetime.now().strftime("%d/%m/%Y %H:%M"),
     }
 
@@ -396,6 +397,11 @@ def _get_session(session_id: str) -> dict:
 class MesureRequest(BaseModel):
     type: str                        # "temperature" | "spo2" | "tension"
     session_id: Optional[str] = None
+
+
+class ESIOverrideRequest(BaseModel):
+    nouveau_esi: int
+    raison: str = ""
 
 
 class QuestionSuivanteRequest(BaseModel):
@@ -1090,6 +1096,43 @@ async def api_degradation(body: DegradationRequest):
     )
 
     return {"statut": "succès", "message": "Dégradation enregistrée et diffusée"}
+
+
+@app.put("/api/patient/{patient_id}/esi")
+async def api_modifier_esi(patient_id: str, body: ESIOverrideRequest):
+    session_id = patient_id.replace("PT-", "", 1)
+    if session_id not in patients_session:
+        raise HTTPException(status_code=404, detail="Patient non trouvé")
+
+    session = patients_session[session_id]
+    ancien_esi = session.get("esi_predit", "?")
+
+    if not gestionnaire_file.signaler_degradation(patient_id, {}, body.nouveau_esi):
+        raise HTTPException(status_code=404, detail="Patient non trouvé dans la file")
+
+    session["esi_predit"] = body.nouveau_esi
+    session["niveau_urgence"] = _libelle_urgence(body.nouveau_esi)
+    session.setdefault("historique_esi", []).append({
+        "ancien_esi": ancien_esi,
+        "nouvel_esi": body.nouveau_esi,
+        "raison": body.raison,
+        "heure": datetime.now().strftime("%H:%M"),
+    })
+
+    etat = _construire_etat_global()
+    await manager.broadcast_to("file_mise_a_jour", etat, ["salle", "medecin_M1", "medecin_M2"])
+    await manager.broadcast_to(
+        "priorite_modifiee",
+        {
+            "patient_id": patient_id,
+            "nom": session.get("nom", ""),
+            "ancien_esi": ancien_esi,
+            "nouvel_esi": body.nouveau_esi,
+            "raison": body.raison,
+        },
+        ["salle", "medecin_M1", "medecin_M2"],
+    )
+    return {"statut": "succès", "ancien_esi": ancien_esi, "nouvel_esi": body.nouveau_esi}
 
 
 # ── Statistiques temps réel ──────────────────────────────────────────────────

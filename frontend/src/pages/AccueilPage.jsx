@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
-import { scannerCIN, saisirManuel, demarrerDemo } from '../services/api'
+import { scannerCIN, saisirManuel, demarrerDemo, abandonnerSession } from '../services/api'
 import IndicateurEtape from '../components/IndicateurEtape'
 import ConfirmationPatient from '../components/ConfirmationPatient'
 import { IllustrationScanCIN } from '../components/IllustrationsGestes'
+import SelecteurLangue from '../components/SelecteurLangue'
+import GuideEtape from '../components/GuideEtape'
+import ModalInactivite from '../components/ModalInactivite'
+import { useTranslation } from '../hooks/useTranslation'
+import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
 const VUE = {
@@ -17,13 +22,22 @@ const VUE = {
 
 export default function AccueilPage() {
   const navigate = useNavigate()
-  const { setIdentite, connecterBorne, reinitialiser } = usePatient()
+  const { setIdentite, connecterBorne, reinitialiser, patient } = usePatient()
+  const { t, langue } = useTranslation()
 
   const [vue, setVue]                   = useState(VUE.ACCUEIL)
   const [donneesScan, setDonneesScan]   = useState(null)
   const [erreur, setErreur]             = useState(null)
   const [wsConnecte, setWsConnecte]     = useState(false)
   const [prenomBienvenue, setPrenomBienvenue] = useState('')
+
+  // Inactivité
+  const handleExpiration = useCallback(async () => {
+    if (patient.session_id) await abandonnerSession(patient.session_id)
+    reinitialiser()
+    navigate('/')
+  }, [patient.session_id, reinitialiser, navigate])
+  const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
 
   // Session créée côté backend même si OCR incomplet
   const [sessionManuelId, setSessionManuelId] = useState(null)
@@ -160,8 +174,10 @@ export default function AccueilPage() {
   }
 
   return (
-    <div className="kiosk-shell">
+    <div className="kiosk-shell" dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={1} />
+      <SelecteurLangue />
+      <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
 
       <div className={`ws-badge ${wsConnecte ? 'ws-badge--ok' : 'ws-badge--off'}`}>
         {wsConnecte ? '● Connecté' : '○ Hors ligne'}
@@ -171,12 +187,10 @@ export default function AccueilPage() {
       {vue === VUE.ACCUEIL && (
         <div className="kiosk-center">
           <div className="kiosk-card">
-            <span className="eyebrow">HealthGate · Urgences</span>
-            <h1 className="kiosk-titre">Bienvenue</h1>
-            <p className="kiosk-soustitre">
-              Pour commencer votre prise en charge, veuillez scanner votre carte
-              d'identité nationale.
-            </p>
+            <span className="eyebrow">{t('titre_app')}</span>
+            <h1 className="kiosk-titre">{t('bienvenue')}</h1>
+            <p className="kiosk-soustitre">{t('sous_titre')}</p>
+            <GuideEtape etape={1} />
 
             <div className="illustration-wrapper">
               <IllustrationScanCIN />
@@ -191,14 +205,14 @@ export default function AccueilPage() {
                 <rect x="2" y="5" width="20" height="14" rx="2" />
                 <path d="M2 10h20" />
               </svg>
-              Scanner ma carte d'identité
+              {t('scanner_btn')}
             </button>
 
             <button
               className="kiosk-btn kiosk-btn--secondary"
               onClick={() => { setFormulaire({ nom: '', prenom: '', date_naissance: '' }); setSessionManuelId(null); setVue(VUE.FORMULAIRE) }}
             >
-              Saisie manuelle
+              {t('saisie_manuelle')}
             </button>
 
             <button
@@ -206,7 +220,7 @@ export default function AccueilPage() {
               onClick={lancerDemo}
               style={{ marginTop: 8, opacity: 0.6, fontSize: '0.85em' }}
             >
-              Mode Démo
+              {t('mode_demo')}
             </button>
           </div>
         </div>
@@ -221,10 +235,8 @@ export default function AccueilPage() {
               Caméra active
             </div>
             <div className="kiosk-spinner" aria-label="Chargement" />
-            <h2 className="kiosk-titre-sm">Scan en cours…</h2>
-            <p className="kiosk-soustitre">
-              Veuillez maintenir votre carte face au lecteur.
-            </p>
+            <h2 className="kiosk-titre-sm">{t('scan_en_cours')}</h2>
+            <p className="kiosk-soustitre">{t('scan_instruction')}</p>
           </div>
         </div>
       )}
@@ -233,11 +245,8 @@ export default function AccueilPage() {
       {vue === VUE.FORMULAIRE && (
         <div className="kiosk-center">
           <div className="kiosk-card">
-            <span className="eyebrow">Saisie manuelle</span>
-            <h2 className="kiosk-titre-sm">Entrez vos informations</h2>
-            <p className="kiosk-soustitre">
-              Le scanner n'a pas pu lire votre carte. Veuillez renseigner vos informations manuellement.
-            </p>
+            <span className="eyebrow">{t('saisie_manuelle')}</span>
+            <h2 className="kiosk-titre-sm">{t('bienvenue')}</h2>
 
             {erreurForm && (
               <div className="kiosk-alerte" role="alert">{erreurForm}</div>
@@ -245,13 +254,13 @@ export default function AccueilPage() {
 
             <div className="cin-form">
               <div className="cin-field">
-                <label className="cin-label" htmlFor="cin-nom">Nom</label>
+                <label className="cin-label" htmlFor="cin-nom">{t('nom')}</label>
                 <input
                   id="cin-nom"
                   className="cin-input"
                   name="nom"
                   type="text"
-                  placeholder="Votre nom de famille"
+                  placeholder={t('nom')}
                   value={formulaire.nom}
                   onChange={changerChamp}
                   autoComplete="family-name"
@@ -259,13 +268,13 @@ export default function AccueilPage() {
               </div>
 
               <div className="cin-field">
-                <label className="cin-label" htmlFor="cin-prenom">Prénom</label>
+                <label className="cin-label" htmlFor="cin-prenom">{t('prenom')}</label>
                 <input
                   id="cin-prenom"
                   className="cin-input"
                   name="prenom"
                   type="text"
-                  placeholder="Votre prénom"
+                  placeholder={t('prenom')}
                   value={formulaire.prenom}
                   onChange={changerChamp}
                   autoComplete="given-name"
@@ -273,7 +282,7 @@ export default function AccueilPage() {
               </div>
 
               <div className="cin-field">
-                <label className="cin-label" htmlFor="cin-ddn">Date de naissance</label>
+                <label className="cin-label" htmlFor="cin-ddn">{t('date_naissance')}</label>
                 <input
                   id="cin-ddn"
                   className="cin-input"
@@ -294,10 +303,10 @@ export default function AccueilPage() {
                 onClick={validerManuel}
                 disabled={enSoumission}
               >
-                {enSoumission ? 'Validation…' : 'Valider et continuer →'}
+                {enSoumission ? '…' : t('valider')}
               </button>
               <button className="kiosk-btn kiosk-btn--secondary" onClick={() => setVue(VUE.ACCUEIL)}>
-                ↩ Retour — Réessayer le scan
+                {t('retour_scan')}
               </button>
             </div>
           </div>
@@ -319,11 +328,9 @@ export default function AccueilPage() {
           <div className="kiosk-card kiosk-card--centree" style={{ textAlign: 'center' }}>
             <span style={{ fontSize: '3rem' }}>👋</span>
             <h2 className="kiosk-titre-sm" style={{ marginTop: 12 }}>
-              Bonjour {prenomBienvenue} !
+              {t('bonjour')} {prenomBienvenue} !
             </h2>
-            <p className="kiosk-soustitre">
-              Nous allons maintenant évaluer votre état de santé.
-            </p>
+            <p className="kiosk-soustitre">{t('evaluation')}</p>
             <div className="kiosk-spinner" style={{ marginTop: 16 }} aria-label="Chargement" />
           </div>
         </div>

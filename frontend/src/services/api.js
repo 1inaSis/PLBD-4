@@ -125,6 +125,13 @@ export function reinitialiserFile() {
   return requete('/admin/reset', { method: 'POST' })
 }
 
+export function modifierESI(patient_id, nouveau_esi, raison = '') {
+  return requete(`/patient/${encodeURIComponent(patient_id)}/esi`, {
+    method: 'PUT',
+    body: JSON.stringify({ nouveau_esi, raison }),
+  })
+}
+
 export function abandonnerSession(session_id) {
   return fetch('/api/session/abandon', {
     method: 'POST',

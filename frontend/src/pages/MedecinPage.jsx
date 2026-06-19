@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { getPatientsMedecin, prendreEnCharge, getHistoriqueMedecin, getRapportPatient } from '../services/api'
+import { getPatientsMedecin, prendreEnCharge, getHistoriqueMedecin, getRapportPatient, modifierESI } from '../services/api'
 import { creerWebSocket, envoyerCommande } from '../services/websocket'
 import BiometrieDisplay, { evaluerCouleur } from '../components/BiometrieDisplay'
 import { ZONES_MAP } from '../components/CorpsHumain'
@@ -183,6 +183,15 @@ export default function MedecinPage() {
         }
         break
 
+      // Priorité modifiée manuellement → toast + reload
+      case 'priorite_modifiee':
+        ajouterToast(
+          `Priorité modifiée : ${data.nom} ESI ${data.ancien_esi} → ${data.nouvel_esi}`,
+          'degradation',
+        )
+        chargerPatients()
+        break
+
       // Patient pris en charge → toast + refresh historique
       case 'patient_pris_en_charge':
         ajouterToast(
@@ -245,6 +254,17 @@ export default function MedecinPage() {
       wsRef.current?.close()
     }
   }, [gererEvenement, medecinId])
+
+  // ── Modification manuelle de l'ESI ────────────────────────────────────────
+  const handleModifierESI = async (patientId, nouvelEsi, raison) => {
+    try {
+      await modifierESI(patientId, nouvelEsi, raison)
+      ajouterToast(`ESI ${nouvelEsi} appliqué`, 'info')
+      await chargerPatients()
+    } catch (err) {
+      ajouterToast(`Erreur modification ESI : ${err.message}`, 'degradation')
+    }
+  }
 
   // ── Prise en charge d'un patient ───────────────────────────────────────────
   const handlePriseEnCharge = async (patientId) => {
@@ -426,6 +446,7 @@ export default function MedecinPage() {
             medecinId={medecinId}
             enPriseEnCharge={enPriseEnCharge}
             onPriseEnCharge={() => handlePriseEnCharge(patientActif.patient_id)}
+            onModifierESI={(esi, raison) => handleModifierESI(patientActif.patient_id, esi, raison)}
             onRetour={() => { setVue('liste'); setPatientActif(null) }}
           />
         )}
@@ -548,9 +569,12 @@ function CartePatient({ patient, onOuvrirDossier }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // Vue dossier — rapport médical complet
 // ═════════════════════════════════════════════════════════════════════════════
-function VueDossier({ patient, medecinId, enPriseEnCharge, onPriseEnCharge, onRetour }) {
+function VueDossier({ patient, medecinId, enPriseEnCharge, onPriseEnCharge, onModifierESI, onRetour }) {
   const esi = patient.esi_predit ?? 5
   const cfg = ESI_CFG[esi] ?? ESI_CFG[5]
+  const [esiChoisi, setEsiChoisi]   = useState(esi)
+  const [raison, setRaison]         = useState('')
+  const [enMod, setEnMod]           = useState(false)
 
   const nlpActifs = Object.keys(patient.features_nlp_actives ?? {}).filter(
     k => patient.features_nlp_actives[k] > 0 && NLP_LABELS[k]
@@ -668,6 +692,68 @@ function VueDossier({ patient, medecinId, enPriseEnCharge, onPriseEnCharge, onRe
 
         </div>
       </div>
+
+      {/* ── Modifier priorité ESI manuellement ──────────────────── */}
+      {!patient._depuis_historique && (
+        <section className="dossier-section dossier-esi-override">
+          <h3 className="dossier-section-titre">Modifier la priorité ESI</h3>
+          <div className="esi-override-form">
+            <div className="esi-override-selects">
+              {[1, 2, 3, 4, 5].map(n => {
+                const c = ESI_CFG[n]
+                return (
+                  <button
+                    key={n}
+                    className={`esi-override-btn${esiChoisi === n ? ' esi-override-btn--actif' : ''}`}
+                    style={{
+                      borderColor: esiChoisi === n ? c.bordure : 'rgba(255,255,255,0.1)',
+                      color: esiChoisi === n ? c.texte : 'rgba(255,255,255,0.5)',
+                      background: esiChoisi === n ? c.fond : 'transparent',
+                    }}
+                    onClick={() => setEsiChoisi(n)}
+                  >
+                    ESI {n}
+                  </button>
+                )
+              })}
+            </div>
+            <input
+              className="esi-override-raison"
+              type="text"
+              placeholder="Raison (optionnel)"
+              value={raison}
+              onChange={e => setRaison(e.target.value)}
+              maxLength={120}
+            />
+            <button
+              className="kiosk-btn kiosk-btn--secondary esi-override-appliquer"
+              disabled={enMod || esiChoisi === esi}
+              onClick={async () => {
+                setEnMod(true)
+                await onModifierESI(esiChoisi, raison)
+                setRaison('')
+                setEnMod(false)
+              }}
+            >
+              {enMod ? '…' : `Appliquer ESI ${esiChoisi}`}
+            </button>
+          </div>
+
+          {/* Historique des modifications */}
+          {patient.historique_esi?.length > 0 && (
+            <div className="esi-historique">
+              <p className="esi-historique-titre">Modifications ESI</p>
+              {patient.historique_esi.map((h, i) => (
+                <div key={i} className="esi-historique-ligne">
+                  <span className="esi-histo-heure">{h.heure}</span>
+                  <span>ESI {h.ancien_esi} → {h.nouvel_esi}</span>
+                  {h.raison && <span className="esi-histo-raison"> — {h.raison}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── Bouton "Pris en charge" (masqué pour l'historique) ──── */}
       {!patient._depuis_historique && (

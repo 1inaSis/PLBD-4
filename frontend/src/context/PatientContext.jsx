@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useRef, useCallback } from 'react'
+import { createContext, useContext, useReducer, useRef, useCallback, useState } from 'react'
 
 // ── État initial ─────────────────────────────────────────────────────────────
 const etatInitial = {
@@ -70,6 +70,15 @@ export const PatientContext = createContext(null)
 export function PatientProvider({ children }) {
   const [patient, dispatch] = useReducer(patientReducer, etatInitial)
 
+  // Langue active — persistée dans localStorage
+  const [langue, setLangueState] = useState(
+    () => localStorage.getItem('healthgate_langue') || 'fr'
+  )
+  const setLangue = (lang) => {
+    localStorage.setItem('healthgate_langue', lang)
+    setLangueState(lang)
+  }
+
   // Référence WebSocket — useRef évite les re-renders inutiles
   const wsRef = useRef(null)
 
@@ -131,6 +140,8 @@ export function PatientProvider({ children }) {
       setReponse,
       setResultatTriage,
       reinitialiser,
+      langue,
+      setLangue,
     }}>
       {children}
     </PatientContext.Provider>

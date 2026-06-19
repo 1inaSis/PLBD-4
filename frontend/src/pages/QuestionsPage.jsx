@@ -10,8 +10,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
-import { demanderQuestionSuivante, lancerTriage } from '../services/api'
+import { demanderQuestionSuivante, lancerTriage, abandonnerSession } from '../services/api'
 import IndicateurEtape from '../components/IndicateurEtape'
+import SelecteurLangue from '../components/SelecteurLangue'
+import GuideEtape from '../components/GuideEtape'
+import ModalInactivite from '../components/ModalInactivite'
+import { useTranslation } from '../hooks/useTranslation'
+import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
 const DELAI_PASSER_MS = 8_000
@@ -27,7 +32,13 @@ const PHASE = {
 // ═════════════════════════════════════════════════════════════════════════════
 export default function QuestionsPage() {
   const navigate = useNavigate()
-  const { patient, setResultatTriage } = usePatient()
+  const { patient, setResultatTriage, reinitialiser } = usePatient()
+  const { t, langue } = useTranslation()
+  const handleExpiration = useCallback(async () => {
+    if (patient.session_id) await abandonnerSession(patient.session_id)
+    reinitialiser(); navigate('/')
+  }, [patient.session_id, reinitialiser, navigate])
+  const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
 
   const [phase, setPhase]                 = useState(PHASE.CHARGEMENT)
   const [sortie, setSortie]               = useState(false)
@@ -164,8 +175,11 @@ export default function QuestionsPage() {
 
   // ── Rendu ────────────────────────────────────────────────────────────────────
   return (
-    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`}>
+    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={4} />
+      <SelecteurLangue />
+      <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
+      <GuideEtape etape={4} />
 
       {phase === PHASE.CHARGEMENT && (
         <VueChargement numQuestion={numQuestion} />
@@ -198,17 +212,24 @@ export default function QuestionsPage() {
   )
 }
 
+// Petit helper pour éviter d'appeler useTranslation dans un callback
+function PasserTexte() {
+  const { t } = useTranslation()
+  return t('passer_question')
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Sous-vues
 // ═════════════════════════════════════════════════════════════════════════════
 
 function VueChargement({ numQuestion }) {
+  const { t } = useTranslation()
   return (
     <div className="kiosk-center">
       <div className="kiosk-card kiosk-card--centree q-chargement">
         <div className="kiosk-spinner" aria-label="Chargement" />
         <h2 className="kiosk-titre-sm">
-          {numQuestion === 0 ? 'Préparation des questions…' : 'Analyse de votre réponse…'}
+          {numQuestion === 0 ? t('prep_questions') : t('analyse_reponse')}
         </h2>
         <p className="kiosk-soustitre">
           {numQuestion === 0
@@ -335,7 +356,7 @@ function VueQuestion({
         {/* Bouton "Passer" (après DELAI_PASSER_MS) */}
         {passerVisible && (
           <button className="q-btn-passer" onClick={onPasser}>
-            Passer cette question →
+            <PasserTexte />
           </button>
         )}
 
