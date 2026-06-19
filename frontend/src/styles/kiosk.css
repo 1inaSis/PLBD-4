@@ -2102,3 +2102,118 @@
   }
   .dossier-esi-meta { display: none; }
 }
+
+/* ── Onglets médecin (attente / historique) ───────────────────────────────── */
+.medecin-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 20px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 0;
+}
+
+.medecin-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.medecin-tab:hover {
+  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.04);
+}
+
+.medecin-tab--actif {
+  color: #fff;
+  background: rgba(20,184,166,0.12);
+  border-color: rgba(20,184,166,0.3);
+}
+
+.medecin-tab-badge {
+  background: rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 1px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.medecin-tab--actif .medecin-tab-badge {
+  background: rgba(20,184,166,0.25);
+  color: #2dd4bf;
+}
+
+/* ── Tableau historique patients ─────────────────────────────────────────── */
+.medecin-historique {
+  padding: 16px 20px;
+  overflow-x: auto;
+}
+
+.historique-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.historique-table th {
+  text-align: left;
+  padding: 8px 12px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.historique-ligne {
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  transition: background 0.15s;
+}
+
+.historique-ligne:hover { background: rgba(255,255,255,0.04); }
+
+.historique-cell {
+  padding: 10px 12px;
+  color: rgba(255,255,255,0.85);
+  vertical-align: middle;
+}
+
+.historique-cell--nom { font-weight: 600; }
+
+.historique-age {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+.historique-btn-dossier {
+  padding: 4px 12px !important;
+  font-size: 0.8rem !important;
+}
+
+/* ── Bannière dégradation clinique (salle d'attente) ─────────────────────── */
+.salle-degradation-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 24px;
+  background: rgba(249,115,22,0.16);
+  border-top: 2px solid rgba(249,115,22,0.55);
+  border-bottom: 2px solid rgba(249,115,22,0.55);
+  color: #fb923c;
+  font-weight: 700;
+  font-size: 0.95rem;
+  animation: fadeInUp 0.3s ease both;
+}

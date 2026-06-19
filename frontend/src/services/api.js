@@ -100,6 +100,10 @@ export function getPatientsMedecin(medecin_id) {
   return requete(`/medecin/${medecin_id}`)
 }
 
+export function getHistoriqueMedecin(medecin_id) {
+  return requete(`/medecin/${medecin_id}/historique`)
+}
+
 export function prendreEnCharge(patient_id, medecin_id) {
   return requete('/prise_en_charge', {
     method: 'POST',

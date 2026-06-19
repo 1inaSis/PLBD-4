@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { getPatientsMedecin, prendreEnCharge } from '../services/api'
+import { getPatientsMedecin, prendreEnCharge, getHistoriqueMedecin, getRapportPatient } from '../services/api'
 import { creerWebSocket, envoyerCommande } from '../services/websocket'
 import BiometrieDisplay, { evaluerCouleur } from '../components/BiometrieDisplay'
 import { ZONES_MAP } from '../components/CorpsHumain'
@@ -91,6 +91,11 @@ export default function MedecinPage() {
   const [sonActif, setSonActif]           = useState(true)
   const sonActifRef                       = useRef(true)
 
+  // Onglet actif : 'attente' | 'historique'
+  const [onglet, setOnglet]               = useState('attente')
+  const [historique, setHistorique]       = useState([])
+  const [chargHistorique, setChargH]      = useState(false)
+
   const wsRef    = useRef(null)
   const pingRef  = useRef(null)
   const monteRef = useRef(true)
@@ -121,6 +126,17 @@ export default function MedecinPage() {
   useEffect(() => {
     chargerPatients()
   }, [chargerPatients])
+
+  // ── Historique patients traités ────────────────────────────────────────────
+  const chargerHistorique = useCallback(async () => {
+    if (!monteRef.current) return
+    setChargH(true)
+    try {
+      const res = await getHistoriqueMedecin(medecinId)
+      if (monteRef.current) setHistorique(res.historique ?? [])
+    } catch { /* silencieux */ }
+    finally { if (monteRef.current) setChargH(false) }
+  }, [medecinId])
 
   // ── Toasts ─────────────────────────────────────────────────────────────────
   const ajouterToast = useCallback((message, type = 'info') => {
@@ -167,6 +183,15 @@ export default function MedecinPage() {
         }
         break
 
+      // Patient pris en charge → toast + refresh historique
+      case 'patient_pris_en_charge':
+        ajouterToast(
+          `Pris en charge : ${data.patient_id} par ${data.medecin} à ${data.heure}`,
+          'prise_en_charge',
+        )
+        chargerHistorique()
+        break
+
       // Dégradation clinique → toast d'alerte
       case 'degradation':
         ajouterToast(
@@ -178,7 +203,7 @@ export default function MedecinPage() {
       default:
         break
     }
-  }, [medecinId, chargerPatients, ajouterToast])
+  }, [medecinId, chargerPatients, ajouterToast, chargerHistorique])
 
   // ── Connexion WebSocket avec reconnexion automatique ───────────────────────
   useEffect(() => {
@@ -242,6 +267,25 @@ export default function MedecinPage() {
     setPatientActif(patient)
     setVue('dossier')
   }
+
+  // ── Ouvrir le dossier d'un patient de l'historique ───────────────────────
+  const voirDossierHistorique = useCallback(async (h) => {
+    let p
+    try {
+      const data = await getRapportPatient(h.session_id)
+      p = { ...data.rapport, patient_id: h.patient_id_display, _depuis_historique: true }
+    } catch {
+      p = {
+        patient_id: h.patient_id_display,
+        nom: h.nom, prenom: h.prenom, age: h.age,
+        esi_predit: h.esi,
+        heure_arrivee: h.heure_arrivee,
+        _depuis_historique: true,
+      }
+    }
+    setPatientActif(p)
+    setVue('dossier')
+  }, [])
 
   // ── Ouvrir le dossier depuis une alerte critique ────────────────────────────
   const ouvrirAlerte = (alerte) => {
@@ -344,10 +388,36 @@ export default function MedecinPage() {
         )}
 
         {!chargement && !erreurChargement && vue === 'liste' && (
-          <VueListe
-            patients={patients}
-            onOuvrirDossier={ouvrirDossier}
-          />
+          <>
+            {/* Onglets attente / historique */}
+            <div className="medecin-tabs">
+              <button
+                className={`medecin-tab${onglet === 'attente' ? ' medecin-tab--actif' : ''}`}
+                onClick={() => setOnglet('attente')}
+              >
+                Patients en attente
+                <span className="medecin-tab-badge">{patients.length}</span>
+              </button>
+              <button
+                className={`medecin-tab${onglet === 'historique' ? ' medecin-tab--actif' : ''}`}
+                onClick={() => { setOnglet('historique'); chargerHistorique() }}
+              >
+                Historique
+                <span className="medecin-tab-badge">{historique.length}</span>
+              </button>
+            </div>
+
+            {onglet === 'attente' && (
+              <VueListe patients={patients} onOuvrirDossier={ouvrirDossier} />
+            )}
+            {onglet === 'historique' && (
+              <VueHistorique
+                historique={historique}
+                chargement={chargHistorique}
+                onVoirDossier={voirDossierHistorique}
+              />
+            )}
+          </>
         )}
 
         {!chargement && !erreurChargement && vue === 'dossier' && patientActif && (
@@ -599,25 +669,98 @@ function VueDossier({ patient, medecinId, enPriseEnCharge, onPriseEnCharge, onRe
         </div>
       </div>
 
-      {/* ── Bouton "Pris en charge" ──────────────────────────────── */}
-      <div className="dossier-action">
-        <button
-          className="kiosk-btn dossier-btn-pec"
-          style={{
-            background: cfg.fond,
-            border: `2px solid ${cfg.bordure}`,
-            color: cfg.texte,
-          }}
-          onClick={onPriseEnCharge}
-          disabled={enPriseEnCharge}
-        >
-          {enPriseEnCharge
-            ? <><span className="kiosk-spinner" style={{ width: 24, height: 24, borderWidth: 3 }} /> En cours…</>
-            : '✓ Marquer comme pris en charge'
-          }
-        </button>
-      </div>
+      {/* ── Bouton "Pris en charge" (masqué pour l'historique) ──── */}
+      {!patient._depuis_historique && (
+        <div className="dossier-action">
+          <button
+            className="kiosk-btn dossier-btn-pec"
+            style={{
+              background: cfg.fond,
+              border: `2px solid ${cfg.bordure}`,
+              color: cfg.texte,
+            }}
+            onClick={onPriseEnCharge}
+            disabled={enPriseEnCharge}
+          >
+            {enPriseEnCharge
+              ? <><span className="kiosk-spinner" style={{ width: 24, height: 24, borderWidth: 3 }} /> En cours…</>
+              : '✓ Marquer comme pris en charge'
+            }
+          </button>
+        </div>
+      )}
 
+    </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Vue historique — tableau des patients traités
+// ═════════════════════════════════════════════════════════════════════════════
+function VueHistorique({ historique, chargement, onVoirDossier }) {
+  if (chargement) {
+    return (
+      <div className="kiosk-center" style={{ padding: 40 }}>
+        <div className="kiosk-spinner" />
+      </div>
+    )
+  }
+  if (historique.length === 0) {
+    return (
+      <div className="medecin-vide">
+        <span className="salle-vide-icone" aria-hidden="true">📋</span>
+        <p className="salle-vide-texte">Aucun patient traité aujourd'hui</p>
+      </div>
+    )
+  }
+  return (
+    <div className="medecin-historique">
+      <table className="historique-table">
+        <thead>
+          <tr>
+            <th>Patient</th>
+            <th>ESI</th>
+            <th>Arrivée</th>
+            <th>Pris en charge</th>
+            <th>Attente</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {historique.map(h => {
+            const esi = h.esi
+            const cfg = ESI_CFG[esi] ?? ESI_CFG[5]
+            return (
+              <tr key={h.session_id || h.patient_id_display} className="historique-ligne">
+                <td className="historique-cell historique-cell--nom">
+                  {h.prenom} {h.nom}
+                  <span className="historique-age">{h.age} ans</span>
+                </td>
+                <td className="historique-cell">
+                  <span className="medecin-carte-esi" style={{ borderColor: cfg.bordure, color: cfg.texte }}>
+                    {esi}
+                  </span>
+                </td>
+                <td className="historique-cell">{h.heure_arrivee}</td>
+                <td className="historique-cell">{h.heure_prise_en_charge}</td>
+                <td className="historique-cell">
+                  {h.duree_attente_minutes != null && h.duree_attente_minutes !== '?'
+                    ? `${h.duree_attente_minutes} min`
+                    : '—'}
+                </td>
+                <td className="historique-cell">
+                  <button
+                    className="kiosk-btn kiosk-btn--secondary historique-btn-dossier"
+                    onClick={() => onVoirDossier(h)}
+                  >
+                    Voir dossier
+                  </button>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

@@ -62,6 +62,7 @@ export default function SalleAttentePage() {
   const [heureLive, setHeureLive]   = useState(heureLocale())
   const [resetEnCours, setResetEnCours] = useState(false)
   const [tempsCourant, setTempsCourant] = useState(Date.now())
+  const [degradBanner, setDegradBanner] = useState(null)
   const [stats, setStats]           = useState({
     patients_en_attente: 0,
     patients_traites_aujourd_hui: 0,
@@ -146,8 +147,17 @@ export default function SalleAttentePage() {
         )
         break
 
-      // Dégradation clinique → toast d'alerte
+      // Dégradation clinique → bannière + toast
       case 'degradation':
+        setDegradBanner({
+          nom: data.nom,
+          ancien: data.ancien_esi,
+          nouvel: data.nouvel_esi,
+          auto: data.auto,
+        })
+        setTimeout(() => {
+          if (monteRef.current) setDegradBanner(null)
+        }, 10_000)
         ajouterToast(
           `⚠️ Dégradation : ${data.nom} — ESI ${data.ancien_esi} → ${data.nouvel_esi}`,
           'degradation',
@@ -271,6 +281,21 @@ export default function SalleAttentePage() {
               🚨 PRIORITÉ MAXIMALE — {a.prenom} {a.nom} · ESI {a.esi_actuel ?? a.esi_predit}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Bannière dégradation automatique ───────────────────── */}
+      {degradBanner && (
+        <div className="salle-degradation-banner" role="alert">
+          ⚠️ Dégradation{degradBanner.auto ? ' automatique' : ''} — {degradBanner.nom} : ESI {degradBanner.ancien} → {degradBanner.nouvel}
+          <button
+            onClick={() => setDegradBanner(null)}
+            aria-label="Fermer"
+            style={{
+              marginLeft: 16, background: 'transparent', border: 'none',
+              color: 'inherit', cursor: 'pointer', fontSize: '1rem',
+            }}
+          >✕</button>
         </div>
       )}
 

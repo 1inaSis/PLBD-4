@@ -194,20 +194,84 @@ async def _periodic_queue_broadcast() -> None:
         )
 
 
+# Patients ESI 2 déjà alertés pour attente > 15 min (évite répétition)
+_alertes_esi2_envoyees: set = set()
+
+
+async def _verifier_degradations_auto() -> None:
+    """Reclassification automatique si attente excessive (toutes les 5 min)."""
+    while True:
+        await asyncio.sleep(300)
+        file_courante = gestionnaire_file.get_file_triee()
+        for patient in file_courante:
+            attente = patient.temps_attente_minutes()
+            esi_actuel = patient.esi_actuel
+            session_id = patient.patient_id.replace("PT-", "", 1)
+            session = patients_session.get(session_id, {})
+
+            # Dégradation ESI 3→2 (>30 min) ou ESI 4→3 (>60 min)
+            nouvel_esi = None
+            if esi_actuel == 3 and attente > 30:
+                nouvel_esi = 2
+            elif esi_actuel == 4 and attente > 60:
+                nouvel_esi = 3
+
+            if nouvel_esi:
+                gestionnaire_file.signaler_degradation(patient.patient_id, {}, nouvel_esi)
+                session["esi_predit"] = nouvel_esi
+                session["niveau_urgence"] = _libelle_urgence(nouvel_esi)
+                await manager.broadcast_to(
+                    "degradation",
+                    {
+                        "patient_id": patient.patient_id,
+                        "nom": session.get("nom", ""),
+                        "ancien_esi": esi_actuel,
+                        "nouvel_esi": nouvel_esi,
+                        "nouveau_libelle": _libelle_urgence(nouvel_esi),
+                        "temps_attente": round(attente),
+                        "auto": True,
+                    },
+                    ["salle", "medecin_M1", "medecin_M2"],
+                )
+                await manager.broadcast_to(
+                    "file_mise_a_jour",
+                    _construire_etat_global(),
+                    ["salle", "medecin_M1", "medecin_M2"],
+                )
+
+            # ESI 2 en attente > 15 min → alerte critique (une seule fois)
+            elif esi_actuel == 2 and attente > 15 and patient.patient_id not in _alertes_esi2_envoyees:
+                medecin_id = session.get("medecin_id", "")
+                groupe = f"medecin_{medecin_id}" if medecin_id in ("M1", "M2") else "medecin_M1"
+                await manager.broadcast_to(
+                    "alerte_critique",
+                    {
+                        "patient_id": patient.patient_id,
+                        "nom": session.get("nom", ""),
+                        "prenom": session.get("prenom", ""),
+                        "esi": 2,
+                        "temps_attente": round(attente),
+                    },
+                    [groupe],
+                )
+                _alertes_esi2_envoyees.add(patient.patient_id)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("[BACKEND] Scanner Groq Vision prêt")
 
-    # Le queue_manager a son propre thread de mise à jour des scores
     gestionnaire_file.demarrer_mise_a_jour_auto(intervalle=60)
-    # Tâche asyncio séparée pour le broadcast WebSocket
-    task = asyncio.create_task(_periodic_queue_broadcast())
+    task1 = asyncio.create_task(_periodic_queue_broadcast())
+    task2 = asyncio.create_task(_verifier_degradations_auto())
     yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    task1.cancel()
+    task2.cancel()
+    for t in (task1, task2):
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -923,6 +987,7 @@ async def api_prise_en_charge(body: PriseEnChargeRequest):
     session = patients_session.get(body.patient_id.replace("PT-", "", 1), {})
     historique_patients.append({
         **session,
+        "medecin_id": body.medecin_id,
         "pris_en_charge_par": MEDECINS[body.medecin_id]["nom"],
         "heure_prise_en_charge": datetime.now().strftime("%H:%M"),
         "temps_attente_reel": (
@@ -972,6 +1037,30 @@ async def api_patients_medecin(medecin_id: str):
         "medecin": MEDECINS[medecin_id],
         "nb_patients": len(rapports),
         "patients": rapports,
+    }
+
+
+@app.get("/api/medecin/{medecin_id}/historique")
+async def api_historique_medecin(medecin_id: str):
+    if medecin_id not in MEDECINS:
+        raise HTTPException(status_code=404, detail="Médecin non trouvé")
+    historique_medecin = [h for h in historique_patients if h.get("medecin_id") == medecin_id][-20:]
+    return {
+        "statut": "succès",
+        "historique": [
+            {
+                "session_id": h.get("session_id", ""),
+                "patient_id_display": f"PT-{h.get('session_id', '')}",
+                "nom": h.get("nom", ""),
+                "prenom": h.get("prenom", ""),
+                "age": h.get("age", "?"),
+                "esi": h.get("esi_predit", "?"),
+                "heure_arrivee": h.get("heure_arrivee", "?"),
+                "heure_prise_en_charge": h.get("heure_prise_en_charge", "?"),
+                "duree_attente_minutes": h.get("temps_attente_reel", "?"),
+            }
+            for h in reversed(historique_medecin)
+        ],
     }
 
 
