@@ -1003,6 +1003,53 @@ async def api_degradation(body: DegradationRequest):
     return {"statut": "succès", "message": "Dégradation enregistrée et diffusée"}
 
 
+# ── Démo / Admin ─────────────────────────────────────────────────────────────
+
+@app.post("/api/demo/patient")
+async def api_demo_patient():
+    """Crée un patient fictif sans scanner — mode démonstration."""
+    session_id = str(uuid.uuid4())[:8].upper()
+    patients_session[session_id] = {
+        "session_id": session_id,
+        "nom": "DEMO",
+        "prenom": "Patient",
+        "age": 35,
+        "sex": 0,
+        "heure_arrivee": datetime.now().strftime("%H:%M"),
+        "etape": "scan_ok",
+    }
+    return {"session_id": session_id, "nom": "DEMO", "prenom": "Patient", "age": 35, "sexe": 0}
+
+
+@app.post("/api/admin/reset")
+async def api_admin_reset():
+    """Vide la file, les sessions et l'historique — usage démo uniquement."""
+    patients_session.clear()
+    historique_patients.clear()
+    with gestionnaire_file._verrou:
+        gestionnaire_file.file.clear()
+    for info in MEDECINS.values():
+        info["patients"].clear()
+    await manager.broadcast_to(
+        "file_mise_a_jour",
+        _construire_etat_global(),
+        ["salle", "medecin_M1", "medecin_M2"],
+    )
+    return {"statut": "réinitialisé"}
+
+
+class AbandonRequest(BaseModel):
+    session_id: str
+
+
+@app.post("/api/session/abandon")
+async def api_session_abandon(body: AbandonRequest):
+    """Supprime une session incomplète et retire le patient de la file."""
+    patients_session.pop(body.session_id, None)
+    gestionnaire_file.retirer_patient(f"PT-{body.session_id}")
+    return {"statut": "abandonné"}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # WebSocket — /ws
 # ═══════════════════════════════════════════════════════════════════════════════

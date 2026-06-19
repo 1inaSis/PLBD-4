@@ -111,7 +111,24 @@ export default function ConstantesPage() {
   // 'null' = capteur non pointé  |  'timeout' = 30s dépassés  |  null = RAS
   const [messageCapture, setMessageCapture] = useState(null)
 
-  const enFetchRef = useRef(false)
+  const enFetchRef   = useRef(false)
+  const completedRef = useRef(false)
+
+  // Abandon si le visiteur quitte avant d'avoir terminé les constantes
+  useEffect(() => {
+    const sid = patient.session_id
+    return () => {
+      if (!completedRef.current && sid) {
+        fetch('/api/session/abandon', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sid }),
+          keepalive: true,
+        }).catch(() => {})
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const etapeActuelle  = ETAPES[indexEtape]
   const valeurActuelle = constantes?.[etapeActuelle?.cle]
@@ -268,6 +285,7 @@ export default function ConstantesPage() {
 
   // ── Continuer vers l'étape 4 ────────────────────────────────────────────────
   const continuer = () => {
+    completedRef.current = true
     setConstantes(constantes)
     navigate('/questions')
   }

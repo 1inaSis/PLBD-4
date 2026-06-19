@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
-import { scannerCIN, saisirManuel } from '../services/api'
+import { scannerCIN, saisirManuel, demarrerDemo } from '../services/api'
 import IndicateurEtape from '../components/IndicateurEtape'
 import ConfirmationPatient from '../components/ConfirmationPatient'
 import { IllustrationScanCIN } from '../components/IllustrationsGestes'
@@ -12,6 +12,7 @@ const VUE = {
   SCAN:         'scan',
   FORMULAIRE:   'formulaire',
   CONFIRMATION: 'confirmation',
+  BIENVENUE:    'bienvenue',
 }
 
 export default function AccueilPage() {
@@ -22,6 +23,7 @@ export default function AccueilPage() {
   const [donneesScan, setDonneesScan]   = useState(null)
   const [erreur, setErreur]             = useState(null)
   const [wsConnecte, setWsConnecte]     = useState(false)
+  const [prenomBienvenue, setPrenomBienvenue] = useState('')
 
   // Session créée côté backend même si OCR incomplet
   const [sessionManuelId, setSessionManuelId] = useState(null)
@@ -30,6 +32,13 @@ export default function AccueilPage() {
   const [formulaire, setFormulaire] = useState({ nom: '', prenom: '', date_naissance: '' })
   const [erreurForm, setErreurForm] = useState(null)
   const [enSoumission, setEnSoumission] = useState(false)
+
+  // Auto-navigation après message de bienvenue (2 s)
+  useEffect(() => {
+    if (vue !== VUE.BIENVENUE) return
+    const t = setTimeout(() => navigate('/questionnaire'), 2000)
+    return () => clearTimeout(t)
+  }, [vue, navigate])
 
   useEffect(() => {
     reinitialiser()
@@ -40,8 +49,13 @@ export default function AccueilPage() {
       }
     })
 
-    ws.onopen  = () => setWsConnecte(true)
-    ws.onclose = () => setWsConnecte(false)
+    ws.onopen = () => setWsConnecte(true)
+    // Chaîner avec le handler de reconnexion de PatientContext
+    const _prevOnClose = ws.onclose
+    ws.onclose = (e) => {
+      setWsConnecte(false)
+      _prevOnClose?.(e)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -97,11 +111,32 @@ export default function AccueilPage() {
         sexe:       data.sexe ?? -1,
         numero_cin: '',
       })
-      navigate('/questionnaire')
+      setPrenomBienvenue(data.prenom)
+      setVue(VUE.BIENVENUE)
     } catch (err) {
       setErreurForm(`Erreur : ${err.message}`)
     } finally {
       setEnSoumission(false)
+    }
+  }
+
+  // ── Mode démo ─────────────────────────────────────────────────────────────
+  const lancerDemo = async () => {
+    setErreur(null)
+    try {
+      const data = await demarrerDemo()
+      setIdentite({
+        session_id: data.session_id,
+        nom:        data.nom,
+        prenom:     data.prenom,
+        age:        data.age,
+        sexe:       data.sexe ?? 0,
+        numero_cin: '',
+      })
+      setPrenomBienvenue(data.prenom)
+      setVue(VUE.BIENVENUE)
+    } catch {
+      setErreur('Impossible de démarrer le mode démo')
     }
   }
 
@@ -115,7 +150,8 @@ export default function AccueilPage() {
       sexe:        donneesScan.sexe,
       numero_cin:  donneesScan.numero_cin,
     })
-    navigate('/questionnaire')
+    setPrenomBienvenue(donneesScan.prenom)
+    setVue(VUE.BIENVENUE)
   }
 
   const recommencer = () => {
@@ -163,6 +199,14 @@ export default function AccueilPage() {
               onClick={() => { setFormulaire({ nom: '', prenom: '', date_naissance: '' }); setSessionManuelId(null); setVue(VUE.FORMULAIRE) }}
             >
               Saisie manuelle
+            </button>
+
+            <button
+              className="kiosk-btn kiosk-btn--secondary"
+              onClick={lancerDemo}
+              style={{ marginTop: 8, opacity: 0.6, fontSize: '0.85em' }}
+            >
+              Mode Démo
             </button>
           </div>
         </div>
@@ -267,6 +311,22 @@ export default function AccueilPage() {
           onConfirmer={confirmer}
           onRecommencer={recommencer}
         />
+      )}
+
+      {/* ── Message de bienvenue (2 s avant navigation) ─────────── */}
+      {vue === VUE.BIENVENUE && (
+        <div className="kiosk-center">
+          <div className="kiosk-card kiosk-card--centree" style={{ textAlign: 'center' }}>
+            <span style={{ fontSize: '3rem' }}>👋</span>
+            <h2 className="kiosk-titre-sm" style={{ marginTop: 12 }}>
+              Bonjour {prenomBienvenue} !
+            </h2>
+            <p className="kiosk-soustitre">
+              Nous allons maintenant évaluer votre état de santé.
+            </p>
+            <div className="kiosk-spinner" style={{ marginTop: 16 }} aria-label="Chargement" />
+          </div>
+        </div>
       )}
     </div>
   )

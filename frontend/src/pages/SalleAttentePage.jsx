@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { creerWebSocket, envoyerCommande } from '../services/websocket'
+import { reinitialiserFile } from '../services/api'
 import '../styles/kiosk.css'
 
 // ── Configuration des niveaux ESI (couleurs + libellés) ──────────────────────
@@ -42,6 +43,7 @@ export default function SalleAttentePage() {
   const [toasts, setToasts]         = useState([])
   const [wsEtat, setWsEtat]         = useState('connexion')  // connexion | connecte | deconnecte
   const [heureLive, setHeureLive]   = useState(heureLocale())
+  const [resetEnCours, setResetEnCours] = useState(false)
 
   const wsRef    = useRef(null)
   const pingRef  = useRef(null)
@@ -61,6 +63,19 @@ export default function SalleAttentePage() {
       if (monteRef.current) setToasts(prev => prev.filter(t => t.id !== id))
     }, 5000)
   }, [])
+
+  // ── Réinitialisation de la file (admin démo) ────────────────────────────────
+  const reinitialiser = async () => {
+    if (!window.confirm('Confirmer la réinitialisation ? Tous les patients seront supprimés.')) return
+    setResetEnCours(true)
+    try {
+      await reinitialiserFile()
+    } catch {
+      alert('Erreur lors de la réinitialisation')
+    } finally {
+      setResetEnCours(false)
+    }
+  }
 
   // ── Gestionnaire d'événements WebSocket ────────────────────────────────────
   const gererEvenement = useCallback((msg) => {
@@ -238,6 +253,21 @@ export default function SalleAttentePage() {
           ))}
         </div>
       )}
+
+      {/* ── Bouton admin réinitialisation (bas-gauche, discret) ──── */}
+      <button
+        onClick={reinitialiser}
+        disabled={resetEnCours}
+        style={{
+          position: 'fixed', bottom: 12, left: 12,
+          padding: '4px 10px', fontSize: '0.72rem',
+          background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: 6, color: 'rgba(255,255,255,0.4)', cursor: 'pointer',
+          opacity: resetEnCours ? 0.4 : 1,
+        }}
+      >
+        {resetEnCours ? 'Réinitialisation…' : 'Réinitialiser la file'}
+      </button>
 
     </div>
   )

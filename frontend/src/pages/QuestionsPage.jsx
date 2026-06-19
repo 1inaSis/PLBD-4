@@ -41,6 +41,23 @@ export default function QuestionsPage() {
   const passerTimerRef  = useRef(null)
   const lancerTriageRef = useRef(null)
   const chargerRef      = useRef(null)
+  const completedRef    = useRef(false)
+
+  // Abandon si le visiteur quitte avant la fin du triage
+  useEffect(() => {
+    const sid = patient.session_id
+    return () => {
+      if (!completedRef.current && sid) {
+        fetch('/api/session/abandon', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sid }),
+          keepalive: true,
+        }).catch(() => {})
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Timer "Passer" — reset à chaque nouvelle question ──────────────────────
   useEffect(() => {
@@ -62,6 +79,7 @@ export default function QuestionsPage() {
     try {
       const res = await lancerTriage(patient.session_id, patient.constantes ?? null, reponsesFinales)
       setResultatTriage(res)
+      completedRef.current = true
       navigate('/resultat')
     } catch (err) {
       setErreurTriage(`Erreur lors du calcul du triage : ${err.message}`)

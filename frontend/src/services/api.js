@@ -106,3 +106,21 @@ export function prendreEnCharge(patient_id, medecin_id) {
     body: JSON.stringify({ patient_id, medecin_id }),
   })
 }
+
+// ── Démo / Admin ──────────────────────────────────────────────────────────────
+export function demarrerDemo() {
+  return requete('/demo/patient', { method: 'POST' })
+}
+
+export function reinitialiserFile() {
+  return requete('/admin/reset', { method: 'POST' })
+}
+
+export function abandonnerSession(session_id) {
+  return fetch('/api/session/abandon', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id }),
+    keepalive: true,
+  }).catch(() => {})
+}
