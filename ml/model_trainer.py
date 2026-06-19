@@ -43,7 +43,7 @@ FEATURES_NLP = [
     "nlp_urgence_critique",
 ]
 
-FEATURES_DIAGNOSTIC = ["diagnostic_encode"]
+FEATURES_DIAGNOSTIC = []  # diagnostic_encode exclu : fuit le label en training (=esi_level), vaut 0 à l'inférence
 
 CIBLE = "esi_level"
 
@@ -284,14 +284,14 @@ def entrainer_modele(X_train: np.ndarray, y_train: np.ndarray) -> RandomForestCl
     pour la classification ESI multi-classes.
     """
     modele = RandomForestClassifier(
-        n_estimators=200,        # 200 arbres pour la robustesse
-        max_depth=15,            # Profondeur suffisante sans surapprentissage
-        min_samples_split=5,     # Évite le surapprentissage
-        min_samples_leaf=2,      # Feuilles avec au moins 2 exemples
-        max_features="sqrt",     # Nombre de features par split
+        n_estimators=500,        # 500 arbres pour robustesse maximale
+        max_depth=20,
+        min_samples_split=5,
+        min_samples_leaf=2,
+        max_features="sqrt",
         class_weight="balanced", # Compense les classes minoritaires (ESI 1 rare)
         random_state=42,
-        n_jobs=-1,               # Utilise tous les cœurs disponibles
+        n_jobs=-1,
     )
     modele.fit(X_train, y_train)
     return modele
@@ -425,6 +425,40 @@ def _estimer_diagnostic_probable(donnees_patient: dict, features_nlp: dict) -> s
     return "Évaluation clinique complémentaire"
 
 
+def _enrichir_q_pour_inference(patient: dict) -> dict:
+    """
+    Calcule les features q_* depuis les constantes vitales à l'inférence,
+    exactement comme enrichir_features_questions() le fait à l'entraînement.
+    Retourne un dict {q_feature: valeur}.
+    """
+    row = pd.DataFrame([{
+        "age":              patient.get("age", 30),
+        "sex":              patient.get("sex", 0),
+        "temperature":      patient.get("temperature", 37.0),
+        "heart_rate":       patient.get("heart_rate", 75),
+        "bp_systolic":      patient.get("bp_systolic", 120),
+        "bp_diastolic":     patient.get("bp_diastolic", 80),
+        "spo2":             patient.get("spo2", 98.0),
+        "respiratory_rate": patient.get("respiratory_rate", 16),
+        "glucose":          patient.get("glucose", 90),
+        "pain_score":       patient.get("pain_score", 0),
+        "chest_pain":       patient.get("chest_pain", 0),
+        "dyspnea":          patient.get("dyspnea", 0),
+        "loss_of_consciousness": patient.get("loss_of_consciousness", 0),
+        "severe_bleeding":  patient.get("severe_bleeding", 0),
+        "neurological_symptoms": patient.get("neurological_symptoms", 0),
+        "abdominal_pain":   patient.get("abdominal_pain", 0),
+        "fever":            patient.get("fever", 0),
+        "trauma":           patient.get("trauma", 0),
+        "symptom_text":     patient.get("symptom_text", ""),
+        "diagnostic_probable": patient.get("diagnostic_probable", ""),
+        "comorbidites":     patient.get("comorbidites", ""),
+        "diagnostic_encode": 0,
+    }])
+    row_enrichi = enrichir_features_questions(row)
+    return {c: int(row_enrichi.iloc[0][c]) for c in row_enrichi.columns if c.startswith("q_")}
+
+
 def predire_esi(donnees_patient: dict) -> dict:
     """
     Prédit le niveau ESI d'un patient à partir de ses données brutes.
@@ -442,30 +476,40 @@ def predire_esi(donnees_patient: dict) -> dict:
 
     modele, scaler, noms_features = charger_modele()
 
-    # Extraction NLP si texte disponible
+    # NLP sur texte libre
     features_nlp = extraire_features_nlp(donnees_patient.get("symptom_text", ""))
+
+    # q_* calculées depuis vitales (même logique qu'à l'entraînement)
+    q_infer = _enrichir_q_pour_inference(donnees_patient)
+
+    # q_* issues des réponses réelles aux questions adaptatives (priorité sur q_infer)
     questions = donnees_patient.get("questions") or []
     reponses_questions = donnees_patient.get("question_reponses") or donnees_patient.get("reponses_questions") or {}
-    features_questions = encoder_reponses(questions, reponses_questions) if questions else {feat: 0 for feat in FEATURES_QUESTIONS}
+    features_questions = encoder_reponses(questions, reponses_questions) if questions else {}
 
     diagnostic_probable = donnees_patient.get("diagnostic_probable") or _estimer_diagnostic_probable(donnees_patient, features_nlp)
     diagnostic_encode = donnees_patient.get("diagnostic_encode")
     if diagnostic_encode is None:
         diagnostic_encode = _encodage_diagnostic_probable(diagnostic_probable)
 
-    # Construction du vecteur de features
+    # Construction du vecteur de features (ordre de priorité : patient_dict > réponses réelles > q_infer > NLP > 0)
     vecteur = {}
     for feat in noms_features:
-        if feat in donnees_patient:
+        if feat in donnees_patient and feat not in FEATURES_QUESTIONS:
+            # Vitales, binaires NLP : prendre directement depuis le patient
             vecteur[feat] = donnees_patient[feat]
-        elif feat in features_questions:
+        elif feat in features_questions and features_questions[feat] != 0:
+            # Réponse réelle non-nulle de l'utilisateur → priorité
             vecteur[feat] = features_questions[feat]
+        elif feat in q_infer:
+            # q_* calculées depuis vitales (fallback cohérent avec training)
+            vecteur[feat] = q_infer[feat]
         elif feat == "diagnostic_encode":
             vecteur[feat] = diagnostic_encode
         elif feat in features_nlp:
             vecteur[feat] = features_nlp[feat]
         else:
-            vecteur[feat] = 0  # valeur par défaut
+            vecteur[feat] = 0
 
     X = pd.DataFrame([vecteur])[noms_features]
     X = X.fillna(0)
