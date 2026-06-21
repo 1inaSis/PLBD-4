@@ -10,6 +10,7 @@ import GuideEtape from '../components/GuideEtape'
 import ModalInactivite from '../components/ModalInactivite'
 import BoutonPleinEcran from '../components/BoutonPleinEcran'
 import { useTranslation } from '../hooks/useTranslation'
+import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import { useFullscreen } from '../hooks/useFullscreen'
 import '../styles/kiosk.css'
@@ -26,6 +27,7 @@ export default function AccueilPage() {
   const navigate = useNavigate()
   const { setIdentite, connecterBorne, reinitialiser, patient } = usePatient()
   const { t, langue } = useTranslation()
+  const { parler }    = useTextToSpeech()
 
   const [vue, setVue]                   = useState(VUE.ACCUEIL)
   const [donneesScan, setDonneesScan]   = useState(null)
@@ -53,9 +55,16 @@ export default function AccueilPage() {
   // Auto-navigation après message de bienvenue (2 s)
   useEffect(() => {
     if (vue !== VUE.BIENVENUE) return
-    const t = setTimeout(() => navigate('/questionnaire'), 2000)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => navigate('/questionnaire'), 2000)
+    return () => clearTimeout(timer)
   }, [vue, navigate])
+
+  // Lecture TTS unique à l'apparition de la vue bienvenue
+  useEffect(() => {
+    if (vue !== VUE.BIENVENUE || !prenomBienvenue) return
+    parler(t('tts_bienvenue', { prenom: prenomBienvenue }), langue)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vue])
 
   useEffect(() => {
     reinitialiser()

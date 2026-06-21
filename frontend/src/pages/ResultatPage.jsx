@@ -9,6 +9,7 @@ import SelecteurLangue from '../components/SelecteurLangue'
 import GuideEtape from '../components/GuideEtape'
 import ModalInactivite from '../components/ModalInactivite'
 import { useTranslation } from '../hooks/useTranslation'
+import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
@@ -33,6 +34,7 @@ export default function ResultatPage() {
   const navigate  = useNavigate()
   const { patient, reinitialiser } = usePatient()
   const { t, langue } = useTranslation()
+  const { parler, estEnTrainDeParler, supporte } = useTextToSpeech()
   const [sortie, setSortie] = useState(false)
 
   const { avertissement, compte, reset } = useInactivite({
@@ -48,8 +50,11 @@ export default function ResultatPage() {
   const esi        = res?.esi_predit ?? null
   const config     = ESI_CONFIG[esi] ?? null
   const style      = config ? COULEURS_ESI[config.couleur] : null
-  const esiLibelle = esi ? t(`esi${esi}_libelle`) : null
-  const esiDelai   = esi ? t(`esi${esi}_delai`)   : null
+  const esiLibelle  = esi ? t(`esi${esi}_libelle`) : null
+  const esiDelai    = esi ? t(`esi${esi}_delai`)   : null
+  const texteResultat = esiLibelle && esiDelai
+    ? t('tts_resultat', { libelle: esiLibelle, delai: esiDelai })
+    : null
 
   // Garder le résultat affiché 60 s max, puis permettre nouvelle consultation
   useEffect(() => {
@@ -89,20 +94,32 @@ export default function ResultatPage() {
 
           {/* Badge ESI principal */}
           {esi && style && (
-            <div
-              className="resultat-esi-badge"
-              style={{
-                background: style.fond,
-                border: `2px solid ${style.bordure}`,
-                color: style.texte,
-              }}
-              aria-label={`${t('niveau_priorite')} ESI ${esi} : ${esiLibelle}`}
-            >
-              <span className="resultat-esi-numero">{esi}</span>
-              <div className="resultat-esi-infos">
-                <span className="resultat-esi-libelle">{esiLibelle}</span>
-                <span className="resultat-esi-sous">{t('niveau_priorite')}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                className="resultat-esi-badge"
+                style={{
+                  background: style.fond,
+                  border: `2px solid ${style.bordure}`,
+                  color: style.texte,
+                  flex: 1,
+                }}
+                aria-label={`${t('niveau_priorite')} ESI ${esi} : ${esiLibelle}`}
+              >
+                <span className="resultat-esi-numero">{esi}</span>
+                <div className="resultat-esi-infos">
+                  <span className="resultat-esi-libelle">{esiLibelle}</span>
+                  <span className="resultat-esi-sous">{t('niveau_priorite')}</span>
+                </div>
               </div>
+              {supporte && texteResultat && (
+                <button
+                  className={`tts-btn${estEnTrainDeParler ? ' tts-btn--actif' : ''}`}
+                  onClick={() => parler(texteResultat, langue)}
+                  aria-label={t('tts_ecouter')}
+                  title={t('tts_ecouter')}
+                  style={{ fontSize: '1.4rem', padding: '6px 10px' }}
+                >🔊</button>
+              )}
             </div>
           )}
 

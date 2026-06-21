@@ -16,6 +16,7 @@ import SelecteurLangue from '../components/SelecteurLangue'
 import GuideEtape from '../components/GuideEtape'
 import ModalInactivite from '../components/ModalInactivite'
 import { useTranslation } from '../hooks/useTranslation'
+import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
@@ -282,8 +283,16 @@ function VueQuestion({
   texteLibre, onTexteChange,
   passerVisible, onRepondre, onPasser, onRetour,
 }) {
-  const { t } = useTranslation()
+  const { t, langue }  = useTranslation()
+  const { parler, arreter, estEnTrainDeParler, supporte } = useTextToSpeech()
   const pctProgression = Math.round(((numQuestion - 1) / maxQuestions) * 100)
+
+  // Lecture automatique de chaque nouvelle question
+  useEffect(() => {
+    if (question?.question) parler(question.question, langue)
+    return arreter
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question?.question, langue])
 
   return (
     <div className="kiosk-center">
@@ -304,8 +313,19 @@ function VueQuestion({
           <div className="q-barre-progression" style={{ width: `${pctProgression}%` }} />
         </div>
 
-        {/* Texte de la question */}
-        <p className="q-texte">{question.question}</p>
+        {/* Texte de la question + bouton relire */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+          <p className="q-texte" style={{ margin: 0, flex: 1 }}>{question.question}</p>
+          {supporte && (
+            <button
+              className={`tts-btn${estEnTrainDeParler ? ' tts-btn--actif' : ''}`}
+              onClick={() => parler(question.question, langue)}
+              aria-label={t('tts_ecouter')}
+              title={t('tts_ecouter')}
+              style={{ marginTop: 2 }}
+            >🔊</button>
+          )}
+        </div>
 
         {/* Réponses — type oui_non */}
         {question.type === 'oui_non' && (

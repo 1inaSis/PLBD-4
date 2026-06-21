@@ -24,6 +24,7 @@ import SelecteurLangue from '../components/SelecteurLangue'
 import GuideEtape from '../components/GuideEtape'
 import ModalInactivite from '../components/ModalInactivite'
 import { useTranslation } from '../hooks/useTranslation'
+import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
@@ -39,11 +40,12 @@ function pireCouleur(...couleurs) {
 // ── 3 étapes de mesure ────────────────────────────────────────────────────────
 const ETAPES = [
   {
-    cle:          'temperature',
-    typeMesure:   'temperature',
-    label:        'const_temp_label',
-    instruction:  'const_temp_instruction',
-    messageNull:  'const_temp_null',
+    cle:            'temperature',
+    typeMesure:     'temperature',
+    label:          'const_temp_label',
+    instruction:    'const_temp_instruction',
+    instructionTTS: 'tts_instruction_temp',
+    messageNull:    'const_temp_null',
     unite:        '°C',
     icone:        '🌡️',
     illustration: IllustrationThermometre,
@@ -52,12 +54,13 @@ const ETAPES = [
   },
 
   {
-    cle:          'spo2',
-    typeMesure:   'spo2',
-    double:       true,
-    label:        'const_spo2_label',
-    instruction:  'guide3_spo2',
-    messageNull:  'const_spo2_null',
+    cle:            'spo2',
+    typeMesure:     'spo2',
+    double:         true,
+    label:          'const_spo2_label',
+    instruction:    'guide3_spo2',
+    instructionTTS: 'tts_instruction_spo2',
+    messageNull:    'const_spo2_null',
     icone:        '🫁',
     illustration: IllustrationSpo2,
     fallback:     { spo2: 97.0, heart_rate: 72 },
@@ -68,10 +71,11 @@ const ETAPES = [
   },
 
   {
-    cle:         'bp_systolic',
-    typeMesure:  'tension',
-    manuelle:    true,
-    instruction: 'const_bp_guide',
+    cle:            'bp_systolic',
+    typeMesure:     'tension',
+    manuelle:       true,
+    instruction:    'const_bp_guide',
+    instructionTTS: 'tts_instruction_tension',
     label:       'const_bp_label',
     unite:       'mmHg',
     icone:       '💉',
@@ -345,9 +349,21 @@ function VueMesure({
   erreur, messageCapture,
   onLancerMesure, onEtapeSuivante, onReessayer, onValiderManuel, onRetour,
 }) {
-  const { t } = useTranslation()
+  const { t, langue }  = useTranslation()
+  const { parler, arreter, estEnTrainDeParler, supporte } = useTextToSpeech()
   const estSimulee    = !!etape.simulee
   const estManuelle   = !!etape.manuelle
+
+  const texteInstruction = etape.instructionTTS ? t(etape.instructionTTS) : null
+
+  // Lecture auto une fois à chaque nouvelle étape
+  useEffect(() => {
+    if (texteInstruction) parler(texteInstruction, langue)
+    return arreter
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indexEtape])
+
+  const relireInstruction = () => { if (texteInstruction) parler(texteInstruction, langue) }
   const couleur       = evaluerCouleur(etape.cle, valeur)
   const affichee      = !etape.double && valeur != null
     ? etape.formatter(valeur, constantes)
@@ -375,7 +391,7 @@ function VueMesure({
           <h2 className="kiosk-titre-sm">{t(etape.label)}</h2>
         </div>
 
-        {/* PRET : illustration + instruction + bouton Mesurer (température) */}
+        {/* PRET : illustration + instruction + bouton Mesurer (température / SpO₂) */}
         {etat === ETAT.PRET && !estSimulee && !estManuelle && (
           <>
             {Illustration && (
@@ -383,7 +399,17 @@ function VueMesure({
                 <Illustration />
               </div>
             )}
-            <p className="kiosk-soustitre">{t(etape.instruction)}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <p className="kiosk-soustitre" style={{ margin: 0 }}>{t(etape.instruction)}</p>
+              {supporte && texteInstruction && (
+                <button
+                  className={`tts-btn${estEnTrainDeParler ? ' tts-btn--actif' : ''}`}
+                  onClick={relireInstruction}
+                  aria-label={t('tts_ecouter')}
+                  title={t('tts_ecouter')}
+                >🔊</button>
+              )}
+            </div>
             <button className="kiosk-btn kiosk-btn--primary" onClick={onLancerMesure}>
               {t('const_mesurer')}
             </button>
@@ -392,11 +418,23 @@ function VueMesure({
 
         {/* PRET : saisie manuelle tension artérielle */}
         {etat === ETAT.PRET && estManuelle && (
-          <SaisieTension
-            instruction={t(etape.instruction ?? 'const_bp_guide')}
-            onValider={onValiderManuel}
-            t={t}
-          />
+          <>
+            {supporte && texteInstruction && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+                <button
+                  className={`tts-btn${estEnTrainDeParler ? ' tts-btn--actif' : ''}`}
+                  onClick={relireInstruction}
+                  aria-label={t('tts_ecouter')}
+                  title={t('tts_ecouter')}
+                >🔊</button>
+              </div>
+            )}
+            <SaisieTension
+              instruction={t(etape.instruction ?? 'const_bp_guide')}
+              onValider={onValiderManuel}
+              t={t}
+            />
+          </>
         )}
 
         {/* COMPTE : compte à rebours SVG circulaire 5→1 */}
@@ -421,7 +459,10 @@ function VueMesure({
             <div className="kiosk-alerte" role="alert">
               {etape.messageNull ? t(etape.messageNull) : t('const_capteur_verif')}
             </div>
-            <button className="kiosk-btn kiosk-btn--primary" onClick={onReessayer}>
+            <button
+              className="kiosk-btn kiosk-btn--primary"
+              onClick={() => { onReessayer(); relireInstruction() }}
+            >
               {t('const_reessayer')}
             </button>
           </div>

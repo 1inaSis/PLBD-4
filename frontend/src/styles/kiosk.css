@@ -3498,3 +3498,27 @@ body {
   /* Garde les animations one-shot (badge-appear, slide-in) */
   .salle-ligne:not(.salle-ligne--entete) { animation: none !important; }
 }
+
+/* ── Bouton text-to-speech 🔊 ───────────────────────────────────────────────── */
+.tts-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.05rem;
+  padding: 3px 7px;
+  border-radius: 6px;
+  opacity: 0.55;
+  transition: opacity 0.18s, background 0.18s;
+  color: inherit;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.tts-btn:hover  { opacity: 0.9; background: rgba(255,255,255,0.07); }
+.tts-btn--actif { opacity: 1; animation: tts-pulse 1s ease-in-out infinite; }
+@keyframes tts-pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.25); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tts-btn--actif { animation: none; }
+}
