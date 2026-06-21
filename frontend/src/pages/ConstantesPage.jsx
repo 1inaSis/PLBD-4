@@ -1,14 +1,12 @@
 // Étape 3 / 5 — Mesure séquentielle des constantes vitales
 //
-// Flux par étape réelle :
+// Flux par étape réelle (Température + SpO₂/FC) :
 //   PRET → (clic Mesurer) → COMPTE (5→1) → ATTENTE → (valeur valide) → COMPLET
 //   ATTENTE → (null retourné) → message + Réessayer → COMPTE → ATTENTE
 //   ATTENTE → (30s sans valeur) → valeur simulée injectée + COMPLET auto (3s)
 //
-// Flux étape simulée (spo2, tension) :
-//   PRET → (auto) → ATTENTE → valeurs générées → COMPLET → passage auto (5s)
-//
-// 3 étapes : Température → Oxymètre (SpO₂ + FC, simulé) → Tension (simulée)
+// Tension : saisie manuelle (PRET → SaisieTension → COMPLET)
+// 3 étapes : Température → SpO₂/FC (MAX30102) → Tension (manuelle)
 // Après les 3 étapes → RECAP (BiometrieDisplay complet + "Continuer")
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -38,13 +36,6 @@ function pireCouleur(...couleurs) {
   )
 }
 
-function simulerSpo2() {
-  return {
-    spo2:       Math.round((96 + Math.random() * 3) * 10) / 10,
-    heart_rate: Math.round(65 + Math.random() * 20),
-  }
-}
-
 // ── 3 étapes de mesure ────────────────────────────────────────────────────────
 const ETAPES = [
   {
@@ -61,18 +52,18 @@ const ETAPES = [
   },
 
   {
-    cle:           'spo2',
-    typeMesure:    'spo2',
-    simulee:       true,
-    simulerValeurs: simulerSpo2,
-    messageSimule: 'const_fc_sim',
-    double:        true,
-    label:         'const_spo2_label',
-    icone:         '🫁',
-    illustration:  IllustrationSpo2,
+    cle:          'spo2',
+    typeMesure:   'spo2',
+    double:       true,
+    label:        'const_spo2_label',
+    instruction:  'guide3_spo2',
+    messageNull:  'const_spo2_null',
+    icone:        '🫁',
+    illustration: IllustrationSpo2,
+    fallback:     { spo2: 97.0, heart_rate: 72 },
     valeurs: [
-      { cle: 'spo2',       label: 'bio_spo2',       unite: '%',   formatter: (v) => Number(v).toFixed(1) },
-      { cle: 'heart_rate', label: 'const_fc_label',  unite: 'bpm', formatter: (v) => Math.round(Number(v)), simule: true },
+      { cle: 'spo2',       label: 'bio_spo2',      unite: '%',   formatter: (v) => Number(v).toFixed(1) },
+      { cle: 'heart_rate', label: 'const_fc_label', unite: 'bpm', formatter: (v) => Math.round(Number(v)) },
     ],
   },
 

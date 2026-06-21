@@ -29,7 +29,7 @@ PORTS_CANDIDATS = [
     "/dev/ttyUSB1",
 ]
 BAUDRATE_ARDUINO = 9600
-TIMEOUT_MESURE   = 20    # secondes max pour recevoir la réponse de l'Arduino
+TIMEOUT_MESURE   = 10    # secondes max pour recevoir la réponse de l'Arduino
 
 # ── État partagé ─────────────────────────────────────────────────────────────
 _verrou: threading.Lock = threading.Lock()

@@ -102,6 +102,7 @@ export const TRANSLATIONS = {
     const_bp_guide:   'Mesurez avec le tensiomètre manuel et saisissez les valeurs',
     const_bp_valider: 'Valider la tension',
     const_fc_sim:     'Fréquence cardiaque simulée — capteur MAX30102 en attente',
+    const_spo2_null:  'Veuillez placer fermement votre doigt sur le capteur.',
     sim_badge:        'Simulé',
     // AccueilPage
     erreur_nom_prenom_requis: 'Le nom et le prénom sont obligatoires.',
@@ -207,6 +208,7 @@ export const TRANSLATIONS = {
     const_temp_null:        'Please point the sensor at your forehead, 2-3 cm away',
     const_spo2_label:       'Pulse oximetry',
     const_spo2_sim:         'MAX30102 sensor not connected — simulated values',
+    const_spo2_null:        'Please place your finger firmly on the sensor.',
     const_fc_label:         'Heart rate',
     const_bp_label:         'Blood pressure',
     const_bp_sim:           'Blood pressure simulated — manual sphygmomanometer not connected',
@@ -335,6 +337,7 @@ export const TRANSLATIONS = {
     const_temp_null:        'يرجى توجيه المستشعر نحو جبهتك على مسافة 2-3 سم',
     const_spo2_label:       'تأكسج الدم',
     const_spo2_sim:         'المستشعر غير متصل — قيم محاكاة',
+    const_spo2_null:        'ضع إصبعك بإحكام على المستشعر.',
     const_fc_label:         'معدل ضربات القلب',
     const_bp_label:         'ضغط الدم',
     const_bp_sim:           'ضغط الدم محاكى — جهاز القياس غير متصل',

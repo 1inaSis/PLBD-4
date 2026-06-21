@@ -184,7 +184,7 @@ void mesurerOxymetrie() {
   }
 
   bool spo2Ok = spo2Valide     && (valeurSpo2     >= 70)  && (valeurSpo2     <= 100);
-  bool freqOk = freqCardValide && (valeurFreqCard >= 30)  && (valeurFreqCard <= 220);
+  bool freqOk = freqCardValide && (valeurFreqCard >= 40)  && (valeurFreqCard <= 180);
 
   if (!spo2Ok || !freqOk) {
     Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
