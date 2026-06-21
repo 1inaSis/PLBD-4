@@ -134,7 +134,7 @@ export default function QuestionnairePage() {
         {/* ── Colonne droite : Saisie symptômes ──────────────────────── */}
         <section className="questionnaire-col questionnaire-col--saisie" aria-label="Description des symptômes">
           <div className="kiosk-card">
-            <span className="eyebrow">Étape 2 / 5 · Symptômes</span>
+            <span className="eyebrow">{t('etape2_titre')}</span>
             <h2 className="kiosk-titre-sm">
               {patient.prenom ? `${t('ou_mal').replace('?', ',')} ${patient.prenom} ?` : t('ou_mal')}
             </h2>
@@ -159,7 +159,7 @@ export default function QuestionnairePage() {
               </div>
             ) : (
               <p className="kiosk-note" style={{ marginTop: 0 }}>
-                Appuyez sur le schéma pour sélectionner vos zones douloureuses.
+                {t('instruction_corps')}
               </p>
             )}
 
@@ -196,7 +196,7 @@ export default function QuestionnairePage() {
             {/* Alerte urgence détectée par le NLP */}
             {urgenceDetectee && (
               <div className="kiosk-alerte kiosk-alerte--urgence" role="alert" aria-live="assertive">
-                ⚠️ Urgence détectée — Le personnel soignant est alerté. Vous serez pris en charge très rapidement.
+                {t('alerte_urgence_detectee')}
               </div>
             )}
 

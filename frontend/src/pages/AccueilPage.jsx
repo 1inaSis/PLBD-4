@@ -114,7 +114,7 @@ export default function AccueilPage() {
   const validerManuel = async () => {
     const { nom, prenom, date_naissance } = formulaire
     if (!nom.trim() || !prenom.trim()) {
-      setErreurForm('Le nom et le prénom sont obligatoires.')
+      setErreurForm(t('erreur_nom_prenom_requis'))
       return
     }
     setEnSoumission(true)
@@ -155,7 +155,7 @@ export default function AccueilPage() {
       setPrenomBienvenue(data.prenom)
       setVue(VUE.BIENVENUE)
     } catch {
-      setErreur('Impossible de démarrer le mode démo')
+      setErreur(t('erreur_mode_demo'))
     }
   }
 
@@ -238,7 +238,7 @@ export default function AccueilPage() {
           <div className="kiosk-card kiosk-card--centree">
             <div className="camera-active-badge" role="status" aria-live="polite">
               <span className="camera-active-dot" aria-hidden="true" />
-              Caméra active
+              {t('camera_active')}
             </div>
             <div className="kiosk-spinner" aria-label="Chargement" />
             <h2 className="kiosk-titre-sm">{t('scan_en_cours')}</h2>
@@ -299,7 +299,7 @@ export default function AccueilPage() {
                   onChange={changerChamp}
                   inputMode="numeric"
                 />
-                <span className="cin-hint">Format : 15/03/1985</span>
+                <span className="cin-hint">{t('format_date_hint')}</span>
               </div>
             </div>
 

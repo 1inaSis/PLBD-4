@@ -233,8 +233,8 @@ function VueChargement({ numQuestion }) {
         </h2>
         <p className="kiosk-soustitre">
           {numQuestion === 0
-            ? "L'IA analyse vos symptômes et constantes pour personnaliser les questions."
-            : "L'IA adapte la prochaine question à vos réponses précédentes."}
+            ? t('ia_analyse_symptomes')
+            : t('ia_adapte_question')}
         </p>
       </div>
     </div>
@@ -242,13 +242,14 @@ function VueChargement({ numQuestion }) {
 }
 
 function VueSoumission() {
+  const { t } = useTranslation()
   return (
     <div className="kiosk-center">
       <div className="kiosk-card kiosk-card--centree">
         <div className="kiosk-spinner" aria-label="Calcul en cours" />
-        <h2 className="kiosk-titre-sm">Calcul du niveau d'urgence…</h2>
+        <h2 className="kiosk-titre-sm">{t('calcul_urgence')}</h2>
         <p className="kiosk-soustitre">
-          Le modèle de triage analyse l'ensemble de vos données.
+          {t('modele_triage_analyse')}
         </p>
       </div>
     </div>
@@ -256,17 +257,18 @@ function VueSoumission() {
 }
 
 function VueErreur({ message, onReessayer, onRetour }) {
+  const { t } = useTranslation()
   return (
     <div className="kiosk-center">
       <div className="kiosk-card kiosk-card--centree">
-        <h2 className="kiosk-titre-sm">Une erreur est survenue</h2>
+        <h2 className="kiosk-titre-sm">{t('erreur_generique')}</h2>
         <div className="kiosk-alerte" role="alert">{message}</div>
         <div className="kiosk-actions" style={{ marginTop: 16 }}>
           <button className="kiosk-btn kiosk-btn--primary" onClick={onReessayer}>
-            Réessayer
+            {t('const_reessayer')}
           </button>
           <button className="kiosk-btn kiosk-btn--secondary" onClick={onRetour}>
-            ← Retour aux constantes
+            {t('retour')}
           </button>
         </div>
       </div>
@@ -280,6 +282,7 @@ function VueQuestion({
   texteLibre, onTexteChange,
   passerVisible, onRepondre, onPasser, onRetour,
 }) {
+  const { t } = useTranslation()
   const pctProgression = Math.round(((numQuestion - 1) / maxQuestions) * 100)
 
   return (
@@ -288,8 +291,8 @@ function VueQuestion({
 
         {/* En-tête + barre de progression */}
         <div className="q-progression-wrapper">
-          <span className="eyebrow">Étape 4 / 5 · Questions IA</span>
-          <span className="q-compteur">Question {numQuestion} / {maxQuestions} max</span>
+          <span className="eyebrow">{t('etape4_titre')}</span>
+          <span className="q-compteur">{t('question_compteur', { x: numQuestion, y: maxQuestions })}</span>
         </div>
         <div
           className="q-barre-wrapper"
@@ -335,7 +338,7 @@ function VueQuestion({
           <div className="q-texte-libre-wrapper">
             <textarea
               className="symptome-input"
-              placeholder="Décrivez en quelques mots…"
+              placeholder={t('decrivez_mots')}
               value={texteLibre}
               onChange={e => onTexteChange(e.target.value)}
               rows={3}
@@ -348,7 +351,7 @@ function VueQuestion({
               disabled={!texteLibre.trim()}
               style={{ marginTop: 8 }}
             >
-              Valider ma réponse →
+              {t('valider_reponse')}
             </button>
           </div>
         )}

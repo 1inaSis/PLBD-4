@@ -597,7 +597,7 @@ function SaisieTension({ instruction, onValider, t }) {
   const peutValider = sys !== '' && dia !== '' && sysN > 0 && diaN > 0
   const couleur = peutValider ? evaluerCouleurTension(sysN, diaN) : null
 
-  const LIBELLES_TENSION = { vert: 'Normal', orange: 'Attention', rouge: 'Critique' }
+  const LIBELLES_TENSION = { vert: t('bio_normal'), orange: t('bio_attention'), rouge: t('bio_critique') }
 
   return (
     <div className="tension-manuelle">
@@ -606,7 +606,7 @@ function SaisieTension({ instruction, onValider, t }) {
       <div className="tension-inputs">
         <div className="tension-input-groupe">
           <label className="tension-input-label" htmlFor="tension-sys">
-            Systolique (mmHg)
+            {t('tension_systolique')}
           </label>
           <input
             id="tension-sys"
@@ -624,7 +624,7 @@ function SaisieTension({ instruction, onValider, t }) {
 
         <div className="tension-input-groupe">
           <label className="tension-input-label" htmlFor="tension-dia">
-            Diastolique (mmHg)
+            {t('tension_diastolique')}
           </label>
           <input
             id="tension-dia"

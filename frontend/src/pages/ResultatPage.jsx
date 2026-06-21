@@ -12,13 +12,13 @@ import { useTranslation } from '../hooks/useTranslation'
 import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
-// ── Configuration des niveaux ESI ────────────────────────────────────────────
+// ── Couleurs ESI (statique) ───────────────────────────────────────────────────
 const ESI_CONFIG = {
-  1: { couleur: 'rouge',  libelle: 'Immédiat',    delai: 'Prise en charge immédiate' },
-  2: { couleur: 'orange', libelle: 'Très urgent',  delai: 'Sous 10 minutes' },
-  3: { couleur: 'jaune',  libelle: 'Urgent',       delai: 'Sous 30 minutes' },
-  4: { couleur: 'vert',   libelle: 'Peu urgent',   delai: 'Sous 1 heure' },
-  5: { couleur: 'bleu',   libelle: 'Non urgent',   delai: 'Selon disponibilités' },
+  1: { couleur: 'rouge'  },
+  2: { couleur: 'orange' },
+  3: { couleur: 'jaune'  },
+  4: { couleur: 'vert'   },
+  5: { couleur: 'bleu'   },
 }
 
 const COULEURS_ESI = {
@@ -44,10 +44,12 @@ export default function ResultatPage() {
     setTimeout(() => navigate(path, opts), 350)
   }, [navigate])
 
-  const res    = patient.resultat_triage
-  const esi    = res?.esi_predit ?? null
-  const config = ESI_CONFIG[esi] ?? null
-  const style  = config ? COULEURS_ESI[config.couleur] : null
+  const res        = patient.resultat_triage
+  const esi        = res?.esi_predit ?? null
+  const config     = ESI_CONFIG[esi] ?? null
+  const style      = config ? COULEURS_ESI[config.couleur] : null
+  const esiLibelle = esi ? t(`esi${esi}_libelle`) : null
+  const esiDelai   = esi ? t(`esi${esi}_delai`)   : null
 
   // Garder le résultat affiché 60 s max, puis permettre nouvelle consultation
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function ResultatPage() {
   // ── Raccourcis pour l'affichage ───────────────────────────────────────────
   const numeroTicket  = res.patient_id ?? '—'
   const positionFile  = res.position_file ?? '—'
-  const attente       = res.attente_estimee ?? config?.delai ?? '—'
+  const attente       = res.attente_estimee ?? esiDelai ?? '—'
   const medecin       = res.medecin_assigne ?? null
   const confiance     = res.confiance != null ? Math.round(res.confiance) : null
   const explications  = res.explications ?? []
@@ -94,12 +96,12 @@ export default function ResultatPage() {
                 border: `2px solid ${style.bordure}`,
                 color: style.texte,
               }}
-              aria-label={`Niveau de priorité ESI ${esi} : ${config.libelle}`}
+              aria-label={`${t('niveau_priorite')} ESI ${esi} : ${esiLibelle}`}
             >
               <span className="resultat-esi-numero">{esi}</span>
               <div className="resultat-esi-infos">
-                <span className="resultat-esi-libelle">{config.libelle}</span>
-                <span className="resultat-esi-sous">Niveau de priorité</span>
+                <span className="resultat-esi-libelle">{esiLibelle}</span>
+                <span className="resultat-esi-sous">{t('niveau_priorite')}</span>
               </div>
             </div>
           )}
@@ -112,7 +114,7 @@ export default function ResultatPage() {
           {/* Explications ESI */}
           {explications.length > 0 && (
             <div className="resultat-explications">
-              <p className="resultat-expl-titre">Facteurs ayant influencé votre niveau de priorité :</p>
+              <p className="resultat-expl-titre">{t('facteurs_influence')}</p>
               <ul className="resultat-expl-liste">
                 {explications.map((e, i) => (
                   <li key={i} className="resultat-expl-item">
