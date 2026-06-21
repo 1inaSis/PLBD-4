@@ -637,20 +637,14 @@ async def api_constantes_mesurer(body: MesureRequest):
     loop = asyncio.get_running_loop()
 
     if body.type == "tension":
-        # Tension artérielle : toujours simulée
+        # Tension artérielle : toujours simulée (pas de tensiomètre Arduino)
         sys_  = int(random.gauss(120, 15))
         sys_  = max(80, min(200, sys_))
         dias  = int(sys_ * random.uniform(0.55, 0.68))
         nouvelles = {"bp_systolic": sys_, "bp_diastolic": dias, "source": "simulation"}
-    elif body.type == "spo2":
-        # MAX30102 non connecté : SpO₂ et FC simulés
-        nouvelles = {
-            "spo2":       round(96 + random.random() * 3, 1),
-            "heart_rate": random.randint(65, 85),
-            "source":     "simulation",
-        }
     else:
-        # Déléguer à l'Arduino (bloquant jusqu'à TIMEOUT_MESURE secondes)
+        # Température et SpO2/FC : délégués à l'Arduino (MAX30102 + MLX90614)
+        # Si le capteur est absent ou timeout, capteurs_raspberry.py retourne une simulation
         data = await loop.run_in_executor(None, mesurer_capteur, body.type)
         nouvelles = data
 
@@ -712,7 +706,7 @@ async def api_questions_suivante(body: QuestionSuivanteRequest):
     Maximum 5 questions imposé côté serveur.
     """
     session      = _get_session(body.session_id)
-    constantes   = body.constantes or session.get("constantes") or {}
+    constantes   = body.constantes if body.constantes is not None else (session.get("constantes") or {})
     symptom_text = body.symptomes  or session.get("symptom_text", "")
     zones_corps  = session.get("zones_corps", [])
     features_nlp = extraire_features_nlp(symptom_text)
@@ -736,7 +730,7 @@ async def api_questions_suivante(body: QuestionSuivanteRequest):
         ),
     )
 
-    # Stocker la question dans la session pour que le triage puisse l'encoder
+    # Stocker la question dans la session (remplace si même feature_name pour éviter doublons en cas de retour)
     if resultat.get("continuer", True) and resultat.get("question"):
         question_obj = {
             "id":           f"q_{num_question}",
@@ -745,7 +739,13 @@ async def api_questions_suivante(body: QuestionSuivanteRequest):
             "choix":        resultat.get("choix", []),
             "feature_name": resultat.get("feature_name", f"q_adaptive_{num_question}"),
         }
-        session.setdefault("questions", []).append(question_obj)
+        questions = session.setdefault("questions", [])
+        fn = question_obj["feature_name"]
+        idx = next((i for i, q in enumerate(questions) if q["feature_name"] == fn), None)
+        if idx is not None:
+            questions[idx] = question_obj
+        else:
+            questions.append(question_obj)
 
     return {
         "continuer":    resultat.get("continuer", False),
@@ -949,7 +949,8 @@ async def api_triage(body: TriageRequest):
         ["salle", "medecin_M1", "medecin_M2"],
     )
 
-    # Alerte critique si ESI 1 ou 2 — médecin assigné seulement
+    # Alerte critique si ESI 1 ou 2 — les deux médecins alertés
+    # medecin_assigne permet à chacun d'afficher "assigné à vous" ou "assigné à un collègue"
     if esi_predit <= 2:
         await manager.broadcast_to(
             "alerte_critique",
@@ -958,9 +959,10 @@ async def api_triage(body: TriageRequest):
                 "nom": session.get("nom"),
                 "prenom": session.get("prenom"),
                 "esi": esi_predit,
+                "medecin_assigne": medecin_id,
                 "rapport": rapport,
             },
-            [f"medecin_{medecin_id}"],
+            ["medecin_M1", "medecin_M2"],
         )
 
     return {
@@ -1004,7 +1006,8 @@ async def api_prise_en_charge(body: PriseEnChargeRequest):
     if body.patient_id in MEDECINS[body.medecin_id]["patients"]:
         MEDECINS[body.medecin_id]["patients"].remove(body.patient_id)
 
-    session = patients_session.get(body.patient_id.replace("PT-", "", 1), {})
+    session_id_clean = body.patient_id.replace("PT-", "", 1)
+    session = patients_session.get(session_id_clean, {})
     historique_patients.append({
         **session,
         "medecin_id": body.medecin_id,
@@ -1014,6 +1017,7 @@ async def api_prise_en_charge(body: PriseEnChargeRequest):
             round(patient_file.temps_attente_minutes(), 1) if patient_file else "?"
         ),
     })
+    patients_session.pop(session_id_clean, None)
 
     etat = _construire_etat_global()
     await manager.broadcast_to("file_mise_a_jour", etat, ["salle", "medecin_M1", "medecin_M2"])
@@ -1192,7 +1196,7 @@ _DEMO_SCENARIOS = {
     1: {
         "nom": "DURAND", "prenom": "Michel", "age": 45, "sex": 1,
         "symptom_text": "douleur thoracique sévère irradiant dans le bras gauche, sueurs froides, essoufflement",
-        "zones_corps": ["chest", "left_arm"],
+        "zones_corps": ["poitrine", "bras_gauche"],
         "constantes": {"temperature": 37.2, "heart_rate": 128, "bp_systolic": 88, "bp_diastolic": 58, "spo2": 91.0, "respiratory_rate": 22, "glucose": 110},
         "binaires": {"chest_pain": 1, "dyspnea": 1, "loss_of_consciousness": 0, "severe_bleeding": 0, "neurological_symptoms": 0, "abdominal_pain": 0, "fever": 0, "trauma": 0},
         "titre": "Urgence cardiaque",
@@ -1201,7 +1205,7 @@ _DEMO_SCENARIOS = {
     2: {
         "nom": "BENALI", "prenom": "Sara", "age": 30, "sex": 0,
         "symptom_text": "fièvre depuis 2 jours, maux de tête, courbatures, fatigue intense",
-        "zones_corps": ["head"],
+        "zones_corps": ["tete"],
         "constantes": {"temperature": 38.8, "heart_rate": 98, "bp_systolic": 118, "bp_diastolic": 76, "spo2": 97.0, "respiratory_rate": 18, "glucose": 85},
         "binaires": {"chest_pain": 0, "dyspnea": 0, "loss_of_consciousness": 0, "severe_bleeding": 0, "neurological_symptoms": 0, "abdominal_pain": 0, "fever": 1, "trauma": 0},
         "titre": "Fièvre modérée",
@@ -1210,7 +1214,7 @@ _DEMO_SCENARIOS = {
     3: {
         "nom": "MARTIN", "prenom": "Léa", "age": 25, "sex": 0,
         "symptom_text": "léger mal de tête depuis ce matin, légère fatigue, aucune fièvre",
-        "zones_corps": ["head"],
+        "zones_corps": ["tete"],
         "constantes": {"temperature": 36.8, "heart_rate": 72, "bp_systolic": 118, "bp_diastolic": 74, "spo2": 99.0, "respiratory_rate": 15, "glucose": 88},
         "binaires": {"chest_pain": 0, "dyspnea": 0, "loss_of_consciousness": 0, "severe_bleeding": 0, "neurological_symptoms": 0, "abdominal_pain": 0, "fever": 0, "trauma": 0},
         "titre": "Consultation simple",

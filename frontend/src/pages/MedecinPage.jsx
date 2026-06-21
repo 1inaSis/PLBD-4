@@ -498,14 +498,20 @@ export default function MedecinPage() {
       )}
 
       {/* ── Alertes critiques — banner modal persistant ──────────── */}
-      {alertesCritiques.map(alerte => (
+      {alertesCritiques.map(alerte => {
+        const estAssigne = !alerte.medecin_assigne || alerte.medecin_assigne === medecinId
+        return (
         <div key={alerte.patient_id} className="medecin-alerte-critique" role="alert">
           <div className="medecin-alerte-corps">
             <span className="medecin-alerte-icone">🚨</span>
             <div>
               <strong>ALERTE CRITIQUE — ESI {alerte.esi}</strong>
               <br />
-              {alerte.prenom} {alerte.nom} — prise en charge immédiate requise
+              {alerte.prenom} {alerte.nom}
+              {' — '}
+              {estAssigne
+                ? 'prise en charge immédiate requise'
+                : `assigné au Dr. ${alerte.medecin_assigne === 'M1' ? 'El Amrani' : 'Bensouda'} — en renfort si nécessaire`}
             </div>
           </div>
           <div className="medecin-alerte-actions">
@@ -524,7 +530,8 @@ export default function MedecinPage() {
             </button>
           </div>
         </div>
-      ))}
+        )
+      })}
 
       {/* ── Contenu principal ────────────────────────────────────── */}
       <main className="medecin-main">

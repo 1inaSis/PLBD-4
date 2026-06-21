@@ -112,6 +112,7 @@ export default function SalleAttentePage() {
   const annulerPin = () => { setPinVisible(false); setPinSaisi(''); setPinErreur(false) }
 
   const validerPin = async () => {
+    // NOTE DÉMO : PIN simple côté client pour prototype. En production, validation côté serveur avec token signé.
     if (pinSaisi !== '2026') { setPinErreur(true); setPinSaisi(''); return }
     setPinVisible(false)
     setResetEnCours(true)
