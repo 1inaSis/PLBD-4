@@ -13,4 +13,11 @@ export default defineConfig({
       '/ws': { target: 'ws://localhost:8000', ws: true },
     },
   },
+  // npm run preview (production systemd) — même proxy que dev
+  preview: {
+    proxy: {
+      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+      '/ws':  { target: 'ws://localhost:8000',  ws: true },
+    },
+  },
 })
