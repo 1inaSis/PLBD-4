@@ -180,6 +180,8 @@ def generer_question_suivante(
     """
     api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
+        # Sans clé Groq : aucune question générée.
+        # Le triage s'appuiera uniquement sur les constantes vitales + NLP des symptômes.
         return {"continuer": False}
 
     prompt_system = (

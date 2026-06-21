@@ -102,14 +102,15 @@ export default function DemoPage() {
     }
 
     try {
-      // Animation des étapes avant l'appel API
+      // API lancée immédiatement, animation en parallèle
+      const apiPromise = postDemoScenario(id)
+
       for (let i = 0; i < ETAPES.length - 1; i++) {
         avancer(i)
         await delai(500)
       }
 
-      // Appel API réel
-      const res = await postDemoScenario(id)
+      const res = await apiPromise
 
       avancer(ETAPES.length - 1)
       await delai(300)

@@ -252,7 +252,7 @@ export default function MedecinPage() {
             `Nouveau patient : ${data.prenom} ${data.nom} — ESI ${data.esi}`,
             'nouveau',
           )
-          if (sonActifRef.current && document.visibilityState === 'visible' && data.esi <= 2) {
+          if (sonActifRef.current && data.esi <= 2) {
             jouerBip(data.esi === 1 ? 3 : 1, audioCtxRef)
           }
         }
@@ -264,7 +264,7 @@ export default function MedecinPage() {
           if (prev.some(a => a.patient_id === data.patient_id)) return prev
           return [...prev, data]
         })
-        if (sonActifRef.current && document.visibilityState === 'visible') {
+        if (sonActifRef.current) {
           jouerBip(3, audioCtxRef)
         }
         // Notification push si la page est en arrière-plan

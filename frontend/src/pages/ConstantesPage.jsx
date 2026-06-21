@@ -101,6 +101,11 @@ export default function ConstantesPage() {
   }, [patient.session_id, reinitialiser, navigate])
   const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
 
+  useEffect(() => {
+    if (!patient.session_id) navigate('/', { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [phase, setPhase]                = useState(PHASE.MESURE)
   const [indexEtape, setIndexEtape]      = useState(0)
   const [etat, setEtat]                  = useState(ETAT.PRET)
@@ -139,7 +144,7 @@ export default function ConstantesPage() {
 
   // ── Lifecycle Arduino ────────────────────────────────────────────────────────
   useEffect(() => {
-    demarrerArduino().catch(() => {})
+    demarrerArduino().catch(() => { console.warn('[Arduino] Non détecté — mode simulation') })
     return () => { arreterArduino() }
   }, [])
 

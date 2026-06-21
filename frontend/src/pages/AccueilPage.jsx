@@ -27,7 +27,7 @@ export default function AccueilPage() {
   const navigate = useNavigate()
   const { setIdentite, connecterBorne, reinitialiser, patient } = usePatient()
   const { t, langue } = useTranslation()
-  const { parler }    = useTextToSpeech()
+  const { parler, arreter } = useTextToSpeech()
 
   const [vue, setVue]                   = useState(VUE.ACCUEIL)
   const [donneesScan, setDonneesScan]   = useState(null)
@@ -63,6 +63,7 @@ export default function AccueilPage() {
   useEffect(() => {
     if (vue !== VUE.BIENVENUE || !prenomBienvenue) return
     parler(t('tts_bienvenue', { prenom: prenomBienvenue }), langue)
+    return arreter
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vue])
 

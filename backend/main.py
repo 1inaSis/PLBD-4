@@ -807,7 +807,10 @@ async def api_triage(body: TriageRequest):
     7. Émet alerte_critique si ESI ≤ 2
     """
     session = _get_session(body.session_id)
-    constantes = body.constantes or session.get("constantes") or lire_toutes_constantes()
+    if body.constantes is not None:
+        constantes = body.constantes
+    else:
+        constantes = session.get("constantes") or lire_toutes_constantes()
 
     # Encoder les réponses aux questions adaptatives (68 features)
     questions = session.get("questions", [])

@@ -118,7 +118,7 @@ void mesurerTemperature() {
   float temp_finale;
   bool fievre = false;
   if (valeur_brute >= 28.0 && valeur_brute <= 40.0) {
-    if (valeur_brute > 37.5) {
+    if (valeur_brute > 37.0) {
       // Fièvre réelle détectable : ne pas normaliser pour préserver le signal clinique
       temp_finale = valeur_brute;
       fievre = true;

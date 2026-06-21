@@ -626,6 +626,12 @@ def main():
 
     # 1. Chargement et préparation
     print(f"\n[SOURCE] {CHEMIN_DATA}")
+    if not os.path.exists(CHEMIN_DATA):
+        raise FileNotFoundError(
+            f"\n[ERREUR] Fichier de données introuvable : {CHEMIN_DATA}\n"
+            "  → Vérifiez que ml/data/patients_50000.csv existe.\n"
+            "  → Placez le fichier CSV dans le dossier ml/data/ et relancez."
+        )
     df_raw = pd.read_csv(CHEMIN_DATA)
     print("\n[DISTRIBUTION ESI — donnees brutes]")
     dist = df_raw["esi_level"].value_counts().sort_index()

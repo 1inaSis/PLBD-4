@@ -62,6 +62,9 @@ export default function SalleAttentePage() {
   const [wsEtat, setWsEtat]         = useState('connexion')  // connexion | connecte | deconnecte
   const [heureLive, setHeureLive]   = useState(heureLocale())
   const [resetEnCours, setResetEnCours] = useState(false)
+  const [pinVisible, setPinVisible]     = useState(false)
+  const [pinSaisi, setPinSaisi]         = useState('')
+  const [pinErreur, setPinErreur]       = useState(false)
   const [tempsCourant, setTempsCourant] = useState(Date.now())
   const [degradBanner, setDegradBanner] = useState(null)
   const [stats, setStats]           = useState({
@@ -104,9 +107,13 @@ export default function SalleAttentePage() {
     }, 5000)
   }, [])
 
-  // ── Réinitialisation de la file (admin démo) ────────────────────────────────
-  const reinitialiser = async () => {
-    if (!window.confirm('Confirmer la réinitialisation ? Tous les patients seront supprimés.')) return
+  // ── Réinitialisation de la file — protégée par PIN ──────────────────────────
+  const ouvrirPin = () => { setPinVisible(true); setPinSaisi(''); setPinErreur(false) }
+  const annulerPin = () => { setPinVisible(false); setPinSaisi(''); setPinErreur(false) }
+
+  const validerPin = async () => {
+    if (pinSaisi !== '2026') { setPinErreur(true); setPinSaisi(''); return }
+    setPinVisible(false)
     setResetEnCours(true)
     try {
       await reinitialiserFile()
@@ -339,20 +346,67 @@ export default function SalleAttentePage() {
         </div>
       )}
 
-      {/* ── Bouton admin réinitialisation (bas-gauche, discret) ──── */}
-      <button
-        onClick={reinitialiser}
-        disabled={resetEnCours}
-        style={{
-          position: 'fixed', bottom: 52, left: 12,
-          padding: '4px 10px', fontSize: '0.72rem',
-          background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: 6, color: 'rgba(255,255,255,0.4)', cursor: 'pointer',
-          opacity: resetEnCours ? 0.4 : 1,
-        }}
-      >
-        {resetEnCours ? 'Réinitialisation…' : 'Réinitialiser la file'}
-      </button>
+      {/* ── Bouton admin réinitialisation — protégé par PIN ──────── */}
+      {!pinVisible ? (
+        <button
+          onClick={ouvrirPin}
+          disabled={resetEnCours}
+          style={{
+            position: 'fixed', bottom: 52, left: 12,
+            padding: '4px 10px', fontSize: '0.72rem',
+            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 6, color: 'rgba(255,255,255,0.4)', cursor: 'pointer',
+            opacity: resetEnCours ? 0.4 : 1,
+          }}
+        >
+          {resetEnCours ? 'Réinitialisation…' : 'Réinitialiser la file'}
+        </button>
+      ) : (
+        <div style={{
+          position: 'fixed', bottom: 44, left: 12,
+          background: 'rgba(15,20,30,0.96)', border: '1px solid rgba(255,255,255,0.2)',
+          borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8,
+          minWidth: 200, boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+        }}>
+          <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.55)' }}>
+            Code administrateur
+          </span>
+          <input
+            type="password"
+            inputMode="numeric"
+            maxLength={4}
+            value={pinSaisi}
+            onChange={e => { setPinSaisi(e.target.value.replace(/\D/g, '')); setPinErreur(false) }}
+            onKeyDown={e => { if (e.key === 'Enter') validerPin(); if (e.key === 'Escape') annulerPin() }}
+            placeholder="• • • •"
+            autoFocus
+            style={{
+              background: 'rgba(255,255,255,0.08)', border: `1px solid ${pinErreur ? '#f87171' : 'rgba(255,255,255,0.2)'}`,
+              borderRadius: 6, color: '#fff', fontSize: '1rem', padding: '5px 8px',
+              textAlign: 'center', letterSpacing: '0.3em', outline: 'none',
+            }}
+          />
+          {pinErreur && (
+            <span style={{ fontSize: '0.68rem', color: '#f87171' }}>Code incorrect</span>
+          )}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={validerPin}
+              style={{
+                flex: 1, padding: '4px 0', fontSize: '0.72rem', borderRadius: 5, cursor: 'pointer',
+                background: 'rgba(239,68,68,0.25)', border: '1px solid rgba(239,68,68,0.5)', color: '#f87171',
+              }}
+            >Confirmer</button>
+            <button
+              onClick={annulerPin}
+              style={{
+                padding: '4px 8px', fontSize: '0.72rem', borderRadius: 5, cursor: 'pointer',
+                background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.4)',
+              }}
+            >Annuler</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Vague décorative ─────────────────────────────────────── */}
       <div className="salle-vague" aria-hidden="true">

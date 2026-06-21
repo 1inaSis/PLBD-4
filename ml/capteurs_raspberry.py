@@ -132,38 +132,42 @@ def mesurer_capteur(type_mesure: str) -> dict:
     --------
     dict avec les valeurs mesurées + "source": "capteur"|"simulation"|"erreur"
     """
-    with _verrou:
+    if not _verrou.acquire(timeout=5):
+        print(f"[ARDUINO] Verrou occupé (mesure parallèle ?) → simulation ({type_mesure})")
+        return _simuler_mesure(type_mesure)
+    try:
         if _port_serie is None or not _port_serie.is_open:
             print(f"[ARDUINO] Port non ouvert → simulation ({type_mesure})")
             return _simuler_mesure(type_mesure)
 
-        try:
-            _port_serie.reset_input_buffer()
-            commande = f"MESURE:{type_mesure}\n".encode()
-            _port_serie.write(commande)
-            print(f"[ARDUINO] Commande → MESURE:{type_mesure}")
+        _port_serie.reset_input_buffer()
+        commande = f"MESURE:{type_mesure}\n".encode()
+        _port_serie.write(commande)
+        print(f"[ARDUINO] Commande → MESURE:{type_mesure}")
 
-            # Attente de la réponse JSON (timeout = TIMEOUT_MESURE)
-            deadline = time.time() + TIMEOUT_MESURE
-            while time.time() < deadline:
-                ligne = _port_serie.readline().decode("utf-8", errors="ignore").strip()
-                if not ligne:
+        # Attente de la réponse JSON (timeout = TIMEOUT_MESURE)
+        deadline = time.time() + TIMEOUT_MESURE
+        while time.time() < deadline:
+            ligne = _port_serie.readline().decode("utf-8", errors="ignore").strip()
+            if not ligne:
+                continue
+            if ligne.startswith("{"):
+                try:
+                    data = json.loads(ligne)
+                    print(f"[ARDUINO] Reponse : {data}")
+                    return data
+                except json.JSONDecodeError:
                     continue
-                if ligne.startswith("{"):
-                    try:
-                        data = json.loads(ligne)
-                        print(f"[ARDUINO] Reponse : {data}")
-                        return data
-                    except json.JSONDecodeError:
-                        continue
-                # Ignorer les lignes de debug Arduino ("[ARDUINO] ...")
+            # Ignorer les lignes de debug Arduino ("[ARDUINO] ...")
 
-            print(f"[ARDUINO] Timeout ({TIMEOUT_MESURE}s) pour {type_mesure} → simulation")
-            return _simuler_mesure(type_mesure)
+        print(f"[ARDUINO] Timeout ({TIMEOUT_MESURE}s) pour {type_mesure} → simulation")
+        return _simuler_mesure(type_mesure)
 
-        except Exception as e:
-            print(f"[ARDUINO] Erreur serie ({type_mesure}) : {e}")
-            return _simuler_mesure(type_mesure)
+    except Exception as e:
+        print(f"[ARDUINO] Erreur serie ({type_mesure}) : {e}")
+        return _simuler_mesure(type_mesure)
+    finally:
+        _verrou.release()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

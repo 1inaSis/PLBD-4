@@ -84,7 +84,8 @@ export function PatientProvider({ children }) {
 
   // Connexion WebSocket role=borne (créée une seule fois par session)
   const connecterBorne = useCallback((onEvenement) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return wsRef.current
+    const rs = wsRef.current?.readyState
+    if (rs === WebSocket.OPEN || rs === WebSocket.CONNECTING) return wsRef.current
 
     const ws = new WebSocket('/ws?role=borne')
 

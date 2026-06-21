@@ -41,6 +41,11 @@ export default function QuestionsPage() {
   }, [patient.session_id, reinitialiser, navigate])
   const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
 
+  useEffect(() => {
+    if (!patient.session_id) navigate('/', { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [phase, setPhase]                 = useState(PHASE.CHARGEMENT)
   const [sortie, setSortie]               = useState(false)
 
@@ -196,7 +201,7 @@ export default function QuestionsPage() {
           passerVisible={passerVisible}
           onRepondre={repondre}
           onPasser={passer}
-          onRetour={numQuestion === 1 ? () => navigate('/constantes') : null}
+          onRetour={numQuestion === 1 ? () => { completedRef.current = true; navigate('/constantes') } : null}
         />
       )}
 
@@ -386,7 +391,7 @@ function VueQuestion({
         {/* Retour (1ère question seulement) */}
         {onRetour && (
           <button className="kiosk-btn kiosk-btn--secondary q-btn-retour" onClick={onRetour}>
-            ← Retour
+            {t('retour')}
           </button>
         )}
 

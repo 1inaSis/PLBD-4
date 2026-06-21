@@ -3,7 +3,7 @@
 // et décrit librement ses symptômes. POST /api/symptomes envoie
 // le texte + les zones ; le NLP extrait les features côté serveur.
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import { soumettreSymptomes, abandonnerSession } from '../services/api'
@@ -25,6 +25,11 @@ export default function QuestionnairePage() {
     reinitialiser(); navigate('/')
   }, [patient.session_id, reinitialiser, navigate])
   const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
+
+  useEffect(() => {
+    if (!patient.session_id) navigate('/', { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [zonesSelectionnees, setZonesSelectionnees] = useState([])
   const [texteSymptome, setTexteSymptome] = useState('')
@@ -136,7 +141,7 @@ export default function QuestionnairePage() {
           <div className="kiosk-card">
             <span className="eyebrow">{t('etape2_titre')}</span>
             <h2 className="kiosk-titre-sm">
-              {patient.prenom ? `${t('ou_mal').replace('?', ',')} ${patient.prenom} ?` : t('ou_mal')}
+              {patient.prenom ? `${t('ou_mal').replace('?', ',').replace('؟', '،')} ${patient.prenom} ?` : t('ou_mal')}
             </h2>
 
             {/* Chips des zones sélectionnées */}
