@@ -167,6 +167,7 @@ void mesurerOxymetrie() {
     }
   }
 
+  Serial.print(F("[MAX] IR=")); Serial.println(irBrut);
   if (!doigtDetecte) {
     Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
     return;
