@@ -153,6 +153,9 @@ void mesurerOxymetrie() {
     return;
   }
 
+  // Vider le FIFO avant détection pour ne pas lire de vieux samples
+  capteurMax.clearFIFO();
+
   // Phase 1 : attente doigt (10s)
   unsigned long debut = millis();
   uint32_t irBrut = 0;
