@@ -56,8 +56,7 @@ const ETAPES = [
   {
     cle:            'spo2',
     typeMesure:     'spo2',
-    simulee:        true,
-    delaiSimulation: 3000,
+    simulerLocal:   true,
     simulerValeurs: () => ({
       spo2:       Math.floor(Math.random() * 4)  + 96,
       heart_rate: Math.floor(Math.random() * 21) + 65,
@@ -172,19 +171,30 @@ export default function ConstantesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])
 
-  // ── Mesure Arduino (ignorée pour les étapes simulées) ───────────────────────
+  // ── Mesure : Arduino ou simulation locale selon l'étape ─────────────────────
   useEffect(() => {
     if (etat !== ETAT.ATTENTE || enFetchRef.current || etapeActuelle.simulee) return
 
     setMessageCapture(null)
     enFetchRef.current = true
+
+    if (etapeActuelle.simulerLocal) {
+      // Simulation locale : délai 3s puis injection des valeurs aléatoires
+      const timer = setTimeout(() => {
+        const valeurs = etapeActuelle.simulerValeurs ? etapeActuelle.simulerValeurs() : {}
+        setConstantesLocal(prev => ({ ...prev, ...valeurs }))
+        setErreur(null)
+        enFetchRef.current = false
+      }, 3000)
+      return () => { clearTimeout(timer); enFetchRef.current = false }
+    }
+
     mesurerConstante(etapeActuelle.typeMesure, patient.session_id)
       .then(res => {
         const nouvelles = {}
         Object.entries(res.constantes ?? {}).forEach(([k, v]) => {
           if (v != null) nouvelles[k] = v
         })
-        // Valeur primaire toujours null → capteur non pointé
         if (nouvelles[etapeActuelle.cle] == null) {
           setMessageCapture('null')
         } else {
@@ -198,9 +208,9 @@ export default function ConstantesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])
 
-  // ── Timeout 30s : injecte valeur simulée si toujours en attente ─────────────
+  // ── Timeout 30s : injecte valeur de secours si toujours en attente ──────────
   useEffect(() => {
-    if (etat !== ETAT.ATTENTE || etapeActuelle.simulee) return
+    if (etat !== ETAT.ATTENTE || etapeActuelle.simulee || etapeActuelle.simulerLocal) return
 
     const timer = setTimeout(() => {
       setConstantesLocal(prev => ({ ...prev, ...(etapeActuelle.fallback ?? {}) }))
@@ -457,7 +467,7 @@ function VueMesure({
         )}
 
         {/* ATTENTE : spinner (mesure en cours) */}
-        {etat === ETAT.ATTENTE && messageCapture !== 'null' && (
+        {etat === ETAT.ATTENTE && !estSimulee && messageCapture !== 'null' && (
           <div className="seq-attente">
             <div className="kiosk-spinner" aria-label={t('const_mesure_cours')} />
             <p className="kiosk-note">{t('const_mesure_cours')}</p>
