@@ -149,18 +149,27 @@ void mesurerTemperature() {
   Serial.println(F(", \"mesure_type\": \"surface_cutanee\", \"source\": \"capteur\"}"));
 }
 
-// ── Utilitaire : lit N samples dans les tampons globaux ──────────────────────
-void lireSamples(int taille) {
-  for (int i = 0; i < taille; i++) {
-    unsigned long t = millis();
-    while (!capteurMax.available()) {
-      capteurMax.check();
-      if (millis() - t > 2000UL) break;
+// ── Utilitaire : lit N samples en lots ───────────────────────────────────────
+// Le FIFO du MAX30102 ne stocke que 32 samples. Pour lire 100+ samples sans
+// perdre de données, on vide le FIFO à chaque itération puis on attend 100ms
+// (≈10 nouveaux samples à 100sps) avant de recommencer.
+int lireSamples(int taille) {
+  int lus = 0;
+  unsigned long debut = millis();
+  unsigned long timeout = (unsigned long)taille * 20UL + 5000UL;  // marge large
+
+  while (lus < taille) {
+    if (millis() - debut > timeout) break;
+    capteurMax.check();
+    while (capteurMax.available() && lus < taille) {
+      tamponRouge[lus] = capteurMax.getRed();
+      tamponIR[lus]    = capteurMax.getIR();
+      capteurMax.nextSample();
+      lus++;
     }
-    tamponRouge[i] = capteurMax.getRed();
-    tamponIR[i]    = capteurMax.getIR();
-    capteurMax.nextSample();
+    if (lus < taille) delay(100);  // attend ~10 nouveaux samples à 100sps
   }
+  return lus;
 }
 
 // ── Mesure SpO2 + fréquence cardiaque (MAX30102) ────────────────────────────
@@ -216,17 +225,23 @@ void mesurerOxymetrie() {
   Serial.println(F("[MAX30102] FIFO vide - attente 500ms"));
   delay(500);
 
-  // ── Phase 3 : remplissage buffer 100 samples + logs ─────────────────────────
+  // ── Phase 3 : remplissage buffer 100 samples (en lots de ≤32) ──────────────
   Serial.println(F("[MAX30102] Remplissage buffer 100 samples..."));
-  lireSamples(TAILLE_BUFFER);
-  Serial.print(F("[MAX30102] IR[0]="));
+  int lus = lireSamples(TAILLE_BUFFER);
+  Serial.print(F("[MAX30102] Samples lus="));
+  Serial.print(lus);
+  Serial.print(F(" IR[0]="));
   Serial.print(tamponIR[0]);
-  Serial.print(F(" Rouge[0]="));
-  Serial.print(tamponRouge[0]);
-  Serial.print(F(" IR[99]="));
-  Serial.print(tamponIR[TAILLE_BUFFER - 1]);
-  Serial.print(F(" Rouge[99]="));
-  Serial.println(tamponRouge[TAILLE_BUFFER - 1]);
+  Serial.print(F(" IR[last]="));
+  Serial.println(tamponIR[lus - 1]);
+
+  if (lus < TAILLE_BUFFER) {
+    Serial.print(F("[MAX30102] Buffer incomplet ("));
+    Serial.print(lus);
+    Serial.println(F("/100) - abandon"));
+    Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
+    return;
+  }
 
   // ── Phase 4 : calcul SpO2/FC — 8 itérations pour stabilisation ──────────────
   int32_t valeurSpo2     = 0;
@@ -272,8 +287,8 @@ void mesurerOxymetrie() {
     Serial.println(freqCardValide);
   }
 
-  bool spo2Ok = spo2Valide     && (valeurSpo2     >= 70)  && (valeurSpo2     <= 100);
-  bool freqOk = freqCardValide && (valeurFreqCard >= 40)  && (valeurFreqCard <= 200);
+  bool spo2Ok = spo2Valide     && (valeurSpo2     >= 70) && (valeurSpo2     <= 100);
+  bool freqOk = freqCardValide && (valeurFreqCard >= 40) && (valeurFreqCard <= 180);
 
   if (spo2Ok && freqOk) {
     Serial.print(F("{\"spo2\": "));
@@ -281,6 +296,16 @@ void mesurerOxymetrie() {
     Serial.print(F(", \"heart_rate\": "));
     Serial.print(valeurFreqCard);
     Serial.println(F(", \"source\": \"capteur\"}"));
+  } else if (spo2Ok && !freqOk) {
+    // SpO2 fiable mais FC hors plage (214, 150…) → résultat partiel utilisable
+    Serial.print(F("[MAX30102] FC invalide ("));
+    Serial.print(valeurFreqCard);
+    Serial.println(F(") - SpO2 retourne seul"));
+    Serial.print(F("{\"spo2\": "));
+    Serial.print(valeurSpo2);
+    Serial.print(F(", \"heart_rate\": null, \"fc_brute\": "));
+    Serial.print(valeurFreqCard);
+    Serial.println(F(", \"source\": \"partiel\"}"));
   } else {
     Serial.print(F("[MAX30102] Non valide - spo2_valide="));
     Serial.print(spo2Valide);
