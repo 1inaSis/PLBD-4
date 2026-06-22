@@ -31,10 +31,12 @@
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 MAX30105 capteurMax;
 
-// ── Buffer pour l'algorithme SpO2/FC (minimum 25 pour spo2_algorithm) ────────
-#define TAILLE_BUFFER 48  // doit correspondre à BUFFER_SIZE dans spo2_algorithm.h (FreqS*4)
-uint16_t tamponIR[TAILLE_BUFFER];
-uint16_t tamponRouge[TAILLE_BUFFER];
+// ── Buffers pour l'algorithme SpO2/FC ────────────────────────────────────────
+#define TAILLE_BUFFER       100  // mesure normale
+#define TAILLE_BUFFER_GRAND 200  // retry si spo2 == -999 (FIFO corrompu)
+// Alloué à la taille max pour éviter un second malloc sur l'Arduino
+uint16_t tamponIR[TAILLE_BUFFER_GRAND];
+uint16_t tamponRouge[TAILLE_BUFFER_GRAND];
 
 // Seuil IR pour détecter la présence d'un doigt
 // Certains modules MAX30102 retournent des valeurs plus faibles → 30000
@@ -147,6 +149,20 @@ void mesurerTemperature() {
   Serial.println(F(", \"mesure_type\": \"surface_cutanee\", \"source\": \"capteur\"}"));
 }
 
+// ── Utilitaire : lit N samples dans les tampons globaux ──────────────────────
+void lireSamples(int taille) {
+  for (int i = 0; i < taille; i++) {
+    unsigned long t = millis();
+    while (!capteurMax.available()) {
+      capteurMax.check();
+      if (millis() - t > 2000UL) break;
+    }
+    tamponRouge[i] = capteurMax.getRed();
+    tamponIR[i]    = capteurMax.getIR();
+    capteurMax.nextSample();
+  }
+}
+
 // ── Mesure SpO2 + fréquence cardiaque (MAX30102) ────────────────────────────
 void mesurerOxymetrie() {
   if (!maxOk) {
@@ -195,50 +211,31 @@ void mesurerOxymetrie() {
     return;
   }
 
-  // ── Phase 2 : remplissage buffer + logs intermédiaires ─────────────────────
-  Serial.println(F("[MAX30102] Remplissage buffer..."));
-  byte samplesLus = 0;
+  // ── Phase 2 : vider le FIFO (données corrompues avant la détection) ─────────
+  capteurMax.clearFIFO();
+  Serial.println(F("[MAX30102] FIFO vide - attente 500ms"));
+  delay(500);
 
-  for (byte i = 0; i < TAILLE_BUFFER; i++) {
-    unsigned long t = millis();
-    while (!capteurMax.available()) {
-      capteurMax.check();
-      if (millis() - t > 2000UL) break;  // timeout par sample
-    }
-    tamponRouge[i] = capteurMax.getRed();
-    tamponIR[i]    = capteurMax.getIR();
-    capteurMax.nextSample();
-    samplesLus++;
-  }
-
-  Serial.print(F("[MAX30102] Samples lus="));
-  Serial.print(samplesLus);
-  Serial.print(F(" IR[0]="));
+  // ── Phase 3 : remplissage buffer 100 samples + logs ─────────────────────────
+  Serial.println(F("[MAX30102] Remplissage buffer 100 samples..."));
+  lireSamples(TAILLE_BUFFER);
+  Serial.print(F("[MAX30102] IR[0]="));
   Serial.print(tamponIR[0]);
   Serial.print(F(" Rouge[0]="));
   Serial.print(tamponRouge[0]);
-  Serial.print(F(" IR[last]="));
+  Serial.print(F(" IR[99]="));
   Serial.print(tamponIR[TAILLE_BUFFER - 1]);
-  Serial.print(F(" Rouge[last]="));
+  Serial.print(F(" Rouge[99]="));
   Serial.println(tamponRouge[TAILLE_BUFFER - 1]);
 
-  // ── Phase 3 : calcul SpO2/FC — 8 itérations pour stabilisation ──────────────
+  // ── Phase 4 : calcul SpO2/FC — 8 itérations pour stabilisation ──────────────
   int32_t valeurSpo2     = 0;
   int8_t  spo2Valide     = 0;
   int32_t valeurFreqCard = 0;
   int8_t  freqCardValide = 0;
 
   for (byte iter = 0; iter < 8; iter++) {
-    for (byte i = 0; i < TAILLE_BUFFER; i++) {
-      unsigned long t = millis();
-      while (!capteurMax.available()) {
-        capteurMax.check();
-        if (millis() - t > 2000UL) break;
-      }
-      tamponRouge[i] = capteurMax.getRed();
-      tamponIR[i]    = capteurMax.getIR();
-      capteurMax.nextSample();
-    }
+    lireSamples(TAILLE_BUFFER);
     maxim_heart_rate_and_oxygen_saturation(
       tamponIR, TAILLE_BUFFER, tamponRouge,
       &valeurSpo2, &spo2Valide,
@@ -256,8 +253,27 @@ void mesurerOxymetrie() {
     Serial.println(freqCardValide);
   }
 
+  // ── Phase 5 : retry 200 samples si algorithme renvoie -999 ──────────────────
+  if (valeurSpo2 == -999) {
+    Serial.println(F("[MAX30102] spo2=-999 -> retry 200 samples"));
+    lireSamples(TAILLE_BUFFER_GRAND);
+    maxim_heart_rate_and_oxygen_saturation(
+      tamponIR, TAILLE_BUFFER_GRAND, tamponRouge,
+      &valeurSpo2, &spo2Valide,
+      &valeurFreqCard, &freqCardValide
+    );
+    Serial.print(F("[MAX30102] retry spo2="));
+    Serial.print(valeurSpo2);
+    Serial.print(F(" valide="));
+    Serial.print(spo2Valide);
+    Serial.print(F(" fc="));
+    Serial.print(valeurFreqCard);
+    Serial.print(F(" valide="));
+    Serial.println(freqCardValide);
+  }
+
   bool spo2Ok = spo2Valide     && (valeurSpo2     >= 70)  && (valeurSpo2     <= 100);
-  bool freqOk = freqCardValide && (valeurFreqCard >= 40)  && (valeurFreqCard <= 180);
+  bool freqOk = freqCardValide && (valeurFreqCard >= 40)  && (valeurFreqCard <= 200);
 
   if (spo2Ok && freqOk) {
     Serial.print(F("{\"spo2\": "));
@@ -266,8 +282,7 @@ void mesurerOxymetrie() {
     Serial.print(valeurFreqCard);
     Serial.println(F(", \"source\": \"capteur\"}"));
   } else {
-    // Retourne les valeurs brutes pour debug même si l'algorithme ne valide pas
-    Serial.print(F("[MAX30102] Algorithme non valide - spo2_valide="));
+    Serial.print(F("[MAX30102] Non valide - spo2_valide="));
     Serial.print(spo2Valide);
     Serial.print(F(" fc_valide="));
     Serial.println(freqCardValide);
