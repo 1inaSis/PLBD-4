@@ -36,8 +36,9 @@ MAX30105 capteurMax;
 uint16_t tamponIR[TAILLE_BUFFER];
 uint16_t tamponRouge[TAILLE_BUFFER];
 
-// Seuil IR pour détecter la présence d'un doigt (<50 000 = pas de doigt)
-#define SEUIL_DOIGT 50000UL
+// Seuil IR pour détecter la présence d'un doigt
+// Certains modules MAX30102 retournent des valeurs plus faibles → 30000
+#define SEUIL_DOIGT 30000UL
 
 bool mlxOk = false;
 bool maxOk = false;
@@ -60,6 +61,9 @@ void setup() {
     maxOk = true;
     capteurMax.setup(0x1F, 4, 2, 100, 411, 4096);
     capteurMax.setPulseAmplitudeRed(0x0A);
+    Serial.println(F("[MAX30102] begin() OK - capteur initialise"));
+  } else {
+    Serial.println(F("[MAX30102] begin() ECHEC - capteur non detecte"));
   }
 
   Serial.println(F("[ARDUINO] Pret - en attente de commandes"));
@@ -146,32 +150,91 @@ void mesurerTemperature() {
 // ── Mesure SpO2 + fréquence cardiaque (MAX30102) ────────────────────────────
 void mesurerOxymetrie() {
   if (!maxOk) {
-    Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
+    Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"max_ok\": false, \"source\": \"erreur\"}"));
     return;
   }
 
-  // Remplissage initial du buffer (25 échantillons ≈ 250 ms à 100 sps)
+  Serial.println(F("[MAX30102] Debut mesure (10s) - poser le doigt"));
+
+  // ── Phase 1 : attente détection doigt (jusqu'à 10s) ────────────────────────
+  unsigned long debut = millis();
+  uint32_t irBrut = 0, rougeBrut = 0;
+  bool doigtDetecte = false;
+
+  while (millis() - debut < 10000UL) {
+    capteurMax.check();
+    if (capteurMax.available()) {
+      irBrut    = capteurMax.getIR();
+      rougeBrut = capteurMax.getRed();
+      capteurMax.nextSample();
+
+      if (irBrut > SEUIL_DOIGT) {
+        doigtDetecte = true;
+        Serial.print(F("[MAX30102] Doigt detecte - IR="));
+        Serial.print(irBrut);
+        Serial.print(F(" Rouge="));
+        Serial.println(rougeBrut);
+        break;
+      }
+    }
+  }
+
+  if (!doigtDetecte) {
+    Serial.print(F("[MAX30102] Pas de doigt apres 10s - IR brut="));
+    Serial.print(irBrut);
+    Serial.print(F(" (seuil="));
+    Serial.print(SEUIL_DOIGT);
+    Serial.println(F(")"));
+    Serial.print(F("{\"spo2\": null, \"heart_rate\": null, \"ir_brut\": "));
+    Serial.print(irBrut);
+    Serial.print(F(", \"rouge_brut\": "));
+    Serial.print(rougeBrut);
+    Serial.print(F(", \"seuil_doigt\": "));
+    Serial.print(SEUIL_DOIGT);
+    Serial.println(F(", \"source\": \"erreur\"}"));
+    return;
+  }
+
+  // ── Phase 2 : remplissage buffer + logs intermédiaires ─────────────────────
+  Serial.println(F("[MAX30102] Remplissage buffer..."));
+  byte samplesLus = 0;
+
   for (byte i = 0; i < TAILLE_BUFFER; i++) {
-    while (!capteurMax.available()) capteurMax.check();
+    unsigned long t = millis();
+    while (!capteurMax.available()) {
+      capteurMax.check();
+      if (millis() - t > 2000UL) break;  // timeout par sample
+    }
     tamponRouge[i] = capteurMax.getRed();
     tamponIR[i]    = capteurMax.getIR();
     capteurMax.nextSample();
+    samplesLus++;
   }
 
-  if (tamponIR[TAILLE_BUFFER - 1] < SEUIL_DOIGT) {
-    Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
-    return;
-  }
+  Serial.print(F("[MAX30102] Samples lus="));
+  Serial.print(samplesLus);
+  Serial.print(F(" IR[0]="));
+  Serial.print(tamponIR[0]);
+  Serial.print(F(" Rouge[0]="));
+  Serial.print(tamponRouge[0]);
+  Serial.print(F(" IR[last]="));
+  Serial.print(tamponIR[TAILLE_BUFFER - 1]);
+  Serial.print(F(" Rouge[last]="));
+  Serial.println(tamponRouge[TAILLE_BUFFER - 1]);
 
+  // ── Phase 3 : calcul SpO2/FC — 8 itérations pour stabilisation ──────────────
   int32_t valeurSpo2     = 0;
   int8_t  spo2Valide     = 0;
   int32_t valeurFreqCard = 0;
   int8_t  freqCardValide = 0;
 
-  // 4 lectures consécutives de 25 échantillons pour stabilisation
-  for (byte iter = 0; iter < 4; iter++) {
+  for (byte iter = 0; iter < 8; iter++) {
     for (byte i = 0; i < TAILLE_BUFFER; i++) {
-      while (!capteurMax.available()) capteurMax.check();
+      unsigned long t = millis();
+      while (!capteurMax.available()) {
+        capteurMax.check();
+        if (millis() - t > 2000UL) break;
+      }
       tamponRouge[i] = capteurMax.getRed();
       tamponIR[i]    = capteurMax.getIR();
       capteurMax.nextSample();
@@ -181,19 +244,41 @@ void mesurerOxymetrie() {
       &valeurSpo2, &spo2Valide,
       &valeurFreqCard, &freqCardValide
     );
+    Serial.print(F("[MAX30102] iter="));
+    Serial.print(iter);
+    Serial.print(F(" spo2="));
+    Serial.print(valeurSpo2);
+    Serial.print(F(" valide="));
+    Serial.print(spo2Valide);
+    Serial.print(F(" fc="));
+    Serial.print(valeurFreqCard);
+    Serial.print(F(" valide="));
+    Serial.println(freqCardValide);
   }
 
   bool spo2Ok = spo2Valide     && (valeurSpo2     >= 70)  && (valeurSpo2     <= 100);
   bool freqOk = freqCardValide && (valeurFreqCard >= 40)  && (valeurFreqCard <= 180);
 
-  if (!spo2Ok || !freqOk) {
-    Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
-    return;
+  if (spo2Ok && freqOk) {
+    Serial.print(F("{\"spo2\": "));
+    Serial.print(valeurSpo2);
+    Serial.print(F(", \"heart_rate\": "));
+    Serial.print(valeurFreqCard);
+    Serial.println(F(", \"source\": \"capteur\"}"));
+  } else {
+    // Retourne les valeurs brutes pour debug même si l'algorithme ne valide pas
+    Serial.print(F("[MAX30102] Algorithme non valide - spo2_valide="));
+    Serial.print(spo2Valide);
+    Serial.print(F(" fc_valide="));
+    Serial.println(freqCardValide);
+    Serial.print(F("{\"spo2\": "));
+    Serial.print(valeurSpo2);
+    Serial.print(F(", \"heart_rate\": "));
+    Serial.print(valeurFreqCard);
+    Serial.print(F(", \"spo2_valide\": "));
+    Serial.print(spo2Valide);
+    Serial.print(F(", \"fc_valide\": "));
+    Serial.print(freqCardValide);
+    Serial.println(F(", \"source\": \"calibration\"}"));
   }
-
-  Serial.print(F("{\"spo2\": "));
-  Serial.print(valeurSpo2);
-  Serial.print(F(", \"heart_rate\": "));
-  Serial.print(valeurFreqCard);
-  Serial.println(F(", \"source\": \"capteur\"}"));
 }
