@@ -160,11 +160,12 @@ void mesurerOxymetrie() {
 
   while (millis() - debut < 10000UL) {
     capteurMax.check();
-    if (capteurMax.available()) {
+    while (capteurMax.available()) {
       irBrut = capteurMax.getIR();
       capteurMax.nextSample();
       if (irBrut > SEUIL_DOIGT) { doigtDetecte = true; break; }
     }
+    if (doigtDetecte) break;
   }
 
   Serial.print(F("[MAX] IR=")); Serial.println(irBrut);
