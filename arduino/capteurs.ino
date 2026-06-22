@@ -3,40 +3,25 @@
  *
  * Commandes acceptées :
  *   MESURE:temperature  → mesure MLX90614, envoie JSON
- *   MESURE:spo2         → mesure MAX30102 (SpO2 + FC), envoie JSON
+ *   MESURE:spo2         → valeurs simulées SpO2 + FC, envoie JSON
  *   MESURE:stop         → annule toute mesure en cours
  *
  * Format de réponse :
  *   {"temperature": 36.7, "source": "capteur"}
- *   {"spo2": 98, "heart_rate": 72, "source": "capteur"}
- *   {"spo2": 98, "heart_rate": null, "source": "partiel"}
- *   {"spo2": null, "heart_rate": null, "source": "erreur"}
+ *   {"spo2": 98, "heart_rate": 72, "source": "simulation"}
  *
  * Bibliothèques requises :
  *   - Adafruit MLX90614 Library
- *   - SparkFun MAX3010x Pulse and Proximity Sensor Library (compatible MAX30102)
  *
  * Câblage I2C (Uno / Nano) : SDA → A4, SCL → A5
  */
 
 #include <Wire.h>
 #include <Adafruit_MLX90614.h>
-#include <MAX30105.h>
-#include "spo2_algorithm.h"
 
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
-MAX30105 capteurMax;
-
-// 50 samples suffisent pour maxim_heart_rate_and_oxygen_saturation — économise 600 bytes RAM
-#define TAILLE_BUFFER 50
-uint16_t tamponIR[TAILLE_BUFFER];
-uint16_t tamponRouge[TAILLE_BUFFER];
-
-// Seuil IR détection doigt (certains modules retournent < 50000)
-#define SEUIL_DOIGT 30000UL
 
 bool mlxOk = false;
-bool maxOk = false;
 
 // ────────────────────────────────────────────────────────────────────────────
 void setup() {
@@ -49,11 +34,7 @@ void setup() {
   }
   if (mlxOk) delay(500);
 
-  if (capteurMax.begin(Wire, I2C_SPEED_STANDARD)) {
-    maxOk = true;
-    capteurMax.setup(0x1F, 4, 2, 100, 411, 4096);
-    capteurMax.setPulseAmplitudeRed(0x0A);
-  }
+  randomSeed(analogRead(0));
 
   Serial.println(F("[ARDUINO] Pret - en attente de commandes"));
 }
@@ -126,111 +107,14 @@ void mesurerTemperature() {
   Serial.println(F(", \"mesure_type\": \"surface_cutanee\", \"source\": \"capteur\"}"));
 }
 
-// ── Utilitaire : lit N samples en lots (FIFO max 32 samples) ────────────────
-int lireSamples(int taille) {
-  int lus = 0;
-  unsigned long debut = millis();
-  unsigned long timeout = (unsigned long)taille * 20UL + 5000UL;
-
-  while (lus < taille) {
-    if (millis() - debut > timeout) break;
-    capteurMax.check();
-    while (capteurMax.available() && lus < taille) {
-      tamponRouge[lus] = capteurMax.getRed();
-      tamponIR[lus]    = capteurMax.getIR();
-      capteurMax.nextSample();
-      lus++;
-    }
-    if (lus < taille) delay(100);
-  }
-  return lus;
-}
-
-// ── Mesure SpO2 + FC (MAX30102) ──────────────────────────────────────────────
+// ── SpO2 + FC simulés (MAX30102 non fiable) ──────────────────────────────────
 void mesurerOxymetrie() {
-  if (!maxOk) {
-    Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
-    return;
-  }
-
-  // Vider le FIFO avant détection pour ne pas lire de vieux samples
-  capteurMax.clearFIFO();
-
-  // Phase 1 : attente doigt (10s)
-  unsigned long debut = millis();
-  uint32_t irBrut = 0;
-  bool doigtDetecte = false;
-
-  while (millis() - debut < 10000UL) {
-    capteurMax.check();
-    while (capteurMax.available()) {
-      irBrut = capteurMax.getIR();
-      capteurMax.nextSample();
-      if (irBrut > SEUIL_DOIGT) { doigtDetecte = true; break; }
-    }
-    if (doigtDetecte) break;
-  }
-
-  Serial.print(F("[MAX] IR=")); Serial.println(irBrut);
-  if (!doigtDetecte) {
-    Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
-    return;
-  }
-
-  // Phase 2 : vider FIFO + stabilisation
-  capteurMax.clearFIFO();
-  delay(500);
-
-  // Phase 3 : remplissage initial 50 samples
-  if (lireSamples(TAILLE_BUFFER) < TAILLE_BUFFER) {
-    Serial.println(F("{\"spo2\": null, \"heart_rate\": null, \"source\": \"erreur\"}"));
-    return;
-  }
-
-  // Phase 4 : 12 itérations de calcul (passes de 50 samples)
-  int32_t valeurSpo2     = 0;
-  int8_t  spo2Valide     = 0;
-  int32_t valeurFreqCard = 0;
-  int8_t  freqCardValide = 0;
-
-  for (byte iter = 0; iter < 12; iter++) {
-    lireSamples(TAILLE_BUFFER);
-    maxim_heart_rate_and_oxygen_saturation(
-      tamponIR, TAILLE_BUFFER, tamponRouge,
-      &valeurSpo2, &spo2Valide,
-      &valeurFreqCard, &freqCardValide
-    );
-  }
-
-  // Phase 5 : 4 passes supplémentaires de 50 si algorithme échoue (-999)
-  for (byte extra = 0; extra < 4 && valeurSpo2 == -999; extra++) {
-    lireSamples(TAILLE_BUFFER);
-    maxim_heart_rate_and_oxygen_saturation(
-      tamponIR, TAILLE_BUFFER, tamponRouge,
-      &valeurSpo2, &spo2Valide,
-      &valeurFreqCard, &freqCardValide
-    );
-  }
-
-  bool spo2Ok = spo2Valide     && (valeurSpo2     >= 70) && (valeurSpo2     <= 100);
-  bool freqOk = freqCardValide && (valeurFreqCard >= 40) && (valeurFreqCard <= 180);
-
-  if (spo2Ok && freqOk) {
-    Serial.print(F("{\"spo2\": "));
-    Serial.print(valeurSpo2);
-    Serial.print(F(", \"heart_rate\": "));
-    Serial.print(valeurFreqCard);
-    Serial.println(F(", \"source\": \"capteur\"}"));
-  } else if (spo2Ok) {
-    // SpO2 fiable, FC hors plage → résultat partiel
-    Serial.print(F("{\"spo2\": "));
-    Serial.print(valeurSpo2);
-    Serial.println(F(", \"heart_rate\": null, \"source\": \"partiel\"}"));
-  } else {
-    Serial.print(F("{\"spo2\": "));
-    Serial.print(valeurSpo2);
-    Serial.print(F(", \"heart_rate\": "));
-    Serial.print(valeurFreqCard);
-    Serial.println(F(", \"source\": \"calibration\"}"));
-  }
+  delay(3000);
+  int spo2 = random(96, 100);  // 96–99 %
+  int fc   = random(65, 86);   // 65–85 bpm
+  Serial.print(F("{\"spo2\": "));
+  Serial.print(spo2);
+  Serial.print(F(", \"heart_rate\": "));
+  Serial.print(fc);
+  Serial.println(F(", \"source\": \"simulation\"}"));
 }
