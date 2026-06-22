@@ -418,6 +418,7 @@ class QuestionSuivanteRequest(BaseModel):
     reponses_precedentes: List[dict] = []   # [{question, feature_name, reponse}]
     constantes:           Optional[dict] = None
     symptomes:            Optional[str]  = None
+    langue:               Optional[str]  = 'fr'
 
 
 @app.get("/api/health")
@@ -727,6 +728,7 @@ async def api_questions_suivante(body: QuestionSuivanteRequest):
             features_nlp,
             body.reponses_precedentes,
             num_question,
+            body.langue or 'fr',
         ),
     )
 

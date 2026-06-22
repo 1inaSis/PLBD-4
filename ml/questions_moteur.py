@@ -172,6 +172,7 @@ def generer_question_suivante(
     features_nlp: dict,
     reponses_precedentes: List[Dict],
     num_question: int,
+    langue: str = 'fr',
 ) -> dict:
     """
     Génère UNE question adaptative en tenant compte de toutes les réponses précédentes.
@@ -180,15 +181,21 @@ def generer_question_suivante(
     """
     api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
-        # Sans clé Groq : aucune question générée.
-        # Le triage s'appuiera uniquement sur les constantes vitales + NLP des symptômes.
         return {"continuer": False}
+
+    _LANGUE_INSTRUCTIONS = {
+        'ar': 'اطرح جميع أسئلتك باللغة العربية الفصحى. يجب أن تكون الأسئلة وخيارات الإجابة باللغة العربية.',
+        'en': 'Ask all your questions in English. Questions and answer choices must be in English.',
+        'fr': 'Pose toutes tes questions en français. Les questions et choix de réponses doivent être en français.',
+    }
+    langue_instruction = _LANGUE_INSTRUCTIONS.get(langue, _LANGUE_INSTRUCTIONS['fr'])
 
     prompt_system = (
         "Tu es un infirmier d'accueil urgentiste (IAO) expert en triage ESI. "
         "Tu poses des questions médicales CIBLÉES une par une, en t'adaptant aux réponses précédentes. "
         "Chaque question doit apporter de nouvelles informations pour affiner le score ESI. "
-        "Tu évites de répéter des informations déjà connues."
+        "Tu évites de répéter des informations déjà connues. "
+        f"LANGUE : {langue_instruction}"
     )
 
     sexe_str = "Homme" if sex == 1 else "Femme"

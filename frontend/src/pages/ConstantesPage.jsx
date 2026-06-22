@@ -56,6 +56,12 @@ const ETAPES = [
   {
     cle:            'spo2',
     typeMesure:     'spo2',
+    simulee:        true,
+    delaiSimulation: 3000,
+    simulerValeurs: () => ({
+      spo2:       Math.floor(Math.random() * 4)  + 96,
+      heart_rate: Math.floor(Math.random() * 21) + 65,
+    }),
     double:         true,
     label:          'const_spo2_label',
     instruction:    'guide3_spo2',
@@ -63,7 +69,6 @@ const ETAPES = [
     messageNull:    'const_spo2_null',
     icone:        '🫁',
     illustration: IllustrationSpo2,
-    fallback:     { spo2: 97.0, heart_rate: 72 },
     valeurs: [
       { cle: 'spo2',       label: 'bio_spo2',      unite: '%',   formatter: (v) => Number(v).toFixed(1) },
       { cle: 'heart_rate', label: 'const_fc_label', unite: 'bpm', formatter: (v) => Math.round(Number(v)) },
@@ -226,14 +231,15 @@ export default function ConstantesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageCapture, etat, indexEtape])
 
-  // ── Étapes simulées : génère les valeurs immédiatement ──────────────────────
-  // Séparé du timer : setEtat(COMPLET) dans le même effet annulerait le setTimeout
-  // via le cleanup React avant qu'il ne se déclenche.
+  // ── Étapes simulées : génère les valeurs après délai ─────────────────────────
   useEffect(() => {
     if (etat !== ETAT.ATTENTE || !etapeActuelle.simulee) return
-    const valeurs = etapeActuelle.simulerValeurs ? etapeActuelle.simulerValeurs() : {}
-    setConstantesLocal(prev => ({ ...prev, ...valeurs }))
-    setEtat(ETAT.COMPLET)
+    const timer = setTimeout(() => {
+      const valeurs = etapeActuelle.simulerValeurs ? etapeActuelle.simulerValeurs() : {}
+      setConstantesLocal(prev => ({ ...prev, ...valeurs }))
+      setEtat(ETAT.COMPLET)
+    }, etapeActuelle.delaiSimulation ?? 3000)
+    return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])
 
@@ -451,7 +457,7 @@ function VueMesure({
         )}
 
         {/* ATTENTE : spinner (mesure en cours) */}
-        {etat === ETAT.ATTENTE && !estSimulee && messageCapture !== 'null' && (
+        {etat === ETAT.ATTENTE && messageCapture !== 'null' && (
           <div className="seq-attente">
             <div className="kiosk-spinner" aria-label={t('const_mesure_cours')} />
             <p className="kiosk-note">{t('const_mesure_cours')}</p>

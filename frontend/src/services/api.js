@@ -70,10 +70,10 @@ export function mesurerConstante(type, session_id = null) {
 
 // ── Étape 4 : Demander UNE question adaptative (mode question par question) ──
 // reponses_precedentes : [{question, feature_name, reponse}]
-export function demanderQuestionSuivante(session_id, reponses_precedentes = [], constantes = null, symptomes = null) {
+export function demanderQuestionSuivante(session_id, reponses_precedentes = [], constantes = null, symptomes = null, langue = 'fr') {
   return requete('/questions/suivante', {
     method: 'POST',
-    body: JSON.stringify({ session_id, reponses_precedentes, constantes, symptomes }),
+    body: JSON.stringify({ session_id, reponses_precedentes, constantes, symptomes, langue }),
   })
 }
 

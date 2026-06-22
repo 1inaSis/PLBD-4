@@ -125,6 +125,7 @@ export default function QuestionsPage() {
         repPrecedentes,
         patient.constantes ?? null,
         patient.symptom_text ?? null,
+        langue,
       )
 
       if (!res.continuer) {
@@ -143,7 +144,7 @@ export default function QuestionsPage() {
       console.warn('[Questions] Erreur API :', err.message)
       lancerTriageRef.current(repDict)
     }
-  }, [patient.session_id, patient.constantes, patient.symptom_text])
+  }, [patient.session_id, patient.constantes, patient.symptom_text, langue])
 
   chargerRef.current = chargerSuivante
 
