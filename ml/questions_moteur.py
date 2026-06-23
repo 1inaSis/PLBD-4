@@ -184,18 +184,19 @@ def generer_question_suivante(
         return {"continuer": False}
 
     _LANGUE_INSTRUCTIONS = {
-        'ar': 'اطرح جميع أسئلتك باللغة العربية الفصحى. يجب أن تكون الأسئلة وخيارات الإجابة باللغة العربية.',
-        'en': 'Ask all your questions in English. Questions and answer choices must be in English.',
-        'fr': 'Pose toutes tes questions en français. Les questions et choix de réponses doivent être en français.',
+        'ar': 'Pose la question en arabe (العربية). اطرح السؤال باللغة العربية الفصحى فقط. يجب أن تكون الأسئلة وجميع خيارات الإجابة باللغة العربية حصراً.',
+        'en': 'Pose la question en anglais (English). Ask the question in English only. Questions and all answer choices must be in English exclusively.',
+        'fr': 'Pose la question en français. Les questions et tous les choix de réponses doivent être en français.',
     }
     langue_instruction = _LANGUE_INSTRUCTIONS.get(langue, _LANGUE_INSTRUCTIONS['fr'])
 
     prompt_system = (
+        f"⚠️ LANGUE OBLIGATOIRE : {langue_instruction} "
+        "Tu dois ABSOLUMENT respecter cette langue pour la question et les choix de réponse. "
         "Tu es un infirmier d'accueil urgentiste (IAO) expert en triage ESI. "
         "Tu poses des questions médicales CIBLÉES une par une, en t'adaptant aux réponses précédentes. "
         "Chaque question doit apporter de nouvelles informations pour affiner le score ESI. "
-        "Tu évites de répéter des informations déjà connues. "
-        f"LANGUE : {langue_instruction}"
+        "Tu évites de répéter des informations déjà connues."
     )
 
     sexe_str = "Homme" if sex == 1 else "Femme"
@@ -235,6 +236,7 @@ def generer_question_suivante(
     features_utilisees = [r.get("feature_name") for r in reponses_precedentes if r.get("feature_name")]
 
     prompt_user += f"\n--- INSTRUCTION ---\n"
+    prompt_user += f"⚠️ RAPPEL LANGUE : {langue_instruction}\n"
     prompt_user += f"C'est la question numéro {num_question} sur 5 maximum.\n"
 
     if num_question >= 3:

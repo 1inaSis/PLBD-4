@@ -173,15 +173,17 @@ export default function ConstantesPage() {
 
   // ── Mesure : Arduino ou simulation locale selon l'étape ─────────────────────
   useEffect(() => {
+    console.log(`[Constantes] useEffect mesure — etat=${etat} etape=${etapeActuelle?.cle} enFetch=${enFetchRef.current} simulee=${etapeActuelle?.simulee} simulerLocal=${etapeActuelle?.simulerLocal}`)
     if (etat !== ETAT.ATTENTE || enFetchRef.current || etapeActuelle.simulee) return
 
     setMessageCapture(null)
     enFetchRef.current = true
 
     if (etapeActuelle.simulerLocal) {
-      // Simulation locale : délai 3s puis injection des valeurs aléatoires
+      console.log(`[Constantes] SpO2 — simulation locale démarrée (3s)`)
       const timer = setTimeout(() => {
         const valeurs = etapeActuelle.simulerValeurs ? etapeActuelle.simulerValeurs() : {}
+        console.log(`[Constantes] SpO2 — valeurs simulées :`, valeurs)
         setConstantesLocal(prev => ({ ...prev, ...valeurs }))
         setErreur(null)
         enFetchRef.current = false
@@ -270,7 +272,9 @@ export default function ConstantesPage() {
 
   // ── ATTENTE → COMPLET dès que la valeur primaire arrive ─────────────────────
   useEffect(() => {
+    console.log(`[Constantes] auto-avance — etat=${etat} etape=${etapeActuelle?.cle} valeurActuelle=${valeurActuelle}`)
     if (etat === ETAT.ATTENTE && valeurActuelle != null) {
+      console.log(`[Constantes] → passage COMPLET (valeur reçue)`)
       setEtat(ETAT.COMPLET)
     }
   }, [etat, valeurActuelle])
@@ -458,11 +462,18 @@ function VueMesure({
           </>
         )}
 
-        {/* COMPTE : compte à rebours SVG circulaire 5→1 */}
+        {/* COMPTE : compte à rebours texte 5→1 */}
         {etat === ETAT.COMPTE && (
           <div className="seq-attente">
             <p className="kiosk-soustitre">{t('const_preparez')}</p>
-            <CompteReboursCirculaire compte={compte ?? 5} role="status" aria-live="assertive" />
+            <div
+              className="countdown-texte"
+              role="status"
+              aria-live="assertive"
+              style={{ fontSize: '5rem', fontWeight: 800, color: '#00d4ff', textAlign: 'center', lineHeight: 1 }}
+            >
+              {compte ?? 5}
+            </div>
           </div>
         )}
 
@@ -710,31 +721,3 @@ function SaisieTension({ instruction, onValider, t }) {
   )
 }
 
-// ── Compte à rebours SVG circulaire ──────────────────────────────────────────
-const CDR_R = 42
-const CDR_CIRC = 2 * Math.PI * CDR_R  // ≈ 263.9
-
-function CompteReboursCirculaire({ compte, ...props }) {
-  const pct = Math.max(0, Math.min(compte, 5)) / 5
-  const dashoffset = CDR_CIRC * (1 - pct)
-  return (
-    <div className="countdown-svg-wrap" {...props}>
-      <svg width="140" height="140" viewBox="0 0 100 100" className="countdown-ring">
-        <defs>
-          <linearGradient id="cdr-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#00d4ff" />
-            <stop offset="100%" stopColor="#7c3aed" />
-          </linearGradient>
-        </defs>
-        <circle className="countdown-ring__track" cx="50" cy="50" r={CDR_R} />
-        <circle
-          className="countdown-ring__circle"
-          cx="50" cy="50" r={CDR_R}
-          strokeDasharray={CDR_CIRC}
-          strokeDashoffset={dashoffset}
-        />
-      </svg>
-      <span className="countdown-svg-num">{compte}</span>
-    </div>
-  )
-}

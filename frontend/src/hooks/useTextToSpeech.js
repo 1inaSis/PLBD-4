@@ -3,8 +3,18 @@ import { useState, useCallback } from 'react'
 const LANG_MAP = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
 const SUPPORTE = typeof window !== 'undefined' && 'speechSynthesis' in window
 
+// Déverrouille speechSynthesis lors du premier geste utilisateur (politique autoplay Chrome)
+export function activerAudio() {
+  if (!SUPPORTE) return
+  const silence = new SpeechSynthesisUtterance('')
+  silence.volume = 0
+  window.speechSynthesis.speak(silence)
+}
+
 export function useTextToSpeech() {
   const [estEnTrainDeParler, setEstEnTrainDeParler] = useState(false)
+
+  const activer = useCallback(() => { activerAudio() }, [])
 
   const parler = useCallback((texte, langue) => {
     if (!SUPPORTE || !texte) return
@@ -25,5 +35,5 @@ export function useTextToSpeech() {
     setEstEnTrainDeParler(false)
   }, [])
 
-  return { parler, arreter, estEnTrainDeParler, supporte: SUPPORTE }
+  return { parler, arreter, activer, estEnTrainDeParler, supporte: SUPPORTE }
 }

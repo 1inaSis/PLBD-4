@@ -27,7 +27,7 @@ export default function AccueilPage() {
   const navigate = useNavigate()
   const { setIdentite, connecterBorne, reinitialiser, patient } = usePatient()
   const { t, langue } = useTranslation()
-  const { parler, arreter } = useTextToSpeech()
+  const { parler, arreter, activer } = useTextToSpeech()
 
   const [vue, setVue]                   = useState(VUE.ACCUEIL)
   const [donneesScan, setDonneesScan]   = useState(null)
@@ -88,6 +88,7 @@ export default function AccueilPage() {
 
   // ── Scan CIN ─────────────────────────────────────────────────────────────
   const lancerScan = async () => {
+    activer()  // déverrouille speechSynthesis avant tout await
     enterFullscreen()
     setVue(VUE.SCAN)
     setErreur(null)
@@ -122,6 +123,7 @@ export default function AccueilPage() {
   }
 
   const validerManuel = async () => {
+    activer()  // geste utilisateur → déverrouille l'audio
     const { nom, prenom, date_naissance } = formulaire
     if (!nom.trim() || !prenom.trim()) {
       setErreurForm(t('erreur_nom_prenom_requis'))
@@ -150,6 +152,7 @@ export default function AccueilPage() {
 
   // ── Mode démo ─────────────────────────────────────────────────────────────
   const lancerDemo = async () => {
+    activer()  // déverrouille speechSynthesis avant tout await
     enterFullscreen()
     setErreur(null)
     try {
@@ -171,6 +174,7 @@ export default function AccueilPage() {
 
   // ── Scan réussi confirmé ──────────────────────────────────────────────────
   const confirmer = () => {
+    activer()  // geste utilisateur → déverrouille l'audio
     setIdentite({
       session_id:  donneesScan.session_id,
       nom:         donneesScan.nom,
@@ -237,6 +241,15 @@ export default function AccueilPage() {
               style={{ marginTop: 8, opacity: 0.6, fontSize: '0.85em' }}
             >
               {t('mode_demo')}
+            </button>
+
+            <button
+              className="kiosk-btn kiosk-btn--secondary"
+              onClick={activer}
+              style={{ marginTop: 16, fontSize: '0.9em', background: 'rgba(20,184,166,0.10)', border: '1px solid rgba(20,184,166,0.3)', color: '#2dd4bf' }}
+              title="Activer le son pour les lectures vocales"
+            >
+              🔊 Activer le son
             </button>
           </div>
         </div>

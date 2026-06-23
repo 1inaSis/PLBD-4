@@ -13,6 +13,7 @@ import SelecteurLangue from '../components/SelecteurLangue'
 import GuideEtape from '../components/GuideEtape'
 import ModalInactivite from '../components/ModalInactivite'
 import { useTranslation } from '../hooks/useTranslation'
+import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 
@@ -20,6 +21,7 @@ export default function QuestionnairePage() {
   const navigate = useNavigate()
   const { patient, setSymptomes, reinitialiser } = usePatient()
   const { t, langue } = useTranslation()
+  const { parler, arreter } = useTextToSpeech()
   const handleExpiration = useCallback(async () => {
     if (patient.session_id) await abandonnerSession(patient.session_id)
     reinitialiser(); navigate('/')
@@ -28,6 +30,16 @@ export default function QuestionnairePage() {
 
   useEffect(() => {
     if (!patient.session_id) navigate('/', { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Lecture automatique de l'instruction principale à l'arrivée sur la page
+  useEffect(() => {
+    const texte = patient.prenom
+      ? `${t('ou_mal')} ${patient.prenom} ? ${t('instruction_corps')}`
+      : `${t('ou_mal')} ${t('instruction_corps')}`
+    parler(texte, langue)
+    return arreter
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
