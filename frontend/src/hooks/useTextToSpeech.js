@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { usePatient } from '../context/PatientContext'
 
 const LANG_MAP = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
 const SUPPORTE = typeof window !== 'undefined' && 'speechSynthesis' in window
@@ -24,7 +25,6 @@ function attendreVoix() {
       resolve(window.speechSynthesis.getVoices())
     }
     window.speechSynthesis.addEventListener('voiceschanged', handler)
-    // Timeout de sécurité 3s — parle quand même si voiceschanged ne fire jamais
     setTimeout(() => {
       window.speechSynthesis.removeEventListener('voiceschanged', handler)
       resolve(window.speechSynthesis.getVoices())
@@ -34,19 +34,24 @@ function attendreVoix() {
 
 export function useTextToSpeech() {
   const [estEnTrainDeParler, setEstEnTrainDeParler] = useState(false)
-  const timerRef = useRef(null)
+  const timerRef    = useRef(null)
+  const { audioActif } = usePatient()
+  // Ref pour éviter les stale closures dans parler()
+  const audioActifRef = useRef(audioActif)
+  useEffect(() => { audioActifRef.current = audioActif }, [audioActif])
 
   const activer = useCallback(() => { activerAudio() }, [])
 
   const parler = useCallback((texte, langue) => {
     console.log('[TTS] parler:', texte, langue)
     console.log('[TTS] speechSynthesis disponible:', !!window?.speechSynthesis)
+    console.log('[TTS] audioActif:', audioActifRef.current)
+    if (!audioActifRef.current) return   // TTS conditionnel : inactif si guidage désactivé
     if (!SUPPORTE || !texte) return
 
     window.speechSynthesis.cancel()
     clearTimeout(timerRef.current)
 
-    // Délai 500ms : laisse le temps au navigateur de finaliser le cancel()
     timerRef.current = setTimeout(async () => {
       const voix = await attendreVoix()
       console.log('[TTS] voix disponibles:', voix.length)

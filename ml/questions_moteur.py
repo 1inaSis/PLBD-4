@@ -93,6 +93,9 @@ def encoder_reponses(questions: list, reponses: dict) -> dict:
             features[feature_name] = _normaliser_bool(valeur)
         elif question.get("type") == "choix":
             features[feature_name] = _encoder_choix(question, valeur)
+        elif question.get("type") == "texte_libre":
+            # Réponse libre : conservée comme contexte pour Groq, encodée à 0 pour le ML
+            features[feature_name] = _normaliser_bool(valeur)
         else:
             features[feature_name] = _normaliser_bool(valeur)
 
@@ -196,7 +199,11 @@ def generer_question_suivante(
         "Tu es un infirmier d'accueil urgentiste (IAO) expert en triage ESI. "
         "Tu poses des questions médicales CIBLÉES une par une, en t'adaptant aux réponses précédentes. "
         "Chaque question doit apporter de nouvelles informations pour affiner le score ESI. "
-        "Tu évites de répéter des informations déjà connues."
+        "Tu évites de répéter des informations déjà connues. "
+        "RÈGLE DE DIVERSITÉ DES TYPES sur 5 questions : max 2 'oui_non', max 1 'choix', au moins 2 'texte_libre'. "
+        "Les questions 'texte_libre' permettent d'obtenir des informations qualitatives précieuses : "
+        "durée des symptômes, intensité de la douleur (sur 10), description précise, contexte de survenue, "
+        "médicaments pris, antécédents pertinents. Elles sont particulièrement utiles pour affiner le triage."
     )
 
     sexe_str = "Homme" if sex == 1 else "Femme"
@@ -231,7 +238,8 @@ def generer_question_suivante(
     if reponses_precedentes:
         prompt_user += "\nRÉPONSES PRÉCÉDENTES :\n"
         for i, r in enumerate(reponses_precedentes, 1):
-            prompt_user += f"  Q{i} : {r.get('question', '')} → {r.get('reponse', '')}\n"
+            type_q = r.get('type', 'oui_non')
+            prompt_user += f"  Q{i} [{type_q}] : {r.get('question', '')} → {r.get('reponse', '')}\n"
 
     features_utilisees = [r.get("feature_name") for r in reponses_precedentes if r.get("feature_name")]
 
@@ -248,18 +256,34 @@ def generer_question_suivante(
     else:
         prompt_user += "Tu DOIS poser une question (minimum 3 obligatoires).\n"
 
+    types_utilises = [r.get('type', 'oui_non') for r in reponses_precedentes]
+    nb_oui_non = types_utilises.count('oui_non')
+    nb_choix   = types_utilises.count('choix')
+    nb_texte   = types_utilises.count('texte_libre')
+
     if features_utilisees:
         prompt_user += f"Features déjà utilisées (NE PAS réutiliser) : {features_utilisees}\n"
+
+    prompt_user += f"Types déjà utilisés — oui_non: {nb_oui_non}/2 max, choix: {nb_choix}/1 max, texte_libre: {nb_texte} (objectif ≥2).\n"
+
+    if nb_oui_non >= 2:
+        prompt_user += "⛔ Quota oui_non atteint — NE PAS utiliser 'oui_non'.\n"
+    if nb_choix >= 1:
+        prompt_user += "⛔ Quota choix atteint — NE PAS utiliser 'choix'.\n"
 
     prompt_user += (
         "\nRéponds UNIQUEMENT avec un JSON valide (sans texte avant ni après) :\n"
         "{\n"
         '  "question": "La question posée au patient",\n'
-        '  "type": "oui_non",\n'
+        '  "type": "oui_non | choix | texte_libre",\n'
         '  "choix": ["Option A", "Option B"],\n'
         '  "feature_name": "q_feature_exacte_de_la_liste",\n'
         '  "continuer": true\n'
         "}\n\n"
+        "RÈGLES TYPE :\n"
+        "  - 'texte_libre' : question ouverte, réponse libre du patient (durée, description, intensité…), choix=[]\n"
+        "  - 'oui_non'     : question fermée oui/non, choix=[]\n"
+        "  - 'choix'       : question à options, fournir 2-4 options dans 'choix'\n\n"
         f"feature_name DOIT être une valeur exacte de cette liste :\n{FEATURES_QUESTIONS}\n"
     )
 

@@ -25,7 +25,7 @@ const VUE = {
 
 export default function AccueilPage() {
   const navigate = useNavigate()
-  const { setIdentite, connecterBorne, reinitialiser, patient } = usePatient()
+  const { setIdentite, connecterBorne, reinitialiser, patient, audioActif, setAudioActif } = usePatient()
   const { t, langue } = useTranslation()
   const { parler, arreter, activer } = useTextToSpeech()
 
@@ -44,10 +44,7 @@ export default function AccueilPage() {
   const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
   const { enterFullscreen } = useFullscreen()
 
-  // Session créée côté backend même si OCR incomplet
   const [sessionManuelId, setSessionManuelId] = useState(null)
-
-  // Champs du formulaire manuel (pré-remplis si OCR partiel)
   const [formulaire, setFormulaire] = useState({ nom: '', prenom: '', date_naissance: '' })
   const [erreurForm, setErreurForm] = useState(null)
   const [enSoumission, setEnSoumission] = useState(false)
@@ -59,7 +56,7 @@ export default function AccueilPage() {
     return () => clearTimeout(timer)
   }, [vue, navigate])
 
-  // Lecture TTS — bienvenue (1s après affichage)
+  // Lecture TTS — bienvenue personnalisée (1s après affichage)
   useEffect(() => {
     if (vue !== VUE.BIENVENUE || !prenomBienvenue) return
     const timer = setTimeout(() => parler(t('tts_bienvenue', { prenom: prenomBienvenue }), langue), 1000)
@@ -75,6 +72,13 @@ export default function AccueilPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vue])
 
+  // Lecture TTS — accueil quand l'audio est activé sur cette vue
+  useEffect(() => {
+    if (!audioActif || vue !== VUE.ACCUEIL) return
+    parler(t('tts_accueil'), langue)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioActif])
+
   useEffect(() => {
     reinitialiser()
 
@@ -85,7 +89,6 @@ export default function AccueilPage() {
     })
 
     ws.onopen = () => setWsConnecte(true)
-    // Chaîner avec le handler de reconnexion de PatientContext
     const _prevOnClose = ws.onclose
     ws.onclose = (e) => {
       setWsConnecte(false)
@@ -94,9 +97,20 @@ export default function AccueilPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── Activer / désactiver le guidage vocal ────────────────────────────────
+  const toggleAudio = () => {
+    if (audioActif) {
+      arreter()
+      setAudioActif(false)
+    } else {
+      activer()  // déverrouille speechSynthesis (geste utilisateur)
+      setAudioActif(true)
+    }
+  }
+
   // ── Scan CIN ─────────────────────────────────────────────────────────────
   const lancerScan = async () => {
-    activer()  // déverrouille speechSynthesis avant tout await
+    activer()
     enterFullscreen()
     setVue(VUE.SCAN)
     setErreur(null)
@@ -104,7 +118,6 @@ export default function AccueilPage() {
     try {
       const data = await scannerCIN()
       if (data.formulaire_manuel) {
-        // OCR incomplet → formulaire avec pré-remplissage partiel
         setSessionManuelId(data.session_id || null)
         setFormulaire({
           nom:            data.nom            || '',
@@ -117,7 +130,6 @@ export default function AccueilPage() {
         setVue(VUE.CONFIRMATION)
       }
     } catch {
-      // Échec réseau ou autre → formulaire vide
       setSessionManuelId(null)
       setFormulaire({ nom: '', prenom: '', date_naissance: '' })
       setVue(VUE.FORMULAIRE)
@@ -131,7 +143,7 @@ export default function AccueilPage() {
   }
 
   const validerManuel = async () => {
-    activer()  // geste utilisateur → déverrouille l'audio
+    activer()
     const { nom, prenom, date_naissance } = formulaire
     if (!nom.trim() || !prenom.trim()) {
       setErreurForm(t('erreur_nom_prenom_requis'))
@@ -158,9 +170,9 @@ export default function AccueilPage() {
     }
   }
 
-  // ── Mode démo ─────────────────────────────────────────────────────────────
+  // ── Mode démo (accessible uniquement via /demo mais gardé ici pour usage interne)
   const lancerDemo = async () => {
-    activer()  // déverrouille speechSynthesis avant tout await
+    activer()
     enterFullscreen()
     setErreur(null)
     try {
@@ -182,7 +194,7 @@ export default function AccueilPage() {
 
   // ── Scan réussi confirmé ──────────────────────────────────────────────────
   const confirmer = () => {
-    activer()  // geste utilisateur → déverrouille l'audio
+    activer()
     setIdentite({
       session_id:  donneesScan.session_id,
       nom:         donneesScan.nom,
@@ -216,7 +228,7 @@ export default function AccueilPage() {
         <div className="kiosk-center">
           <div className="kiosk-card">
             <span className="eyebrow">{t('titre_app')}</span>
-            <h1 className="kiosk-titre">{t('bienvenue')}</h1>
+            <h1 className="kiosk-titre">{t('bienvenue_principale')}</h1>
             <p className="kiosk-soustitre">{t('sous_titre')}</p>
             <GuideEtape etape={1} />
 
@@ -243,21 +255,20 @@ export default function AccueilPage() {
               {t('saisie_manuelle')}
             </button>
 
+            {/* Bouton guidage vocal — bien visible sur l'accueil */}
             <button
               className="kiosk-btn kiosk-btn--secondary"
-              onClick={lancerDemo}
-              style={{ marginTop: 8, opacity: 0.6, fontSize: '0.85em' }}
+              onClick={toggleAudio}
+              style={{
+                marginTop: 8,
+                fontSize: '0.95em',
+                background: audioActif ? 'rgba(20,184,166,0.18)' : 'rgba(15,23,42,0.5)',
+                border: audioActif ? '1px solid rgba(20,184,166,0.5)' : '1px solid rgba(148,163,184,0.2)',
+                color: audioActif ? '#2dd4bf' : 'rgba(148,163,184,0.7)',
+              }}
+              aria-pressed={audioActif}
             >
-              {t('mode_demo')}
-            </button>
-
-            <button
-              className="kiosk-btn kiosk-btn--secondary"
-              onClick={() => { activer(); setTimeout(() => parler(t('tts_test'), langue), 300) }}
-              style={{ marginTop: 16, fontSize: '0.9em', background: 'rgba(20,184,166,0.10)', border: '1px solid rgba(20,184,166,0.3)', color: '#2dd4bf' }}
-              title="Tester la synthèse vocale"
-            >
-              🔊 Tester le son
+              {audioActif ? `🔊 ${t('tts_audio_desactiver')}` : `🔇 ${t('tts_audio_activer')}`}
             </button>
           </div>
         </div>
@@ -372,6 +383,14 @@ export default function AccueilPage() {
           </div>
         </div>
       )}
+
+      {/* Bouton démo masqué — accessible via /demo uniquement */}
+      <button
+        onClick={lancerDemo}
+        style={{ display: 'none' }}
+        data-testid="btn-demo-hidden"
+        aria-hidden="true"
+      />
     </div>
   )
 }

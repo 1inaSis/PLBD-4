@@ -15,6 +15,7 @@ import IndicateurEtape from '../components/IndicateurEtape'
 import SelecteurLangue from '../components/SelecteurLangue'
 import GuideEtape from '../components/GuideEtape'
 import ModalInactivite from '../components/ModalInactivite'
+import BoutonAudio from '../components/BoutonAudio'
 import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
@@ -55,8 +56,8 @@ export default function QuestionsPage() {
   }, [navigate])
   const [questionCourante, setQ]          = useState(null)
   const [numQuestion, setNumQuestion]     = useState(0)
-  const [repsCumulees, setRepsCumulees]   = useState([])  // [{question, feature_name, reponse}]
-  const [repsDict, setRepsDict]           = useState({})  // {feature_name: reponse} → triage
+  const [repsCumulees, setRepsCumulees]   = useState([])
+  const [repsDict, setRepsDict]           = useState({})
   const [texteLibre, setTexteLibre]       = useState('')
   const [passerVisible, setPasserVisible] = useState(false)
   const [erreurTriage, setErreurTriage]   = useState(null)
@@ -66,7 +67,6 @@ export default function QuestionsPage() {
   const chargerRef      = useRef(null)
   const completedRef    = useRef(false)
 
-  // Abandon si le visiteur quitte avant la fin du triage
   useEffect(() => {
     const sid = patient.session_id
     return () => {
@@ -82,7 +82,7 @@ export default function QuestionsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Timer "Passer" — reset à chaque nouvelle question ──────────────────────
+  // ── Timer "Passer" ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== PHASE.QUESTION || !questionCourante) return
     if (questionCourante.type === 'texte_libre') {
@@ -148,7 +148,6 @@ export default function QuestionsPage() {
 
   chargerRef.current = chargerSuivante
 
-  // ── Démarrage au mount : demander la 1ère question ──────────────────────────
   useEffect(() => {
     chargerRef.current([], {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,7 +158,12 @@ export default function QuestionsPage() {
     if (!questionCourante) return
     clearTimeout(passerTimerRef.current)
 
-    const nouvelleRep       = { question: questionCourante.question, feature_name: questionCourante.feature_name, reponse: valeur }
+    const nouvelleRep       = {
+      question:     questionCourante.question,
+      feature_name: questionCourante.feature_name,
+      reponse:      valeur,
+      type:         questionCourante.type,   // transmis à Groq pour suivi des types
+    }
     const nouvellesCumulees = [...repsCumulees, nouvelleRep]
     const nouveauDict       = { ...repsDict, [questionCourante.feature_name]: valeur }
 
@@ -173,7 +177,12 @@ export default function QuestionsPage() {
     if (!questionCourante) return
     clearTimeout(passerTimerRef.current)
 
-    const skip              = { question: questionCourante.question, feature_name: questionCourante.feature_name, reponse: 'sans réponse' }
+    const skip              = {
+      question:     questionCourante.question,
+      feature_name: questionCourante.feature_name,
+      reponse:      'sans réponse',
+      type:         questionCourante.type,
+    }
     const nouvellesCumulees = [...repsCumulees, skip]
 
     setRepsCumulees(nouvellesCumulees)
@@ -185,6 +194,7 @@ export default function QuestionsPage() {
     <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={4} />
       <SelecteurLangue />
+      <BoutonAudio />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
       <GuideEtape etape={4} />
 
@@ -219,16 +229,12 @@ export default function QuestionsPage() {
   )
 }
 
-// Petit helper pour éviter d'appeler useTranslation dans un callback
 function PasserTexte() {
   const { t } = useTranslation()
   return t('passer_question')
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Sous-vues
-// ═════════════════════════════════════════════════════════════════════════════
-
 function VueChargement({ numQuestion }) {
   const { t } = useTranslation()
   return (
@@ -290,21 +296,63 @@ function VueQuestion({
   passerVisible, onRepondre, onPasser, onRetour,
 }) {
   const { t, langue }  = useTranslation()
+  const { audioActif } = usePatient()
   const { parler, arreter, estEnTrainDeParler, supporte } = useTextToSpeech()
   const pctProgression = Math.round(((numQuestion - 1) / maxQuestions) * 100)
 
-  // Lecture automatique de chaque nouvelle question
+  // Microphone pour questions texte_libre
+  const [ecouteVocale, setEcouteVocale] = useState(false)
+  const reconnaissanceRef = useRef(null)
+  const supporteVocal = typeof window !== 'undefined' &&
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+  const LANG_VOCAL = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
+
+  const basculerDictee = () => {
+    if (!ecouteVocale) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+      const reco = new SR()
+      reco.lang = LANG_VOCAL[langue] ?? 'fr-FR'
+      reco.continuous = true
+      reco.interimResults = true
+      reco.onresult = (e) => {
+        let finals = ''
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) finals += e.results[i][0].transcript + ' '
+        }
+        if (finals.trim()) onTexteChange(prev => (prev ? prev.trimEnd() + ' ' : '') + finals.trim())
+      }
+      reco.onend = () => { reconnaissanceRef.current = null; setEcouteVocale(false) }
+      reco.onerror = () => { reconnaissanceRef.current = null; setEcouteVocale(false) }
+      reco.start()
+      reconnaissanceRef.current = reco
+      setEcouteVocale(true)
+    } else {
+      reconnaissanceRef.current?.stop()
+      reconnaissanceRef.current = null
+    }
+  }
+
+  // Lecture automatique de la question (conditionnel via audioActif dans parler)
   useEffect(() => {
-    if (question?.question) parler(question.question, langue)
+    if (question?.question) {
+      const timer = setTimeout(() => parler(question.question, langue), 1000)
+      return () => { clearTimeout(timer); arreter() }
+    }
     return arreter
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question?.question, langue])
+
+  // Re-lecture quand l'audio est (ré)activé
+  useEffect(() => {
+    if (!audioActif || !question?.question) return
+    parler(question.question, langue)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioActif])
 
   return (
     <div className="kiosk-center">
       <div className="kiosk-card q-carte">
 
-        {/* En-tête + barre de progression */}
         <div className="q-progression-wrapper">
           <span className="eyebrow">{t('etape4_titre')}</span>
           <span className="q-compteur">{t('question_compteur', { x: numQuestion, y: maxQuestions })}</span>
@@ -319,7 +367,6 @@ function VueQuestion({
           <div className="q-barre-progression" style={{ width: `${pctProgression}%` }} />
         </div>
 
-        {/* Texte de la question + bouton relire */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
           <p className="q-texte" style={{ margin: 0, flex: 1 }}>{question.question}</p>
           {supporte && (
@@ -362,15 +409,28 @@ function VueQuestion({
         {/* Réponses — type texte_libre */}
         {question.type === 'texte_libre' && (
           <div className="q-texte-libre-wrapper">
-            <textarea
-              className="symptome-input"
-              placeholder={t('decrivez_mots')}
-              value={texteLibre}
-              onChange={e => onTexteChange(e.target.value)}
-              rows={3}
-              maxLength={300}
-              autoFocus
-            />
+            <div className="symptome-textarea-wrap">
+              <textarea
+                className="symptome-input"
+                placeholder={ecouteVocale ? t('mic_ecoute') : t('decrivez_mots')}
+                value={texteLibre}
+                onChange={e => onTexteChange(e.target.value)}
+                rows={3}
+                maxLength={300}
+                autoFocus
+              />
+              {supporteVocal && (
+                <button
+                  type="button"
+                  className={`mic-btn${ecouteVocale ? ' mic-btn--actif' : ''}`}
+                  onClick={basculerDictee}
+                  title={ecouteVocale ? t('mic_arret') : t('mic_dicter')}
+                  aria-label={ecouteVocale ? t('mic_arret') : t('mic_dicter')}
+                >
+                  {ecouteVocale ? '⏹' : '🎤'}
+                </button>
+              )}
+            </div>
             <button
               className="kiosk-btn kiosk-btn--primary"
               onClick={() => onRepondre(texteLibre || '')}
@@ -382,14 +442,12 @@ function VueQuestion({
           </div>
         )}
 
-        {/* Bouton "Passer" (après DELAI_PASSER_MS) */}
         {passerVisible && (
           <button className="q-btn-passer" onClick={onPasser}>
             <PasserTexte />
           </button>
         )}
 
-        {/* Retour (1ère question seulement) */}
         {onRetour && (
           <button className="kiosk-btn kiosk-btn--secondary q-btn-retour" onClick={onRetour}>
             {t('retour')}

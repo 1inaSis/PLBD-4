@@ -8,6 +8,7 @@ import IndicateurEtape from '../components/IndicateurEtape'
 import SelecteurLangue from '../components/SelecteurLangue'
 import GuideEtape from '../components/GuideEtape'
 import ModalInactivite from '../components/ModalInactivite'
+import BoutonAudio from '../components/BoutonAudio'
 import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
@@ -32,7 +33,7 @@ const COULEURS_ESI = {
 
 export default function ResultatPage() {
   const navigate  = useNavigate()
-  const { patient, reinitialiser } = usePatient()
+  const { patient, reinitialiser, audioActif } = usePatient()
   const { t, langue } = useTranslation()
   const { parler, estEnTrainDeParler, supporte } = useTextToSpeech()
   const [sortie, setSortie] = useState(false)
@@ -56,10 +57,24 @@ export default function ResultatPage() {
     ? t('tts_resultat', { libelle: esiLibelle, delai: esiDelai })
     : null
 
-  // Garder le résultat affiché 60 s max, puis permettre nouvelle consultation
   useEffect(() => {
     if (!res) navigate('/', { replace: true })
   }, [res, navigate])
+
+  // Lecture automatique du résultat à l'arrivée sur la page (si audio activé)
+  useEffect(() => {
+    if (!texteResultat) return
+    const timer = setTimeout(() => parler(texteResultat, langue), 1000)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Re-lecture quand l'audio est (ré)activé
+  useEffect(() => {
+    if (!audioActif || !texteResultat) return
+    parler(texteResultat, langue)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioActif])
 
   if (!res) return null
 
@@ -80,6 +95,7 @@ export default function ResultatPage() {
     <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={5} />
       <SelecteurLangue />
+      <BoutonAudio />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
       <GuideEtape etape={5} />
 

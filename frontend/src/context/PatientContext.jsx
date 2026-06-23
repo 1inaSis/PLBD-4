@@ -79,6 +79,9 @@ export function PatientProvider({ children }) {
     setLangueState(lang)
   }
 
+  // Guidage vocal — activé/désactivé par le patient
+  const [audioActif, setAudioActif] = useState(false)
+
   // Référence WebSocket — useRef évite les re-renders inutiles
   const wsRef = useRef(null)
 
@@ -143,6 +146,8 @@ export function PatientProvider({ children }) {
       reinitialiser,
       langue,
       setLangue,
+      audioActif,
+      setAudioActif,
     }}>
       {children}
     </PatientContext.Provider>

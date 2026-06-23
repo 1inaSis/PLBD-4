@@ -15,11 +15,12 @@ import ModalInactivite from '../components/ModalInactivite'
 import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
+import BoutonAudio from '../components/BoutonAudio'
 import '../styles/kiosk.css'
 
 export default function QuestionnairePage() {
   const navigate = useNavigate()
-  const { patient, setSymptomes, reinitialiser } = usePatient()
+  const { patient, setSymptomes, reinitialiser, audioActif } = usePatient()
   const { t, langue } = useTranslation()
   const { parler, arreter } = useTextToSpeech()
   const handleExpiration = useCallback(async () => {
@@ -35,13 +36,17 @@ export default function QuestionnairePage() {
 
   // Lecture automatique de l'instruction principale — 1s après montage
   useEffect(() => {
-    const texte = patient.prenom
-      ? `${t('ou_mal')} ${patient.prenom} ? ${t('instruction_corps')}`
-      : `${t('ou_mal')} ${t('instruction_corps')}`
-    const timer = setTimeout(() => parler(texte, langue), 1000)
+    const timer = setTimeout(() => parler(t('tts_questionnaire'), langue), 1000)
     return () => { clearTimeout(timer); arreter() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Re-lecture de l'instruction quand l'audio est (ré)activé sur cette page
+  useEffect(() => {
+    if (!audioActif) return
+    parler(t('tts_questionnaire'), langue)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioActif])
 
   const [zonesSelectionnees, setZonesSelectionnees] = useState([])
   const [texteSymptome, setTexteSymptome] = useState('')
@@ -135,6 +140,7 @@ export default function QuestionnairePage() {
     <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={2} />
       <SelecteurLangue />
+      <BoutonAudio />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
       <GuideEtape etape={2} />
 

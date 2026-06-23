@@ -3499,6 +3499,34 @@ body {
   .salle-ligne:not(.salle-ligne--entete) { animation: none !important; }
 }
 
+/* ── Bouton audio fixe (guidage vocal) ─────────────────────────────────────── */
+.btn-audio-fixe {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 900;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 50%;
+  width: 52px;
+  height: 52px;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.55;
+  transition: opacity 0.2s, border-color 0.2s, box-shadow 0.2s;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(2, 8, 23, 0.4);
+}
+.btn-audio-fixe:hover { opacity: 0.85; }
+.btn-audio-fixe--actif {
+  opacity: 1;
+  border-color: rgba(20, 184, 166, 0.6);
+  box-shadow: 0 0 12px rgba(20, 184, 166, 0.3);
+}
+
 /* ── Bouton text-to-speech 🔊 ───────────────────────────────────────────────── */
 .tts-btn {
   background: none;

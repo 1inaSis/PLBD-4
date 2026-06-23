@@ -13,6 +13,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import { demarrerArduino, arreterArduino, mesurerConstante, abandonnerSession } from '../services/api'
+// usePatient est aussi utilisé dans VueMesure (sous-composant) pour audioActif
 import IndicateurEtape from '../components/IndicateurEtape'
 import BiometrieDisplay, { evaluerCouleur, LIBELLES_COULEUR } from '../components/BiometrieDisplay'
 import {
@@ -26,6 +27,7 @@ import ModalInactivite from '../components/ModalInactivite'
 import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
+import BoutonAudio from '../components/BoutonAudio'
 import '../styles/kiosk.css'
 
 const PRIORITE_COULEUR = { rouge: 5, orange: 4, jaune: 3, vert: 2, gris: 1 }
@@ -329,6 +331,7 @@ export default function ConstantesPage() {
     <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={3} />
       <SelecteurLangue />
+      <BoutonAudio />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
       <GuideEtape
         etape={3}
@@ -376,6 +379,7 @@ function VueMesure({
 }) {
   const { t, langue }  = useTranslation()
   const { parler, arreter, estEnTrainDeParler, supporte } = useTextToSpeech()
+  const { audioActif } = usePatient()
   const estSimulee    = !!etape.simulee
   const estManuelle   = !!etape.manuelle
 
@@ -388,6 +392,13 @@ function VueMesure({
     return () => { clearTimeout(timer); arreter() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])
+
+  // Re-lecture quand l'audio est (ré)activé sur cette page
+  useEffect(() => {
+    if (!audioActif || !texteInstruction) return
+    parler(texteInstruction, langue)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioActif])
 
   const relireInstruction = () => { if (texteInstruction) parler(texteInstruction, langue) }
   const couleur       = evaluerCouleur(etape.cle, valeur)
