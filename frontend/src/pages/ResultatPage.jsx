@@ -64,7 +64,7 @@ export default function ResultatPage() {
   // Lecture automatique du résultat à l'arrivée sur la page (si audio activé)
   useEffect(() => {
     if (!texteResultat) return
-    const timer = setTimeout(() => parler(texteResultat, langue), 1000)
+    const timer = setTimeout(() => parler(texteResultat, langue), 300)
     return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

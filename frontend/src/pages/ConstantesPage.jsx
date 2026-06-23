@@ -385,10 +385,10 @@ function VueMesure({
 
   const texteInstruction = etape.instructionTTS ? t(etape.instructionTTS) : null
 
-  // Lecture auto 1s après le passage à l'état PRET (nouvelle étape ou retour)
+  // Lecture auto 300ms après le passage à l'état PRET (nouvelle étape ou retour)
   useEffect(() => {
     if (etat !== ETAT.PRET || !texteInstruction) return
-    const timer = setTimeout(() => parler(texteInstruction, langue), 1000)
+    const timer = setTimeout(() => parler(texteInstruction, langue), 300)
     return () => { clearTimeout(timer); arreter() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])

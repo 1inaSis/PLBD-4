@@ -335,7 +335,7 @@ function VueQuestion({
   // Lecture automatique de la question (conditionnel via audioActif dans parler)
   useEffect(() => {
     if (question?.question) {
-      const timer = setTimeout(() => parler(question.question, langue), 1000)
+      const timer = setTimeout(() => parler(question.question, langue), 300)
       return () => { clearTimeout(timer); arreter() }
     }
     return arreter

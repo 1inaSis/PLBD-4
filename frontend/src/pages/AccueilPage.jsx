@@ -56,18 +56,18 @@ export default function AccueilPage() {
     return () => clearTimeout(timer)
   }, [vue, navigate])
 
-  // Lecture TTS — bienvenue personnalisée (1s après affichage)
+  // Lecture TTS — bienvenue personnalisée (300ms après affichage)
   useEffect(() => {
     if (vue !== VUE.BIENVENUE || !prenomBienvenue) return
-    const timer = setTimeout(() => parler(t('tts_bienvenue', { prenom: prenomBienvenue }), langue), 1000)
+    const timer = setTimeout(() => parler(t('tts_bienvenue', { prenom: prenomBienvenue }), langue), 300)
     return () => { clearTimeout(timer); arreter() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vue])
 
-  // Lecture TTS — instruction scan (1s après passage à VUE.SCAN)
+  // Lecture TTS — instruction scan (300ms après passage à VUE.SCAN)
   useEffect(() => {
     if (vue !== VUE.SCAN) return
-    const timer = setTimeout(() => parler(t('tts_scan'), langue), 1000)
+    const timer = setTimeout(() => parler(t('tts_scan'), langue), 300)
     return () => { clearTimeout(timer); arreter() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vue])
@@ -246,7 +246,10 @@ export default function AccueilPage() {
               }}
               aria-pressed={audioActif}
             >
-              {audioActif ? `🔊 ${t('tts_audio_desactiver')}` : `🔇 ${t('tts_audio_activer')}`}
+              {audioActif
+                ? <><span className="audio-active-dot" aria-hidden="true" /> 🔊 {t('tts_audio_desactiver')}</>
+                : `🔇 ${t('tts_audio_activer')}`
+              }
             </button>
           </div>
         </div>

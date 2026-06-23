@@ -34,9 +34,9 @@ export default function QuestionnairePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Lecture automatique de l'instruction principale — 1s après montage
+  // Lecture automatique de l'instruction principale — 300ms après montage
   useEffect(() => {
-    const timer = setTimeout(() => parler(t('tts_questionnaire'), langue), 1000)
+    const timer = setTimeout(() => parler(t('tts_questionnaire'), langue), 300)
     return () => { clearTimeout(timer); arreter() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

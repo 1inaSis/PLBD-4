@@ -6,11 +6,12 @@
 
 /* ── Shell principal ───────────────────────────────────────── */
 .kiosk-shell {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 28px 40px;
-  gap: 24px;
+  padding: 14px 22px;
+  gap: 10px;
   position: relative;
   animation: fadeInUp 0.4s ease both;
 }
@@ -23,6 +24,8 @@
 /* ── Centrage vertical du contenu ──────────────────────────── */
 .kiosk-center {
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -35,12 +38,13 @@
   border-radius: 32px;
   backdrop-filter: blur(24px);
   box-shadow: 0 32px 80px rgba(2, 8, 23, 0.45);
-  padding: 52px 60px;
+  padding: 24px 32px;
   width: 100%;
   max-width: 720px;
+  max-height: calc(100vh - 130px);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
 }
 
 .kiosk-card--centree {
@@ -50,22 +54,22 @@
 
 /* ── Titres ────────────────────────────────────────────────── */
 .kiosk-titre {
-  font-size: clamp(2.4rem, 5vw, 4rem);
+  font-size: clamp(1.7rem, 3.2vw, 2.6rem);
   line-height: 1.05;
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   font-weight: 700;
 }
 
 .kiosk-titre-sm {
-  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-size: clamp(1.2rem, 2.2vw, 1.75rem);
   font-weight: 700;
-  margin: 8px 0 0;
+  margin: 4px 0 0;
 }
 
 .kiosk-soustitre {
   color: #94a3b8;
-  font-size: 1.15rem;
-  line-height: 1.65;
+  font-size: 0.92rem;
+  line-height: 1.5;
   max-width: 52ch;
 }
 
@@ -80,11 +84,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  min-height: 70px;
-  padding: 18px 40px;
-  border-radius: 20px;
-  font-size: 1.2rem;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 24px;
+  border-radius: 16px;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   border: none;
@@ -128,8 +132,8 @@
 .kiosk-actions {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 /* ── Message d'alerte/erreur ───────────────────────────────── */
@@ -335,10 +339,11 @@
 
 .questionnaire-layout {
   flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(300px, 420px) 1fr;
-  gap: 28px;
-  align-items: start;
+  grid-template-columns: minmax(240px, 360px) 1fr;
+  gap: 14px;
+  align-items: stretch;
 }
 
 .questionnaire-col { display: flex; flex-direction: column; }
@@ -349,12 +354,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  justify-content: center;
+  gap: 10px;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 28px;
-  padding: 24px 20px;
+  padding: 14px 14px;
   backdrop-filter: blur(18px);
+  height: 100%;
 }
 
 .corps-humain-consigne {
@@ -372,10 +379,10 @@
 
 .corps-humain-svg {
   width: 100%;
-  max-width: 340px;
+  max-width: 280px;
+  max-height: calc(100vh - 240px);
   height: auto;
   border-radius: 16px;
-  /* Zones cliquables ont un rayon suffisant pour le toucher */
   touch-action: manipulation;
 }
 
@@ -485,11 +492,11 @@
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 16px;
   color: #f1f5f9;
-  padding: 16px 18px;
-  font-size: 1.05rem;
-  line-height: 1.6;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  line-height: 1.5;
   resize: vertical;
-  min-height: 110px;
+  min-height: 72px;
   transition: border-color 0.15s;
   caret-color: #14b8a6;
 }
@@ -512,9 +519,10 @@
 
 .constantes-layout {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 12px;
   max-width: 960px;
   margin: 0 auto;
   width: 100%;
@@ -584,12 +592,12 @@
 
 .bio-carte {
   background: rgba(15, 23, 42, 0.72);
-  border-radius: 22px;
-  padding: 22px 18px;
+  border-radius: 18px;
+  padding: 12px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   text-align: center;
   border: 1px solid rgba(148, 163, 184, 0.18);
   transition: border-color 0.3s, background 0.3s;
@@ -602,7 +610,7 @@
 .bio-carte--rouge  { border-color: rgba(239,  68,  68, 0.45); background: rgba(239,68,68,0.07); }
 .bio-carte--gris   { border-color: rgba(148, 163, 184, 0.18); }
 
-.bio-icone { font-size: 2rem; line-height: 1; }
+.bio-icone { font-size: 1.4rem; line-height: 1; }
 
 .bio-label {
   color: #94a3b8;
@@ -613,11 +621,11 @@
 }
 
 .bio-valeur {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: #f1f5f9;
   line-height: 1.1;
-  min-height: 2.6rem;
+  min-height: 1.8rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -682,7 +690,7 @@
 /* ── Mesure séquentielle : carte unique ────────────────────── */
 .constante-sequentielle {
   max-width: 680px;
-  gap: 26px;
+  gap: 14px;
 }
 
 /* En-tête : "Étape 3/5" à gauche, compteur "2/4" à droite */
@@ -738,7 +746,7 @@
 
 /* Grande valeur numérique (style commun STABILISATION + COMPLET) */
 .seq-valeur-grande {
-  font-size: clamp(2.8rem, 5vw, 4rem);
+  font-size: clamp(2rem, 3.5vw, 3rem);
   font-weight: 800;
   color: #f1f5f9;
   line-height: 1;
@@ -843,16 +851,15 @@
 
 /* SVG lui-même : taille fixe, filtre d'ombre douce */
 .illustration-geste {
-  width: 180px;
+  width: 110px;
   height: auto;
   flex-shrink: 0;
   filter: drop-shadow(0 4px 18px rgba(20, 184, 166, 0.12));
   transition: opacity 0.3s;
 }
 
-/* Sur tablette/mobile : réduire légèrement */
 @media (max-width: 600px) {
-  .illustration-geste { width: 150px; }
+  .illustration-geste { width: 90px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -955,7 +962,7 @@
 /* Carte plus large pour le texte des questions */
 .q-carte {
   max-width: 860px;
-  gap: 28px;
+  gap: 14px;
 }
 
 /* En-tête : "Étape 4/5 · Questions IA" + compteur "2 / 4" */
@@ -1007,11 +1014,11 @@
   background: rgba(52, 211, 153, 0.14);
   border: 2px solid rgba(52, 211, 153, 0.40);
   color: #34d399;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  border-radius: 22px;
-  min-height: 90px;
+  border-radius: 18px;
+  min-height: 60px;
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
 
@@ -1025,11 +1032,11 @@
   background: rgba(239, 68, 68, 0.12);
   border: 2px solid rgba(239, 68, 68, 0.38);
   color: #f87171;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  border-radius: 22px;
-  min-height: 90px;
+  border-radius: 18px;
+  min-height: 60px;
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
 
@@ -1054,12 +1061,12 @@
   background: rgba(30, 41, 59, 0.80);
   border: 2px solid rgba(148, 163, 184, 0.22);
   color: #cbd5e1;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 500;
-  border-radius: 20px;
-  min-height: 80px;
+  border-radius: 16px;
+  min-height: 54px;
   text-align: left;
-  padding: 18px 28px;
+  padding: 12px 20px;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
@@ -1474,7 +1481,7 @@
 
 .resultat-carte {
   max-width: 680px;
-  gap: 28px;
+  gap: 12px;
 }
 
 /* ── Numéro de ticket ───────────────────────────────────────── */
@@ -1486,7 +1493,7 @@
 }
 
 .resultat-ticket {
-  font-size: 2rem;
+  font-size: 1.4rem;
   font-weight: 800;
   color: #f1f5f9;
   letter-spacing: 0.08em;
@@ -1497,13 +1504,13 @@
 .resultat-esi-badge {
   display: flex;
   align-items: center;
-  gap: 24px;
-  border-radius: 28px;
-  padding: 28px 36px;
+  gap: 16px;
+  border-radius: 22px;
+  padding: 14px 20px;
 }
 
 .resultat-esi-numero {
-  font-size: 4.5rem;
+  font-size: 3rem;
   font-weight: 900;
   line-height: 1;
   flex-shrink: 0;
@@ -1516,7 +1523,7 @@
 }
 
 .resultat-esi-libelle {
-  font-size: 1.8rem;
+  font-size: 1.3rem;
   font-weight: 700;
   line-height: 1.1;
 }
@@ -1542,18 +1549,18 @@
 .resultat-meta {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 8px;
   width: 100%;
 }
 
 .resultat-meta-item {
   background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 18px;
-  padding: 16px 20px;
+  border-radius: 14px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .resultat-meta-label {
@@ -2204,18 +2211,18 @@
 .guide-etape {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 18px;
+  gap: 8px;
+  padding: 6px 14px;
   background: rgba(20,184,166,0.10);
   border: 1px solid rgba(20,184,166,0.25);
-  border-radius: 12px;
-  margin: 0 auto 12px;
+  border-radius: 10px;
+  margin: 0 auto 2px;
   max-width: 560px;
   animation: guideAppear 0.4s ease both;
 }
 
-.guide-icone { font-size: 1.3rem; flex-shrink: 0; }
-.guide-texte { font-size: 0.9rem; color: #2dd4bf; font-weight: 500; }
+.guide-icone { font-size: 1rem; flex-shrink: 0; }
+.guide-texte { font-size: 0.8rem; color: #2dd4bf; font-weight: 500; }
 
 @keyframes guideAppear {
   from { opacity: 0; transform: translateY(-6px); }
@@ -3497,6 +3504,21 @@ body {
 
   /* Garde les animations one-shot (badge-appear, slide-in) */
   .salle-ligne:not(.salle-ligne--entete) { animation: none !important; }
+}
+
+/* ── Point indicateur audio actif ──────────────────────────────────────────── */
+.audio-active-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  flex-shrink: 0;
+  animation: audio-dot-pulse 1.2s ease-in-out infinite;
+}
+@keyframes audio-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
 }
 
 /* ── Bouton audio fixe (guidage vocal) ─────────────────────────────────────── */
