@@ -3941,3 +3941,464 @@ body {
   .resultat-esi-shell--4::after,
   .resultat-esi-shell--5::after { animation: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PREMIUM MEDICAL UI v3 — HealthGate Soutenance PLBD-4
+   Inspiré de Apple Health · Linear · Vercel Dashboard
+   Palette: #060b14 · #2563eb · #06b6d4 · #10b981 · #ef4444
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --v3-bg:         #060b14;
+  --v3-blue:       #2563eb;
+  --v3-cyan:       #06b6d4;
+  --v3-green:      #10b981;
+  --v3-red:        #ef4444;
+  --v3-orange:     #f97316;
+  --v3-yellow:     #eab308;
+  --v3-text:       #f8fafc;
+  --v3-text-sec:   #94a3b8;
+  --v3-border:     rgba(255,255,255,0.08);
+  --v3-border-acc: rgba(37,99,235,0.40);
+  --ease-spring:   cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Fond #060b14 + grain subtil + croix bleues */
+body {
+  background-color: #060b14 !important;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='80' height='80' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='34' y='22' width='12' height='36' fill='%232563eb' fill-opacity='0.036' rx='2'/%3E%3Crect x='22' y='34' width='36' height='12' fill='%232563eb' fill-opacity='0.036' rx='2'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 10% 15%, rgba(37,99,235,0.11) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 85%, rgba(6,182,212,0.07) 0%, transparent 45%),
+    linear-gradient(160deg, #060b14 0%, #080f1a 55%, #060b14 100%) !important;
+  background-size: 200px 200px, 80px 80px, 100% 100%, 100% 100%, 100% 100% !important;
+}
+
+/* ── Animations globales ────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeOutDown {
+  to { opacity: 0; transform: translateY(10px); }
+}
+@keyframes slideInBottom {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes esi-critical-pulse {
+  0%, 100% { box-shadow: 0 0 4px currentColor; }
+  50%       { box-shadow: 0 0 16px currentColor, 0 0 32px currentColor; }
+}
+@keyframes highlight-flash {
+  0%, 100% { background: inherit; }
+  30%, 70%  { background: rgba(37,99,235,0.18); }
+}
+
+/* Transitions de page */
+.kiosk-shell {
+  animation: fadeInUp 0.38s var(--ease-spring) both;
+}
+.page-exit {
+  animation: fadeOutDown 0.35s ease forwards !important;
+}
+
+/* ── Glassmorphisme v3 ──────────────────────────────────────────────────── */
+.kiosk-card {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 4px 24px rgba(0,0,0,0.55),
+    0 1px 2px rgba(0,0,0,0.4) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  animation: fadeInUp 0.45s var(--ease-spring) both;
+}
+.kiosk-card:hover {
+  background: rgba(255,255,255,0.07) !important;
+  border-color: rgba(37,99,235,0.40) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 8px 32px rgba(0,0,0,0.55),
+    0 0 30px rgba(37,99,235,0.10) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ── Bouton primaire v3 ─────────────────────────────────────────────────── */
+.kiosk-btn--primary {
+  background: #2563eb !important;
+  border: 1px solid rgba(37,99,235,0.50) !important;
+  box-shadow: 0 2px 10px rgba(37,99,235,0.25) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+}
+.kiosk-btn--primary:hover:not(:disabled) {
+  background: #1d4ed8 !important;
+  box-shadow: 0 0 0 4px rgba(37,99,235,0.20), 0 4px 20px rgba(37,99,235,0.35) !important;
+  transform: translateY(-1px) scale(1.01) !important;
+  filter: none !important;
+}
+.kiosk-btn--primary:active:not(:disabled) {
+  transform: scale(0.97) !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+.kiosk-btn--primary:disabled {
+  background: rgba(37,99,235,0.22) !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+/* Bouton secondaire v3 */
+.kiosk-btn--secondary {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  color: #94a3b8 !important;
+}
+.kiosk-btn--secondary:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.18) !important;
+  color: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+/* ── Titre gradient v3 ──────────────────────────────────────────────────── */
+.kiosk-titre {
+  background: linear-gradient(130deg, #f8fafc 28%, #60a5fa 68%, #06b6d4 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  filter: none !important;
+}
+.kiosk-titre-sm {
+  background: linear-gradient(130deg, #f8fafc 38%, #93c5fd 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  filter: none !important;
+}
+
+/* Eyebrow badge v3 */
+.eyebrow {
+  background: rgba(37,99,235,0.10) !important;
+  border: 1px solid rgba(37,99,235,0.28) !important;
+  color: #60a5fa !important;
+  text-shadow: none !important;
+}
+
+/* ── Indicateur étape v3 ────────────────────────────────────────────────── */
+@keyframes etape-active-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.6); }
+  50%      { box-shadow: 0 0 0 6px rgba(37,99,235,0.15); }
+}
+.etape--active .etape-bulle {
+  background: #2563eb !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.22) !important;
+  animation: etape-active-pulse 2s ease-in-out infinite;
+}
+.etape--terminee .etape-bulle {
+  background: rgba(16,185,129,0.14) !important;
+  border-color: #10b981 !important;
+  color: #10b981 !important;
+  box-shadow: none !important;
+}
+.etape-trait--actif {
+  background: #2563eb !important;
+  box-shadow: none !important;
+}
+.etape--active .etape-label  { color: #60a5fa !important; text-shadow: none; }
+.etape--terminee .etape-label { color: #10b981 !important; }
+
+/* Orbes v3 */
+.kiosk-shell::before {
+  background: radial-gradient(circle, rgba(37,99,235,0.08) 0%, transparent 70%) !important;
+}
+.kiosk-shell::after {
+  background: radial-gradient(circle, rgba(6,182,212,0.05) 0%, transparent 70%) !important;
+}
+
+/* ── Particules flottantes + ECG + Croix (AccueilPage) ─────────────────── */
+.accueil-fx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.accueil-particles { position: absolute; inset: 0; overflow: hidden; }
+
+@keyframes particle-float {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; }
+  50%       { transform: translateY(-44px) scale(1.4); opacity: 0.05; }
+}
+.accueil-particles span { position: absolute; border-radius: 50%; animation: particle-float linear infinite; }
+.accueil-particles span:nth-child(1)  { left:  4%; top: 18%; width: 3px; height: 3px; animation-duration:  8.0s; animation-delay:  0.0s; background: #2563eb; }
+.accueil-particles span:nth-child(2)  { left: 11%; top: 73%; width: 2px; height: 2px; animation-duration: 10.0s; animation-delay: -2.0s; background: #06b6d4; }
+.accueil-particles span:nth-child(3)  { left: 21%; top: 35%; width: 4px; height: 4px; animation-duration:  7.0s; animation-delay: -1.5s; background: #2563eb; }
+.accueil-particles span:nth-child(4)  { left: 36%; top: 56%; width: 2px; height: 2px; animation-duration: 12.0s; animation-delay: -4.0s; background: #06b6d4; }
+.accueil-particles span:nth-child(5)  { left: 47%; top: 19%; width: 3px; height: 3px; animation-duration:  9.0s; animation-delay: -1.0s; background: #10b981; }
+.accueil-particles span:nth-child(6)  { left: 59%; top: 79%; width: 2px; height: 2px; animation-duration: 11.0s; animation-delay: -3.5s; background: #2563eb; }
+.accueil-particles span:nth-child(7)  { left: 71%; top: 44%; width: 3px; height: 3px; animation-duration:  8.0s; animation-delay: -0.5s; background: #06b6d4; }
+.accueil-particles span:nth-child(8)  { left: 84%; top: 24%; width: 2px; height: 2px; animation-duration: 13.0s; animation-delay: -5.0s; background: #2563eb; }
+.accueil-particles span:nth-child(9)  { left: 93%; top: 66%; width: 4px; height: 4px; animation-duration:  7.0s; animation-delay: -2.5s; background: #10b981; }
+.accueil-particles span:nth-child(10) { left:  2%; top: 45%; width: 2px; height: 2px; animation-duration: 10.0s; animation-delay: -1.8s; background: #06b6d4; }
+.accueil-particles span:nth-child(11) { left: 17%; top: 87%; width: 3px; height: 3px; animation-duration:  9.0s; animation-delay: -3.0s; background: #2563eb; }
+.accueil-particles span:nth-child(12) { left: 29%; top:  9%; width: 2px; height: 2px; animation-duration: 11.0s; animation-delay: -4.5s; background: #06b6d4; }
+.accueil-particles span:nth-child(13) { left: 41%; top: 71%; width: 3px; height: 3px; animation-duration:  8.0s; animation-delay: -0.3s; background: #2563eb; }
+.accueil-particles span:nth-child(14) { left: 53%; top: 41%; width: 2px; height: 2px; animation-duration: 12.0s; animation-delay: -2.2s; background: #10b981; }
+.accueil-particles span:nth-child(15) { left: 66%; top: 11%; width: 4px; height: 4px; animation-duration:  7.0s; animation-delay: -1.0s; background: #06b6d4; }
+.accueil-particles span:nth-child(16) { left: 77%; top: 83%; width: 2px; height: 2px; animation-duration: 10.0s; animation-delay: -3.8s; background: #2563eb; }
+.accueil-particles span:nth-child(17) { left: 89%; top: 37%; width: 3px; height: 3px; animation-duration:  9.0s; animation-delay: -0.8s; background: #06b6d4; }
+.accueil-particles span:nth-child(18) { left: 96%; top: 14%; width: 2px; height: 2px; animation-duration: 11.0s; animation-delay: -4.0s; background: #10b981; }
+.accueil-particles span:nth-child(19) { left: 44%; top: 91%; width: 3px; height: 3px; animation-duration:  8.0s; animation-delay: -2.8s; background: #2563eb; }
+.accueil-particles span:nth-child(20) { left: 31%; top: 51%; width: 2px; height: 2px; animation-duration: 13.0s; animation-delay: -1.3s; background: #06b6d4; }
+
+/* ECG ligne défilante */
+.accueil-ecg {
+  position: absolute;
+  bottom: 0; left: 0;
+  width: 100%; height: 60px;
+  opacity: 0.18;
+}
+.ecg-path {
+  fill: none;
+  stroke: #06b6d4;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1900;
+  stroke-dashoffset: 1900;
+  animation: ecg-scroll 5.5s linear infinite;
+}
+@keyframes ecg-scroll { to { stroke-dashoffset: -1900; } }
+
+/* Croix médicale v3 (position: absolute dans accueil-fx) */
+.accueil-croix-medicale {
+  position: absolute !important;
+  fill: #2563eb !important;
+  opacity: 0.022 !important;
+}
+
+/* ── Q/A v3 ─────────────────────────────────────────────────────────────── */
+.q-btn-oui {
+  background: rgba(16,185,129,0.09) !important;
+  border: 1px solid rgba(16,185,129,0.32) !important;
+  color: #10b981 !important;
+}
+.q-btn-oui:hover:not(:disabled) {
+  background: rgba(16,185,129,0.18) !important;
+  box-shadow: 0 0 20px rgba(16,185,129,0.20) !important;
+}
+.q-btn-non {
+  background: rgba(239,68,68,0.09) !important;
+  border: 1px solid rgba(239,68,68,0.30) !important;
+  color: #ef4444 !important;
+}
+.q-btn-non:hover:not(:disabled) {
+  background: rgba(239,68,68,0.18) !important;
+  box-shadow: 0 0 20px rgba(239,68,68,0.20) !important;
+}
+.q-btn-choix {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.09) !important;
+  color: #94a3b8 !important;
+}
+.q-btn-choix:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(37,99,235,0.40) !important;
+  color: #f8fafc !important;
+}
+.q-btn-choix--selectionne {
+  background: rgba(37,99,235,0.14) !important;
+  border-color: #2563eb !important;
+  color: #60a5fa !important;
+  box-shadow: none !important;
+}
+
+/* ── Zone corps humain v3 ───────────────────────────────────────────────── */
+.zone-clickable:hover    { filter: brightness(1.3) drop-shadow(0 0 6px rgba(37,99,235,0.65)); }
+.zone-clickable--active  { filter: brightness(1.2) drop-shadow(0 0 8px rgba(239,68,68,0.70)); }
+.zone-tag {
+  background: rgba(37,99,235,0.09) !important;
+  border-color: rgba(37,99,235,0.26) !important;
+  color: #60a5fa !important;
+}
+.zone-tag:hover { background: rgba(37,99,235,0.18) !important; }
+
+/* ── Fond ESI ResultatPage v3 ───────────────────────────────────────────── */
+.resultat-esi-shell--1 { background-color: rgba(239,68,68,0.06) !important; }
+.resultat-esi-shell--2 { background-color: rgba(249,115,22,0.05) !important; }
+.resultat-esi-shell--3 { background-color: rgba(234,179,8,0.04)  !important; }
+.resultat-esi-shell--4,
+.resultat-esi-shell--5 { background-color: rgba(16,185,129,0.04) !important; }
+.resultat-esi-shell--4::before,
+.resultat-esi-shell--5::before,
+.resultat-esi-shell--4::after,
+.resultat-esi-shell--5::after { color: #10b981 !important; }
+
+/* ── Salle d'attente v3 — tableau aéroport ──────────────────────────────── */
+.salle-shell {
+  background-color: #030710 !important;
+  background-image:
+    linear-gradient(rgba(37,99,235,0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37,99,235,0.012) 1px, transparent 1px) !important;
+  background-size: 60px 60px !important;
+}
+.salle-shell::before {
+  background: radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 70%) !important;
+}
+.salle-shell::after {
+  background: radial-gradient(circle, rgba(6,182,212,0.04) 0%, transparent 70%) !important;
+}
+.salle-header {
+  background: rgba(3,7,16,0.88) !important;
+  border-bottom: 1px solid rgba(37,99,235,0.14) !important;
+  backdrop-filter: blur(20px) !important;
+  animation: none !important;
+}
+.salle-nom-hopital {
+  background: linear-gradient(130deg, #f8fafc 10%, #60a5fa 52%, #06b6d4 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  filter: none !important;
+}
+/* Horloge digitale avec glow cyan — plain color (no gradient text) */
+.salle-heure {
+  font-family: 'Courier New', 'Roboto Mono', Consolas, monospace !important;
+  font-size: clamp(2.2rem, 3.5vw, 3.8rem) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.06em !important;
+  color: #06b6d4 !important;
+  -webkit-text-fill-color: #06b6d4 !important;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  text-shadow: 0 0 20px rgba(6,182,212,0.65), 0 0 40px rgba(6,182,212,0.30) !important;
+  filter: none !important;
+}
+.salle-ws-badge--connecte {
+  background: rgba(16,185,129,0.09) !important;
+  border-color: rgba(16,185,129,0.32) !important;
+  color: #10b981 !important;
+  box-shadow: none !important;
+}
+.salle-stats-bande {
+  background: rgba(37,99,235,0.05) !important;
+  border-bottom: 1px solid rgba(37,99,235,0.11) !important;
+}
+.salle-stat-valeur {
+  color: #60a5fa !important;
+  -webkit-text-fill-color: #60a5fa !important;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  filter: none !important;
+  text-shadow: 0 0 12px rgba(37,99,235,0.35) !important;
+}
+.salle-stat-badge-critique {
+  background: rgba(239,68,68,0.12) !important;
+  border: 1px solid rgba(239,68,68,0.35) !important;
+  color: #f87171 !important;
+  animation: esi-critical-pulse 1.5s ease-in-out infinite !important;
+}
+.salle-ligne {
+  animation: slideInBottom 0.4s var(--ease-spring) both;
+}
+/* Ticker bandeau bas de page — salle */
+.salle-ticker {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  background: linear-gradient(90deg, rgba(37,99,235,0.12), rgba(6,182,212,0.10), rgba(37,99,235,0.12)) !important;
+  border-top: 1px solid rgba(37,99,235,0.22) !important;
+  height: 28px !important;
+  z-index: 40 !important;
+}
+.salle-ticker-texte {
+  color: #60a5fa !important;
+  font-size: 0.72rem !important;
+  letter-spacing: 0.10em !important;
+  font-weight: 600 !important;
+}
+
+/* ── Dashboard médecin v3 ───────────────────────────────────────────────── */
+.medecin-shell { background: #060b14 !important; }
+.medecin-header {
+  background: rgba(6,11,20,0.92) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+  backdrop-filter: blur(20px) !important;
+  animation: none !important;
+}
+.medecin-carte {
+  animation: slideInBottom 0.4s var(--ease-spring) both;
+  transition: transform 0.2s, box-shadow 0.2s !important;
+}
+.medecin-carte:nth-child(1) { animation-delay: 0.05s; }
+.medecin-carte:nth-child(2) { animation-delay: 0.10s; }
+.medecin-carte:nth-child(3) { animation-delay: 0.15s; }
+.medecin-carte:nth-child(4) { animation-delay: 0.20s; }
+.medecin-carte:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.35) !important;
+}
+.medecin-tab--actif {
+  color: #60a5fa !important;
+  border-bottom-color: #2563eb !important;
+}
+/* Pulse ESI critique sur les badges cartes */
+[data-esi="1"] .medecin-carte-esi,
+[data-esi="2"] .medecin-carte-esi { animation: esi-critical-pulse 1.5s ease-in-out infinite; }
+
+.medecin-chat-toggle {
+  background: #2563eb !important;
+  box-shadow: 0 4px 20px rgba(37,99,235,0.35) !important;
+  color: #fff !important;
+}
+.medecin-chat-toggle:hover {
+  background: #1d4ed8 !important;
+  transform: scale(1.05) !important;
+}
+.medecin-chat-envoyer {
+  background: #2563eb !important;
+  color: #fff !important;
+}
+.medecin-chat-envoyer:hover {
+  background: #1d4ed8 !important;
+  box-shadow: 0 0 14px rgba(37,99,235,0.35) !important;
+}
+
+/* ── Badge WS v3 ─────────────────────────────────────────────────────────── */
+.ws-badge--ok {
+  color: #10b981 !important;
+  background: rgba(16,185,129,0.09) !important;
+  border-color: rgba(16,185,129,0.26) !important;
+}
+
+/* ── Bouton langue actif v3 ──────────────────────────────────────────────── */
+.kiosk-btn--langue.kiosk-btn--actif {
+  background: rgba(37,99,235,0.14) !important;
+  border-color: rgba(37,99,235,0.38) !important;
+  color: #60a5fa !important;
+  box-shadow: none !important;
+}
+
+/* ── Toasts v3 ───────────────────────────────────────────────────────────── */
+.salle-toast--nouveau      { border-color: rgba(37,99,235,0.40)  !important; background: rgba(37,99,235,0.10)  !important; }
+.salle-toast--prise_en_charge { border-color: rgba(16,185,129,0.40) !important; background: rgba(16,185,129,0.10) !important; }
+
+/* Respect prefers-reduced-motion v3 */
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-shell, .page-exit, .kiosk-card { animation: none; }
+  .accueil-particles span { animation: none; }
+  .ecg-path { animation: none; }
+  .accueil-croix-medicale { animation: none !important; }
+  .etape--active .etape-bulle { animation: none; }
+  .salle-ligne, .medecin-carte { animation: none; }
+  [data-esi="1"] .medecin-carte-esi,
+  [data-esi="2"] .medecin-carte-esi,
+  .salle-stat-badge-critique { animation: none; }
+}

@@ -203,10 +203,18 @@ export default function AccueilPage() {
 
       {/* ── Accueil ─────────────────────────────────────────────── */}
       {vue === VUE.ACCUEIL && (
-        <svg className="accueil-croix-medicale" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
-          <rect x="80" y="20" width="40" height="160" rx="8" />
-          <rect x="20" y="80" width="160" height="40" rx="8" />
-        </svg>
+        <div className="accueil-fx" aria-hidden="true">
+          <div className="accueil-particles">
+            {Array.from({ length: 20 }, (_, i) => <span key={i} />)}
+          </div>
+          <svg className="accueil-ecg" viewBox="0 0 1000 60" preserveAspectRatio="none">
+            <path className="ecg-path" d="M0,30 L80,30 L100,5 L105,55 L110,30 L205,30 L225,5 L230,55 L235,30 L330,30 L350,5 L355,55 L360,30 L455,30 L475,5 L480,55 L485,30 L580,30 L600,5 L605,55 L610,30 L705,30 L725,5 L730,55 L735,30 L830,30 L850,5 L855,55 L860,30 L955,30 L975,5 L980,55 L985,30 L1000,30" />
+          </svg>
+          <svg className="accueil-croix-medicale" viewBox="0 0 200 200" aria-hidden="true">
+            <rect x="80" y="20" width="40" height="160" rx="8" />
+            <rect x="20" y="80" width="160" height="40" rx="8" />
+          </svg>
+        </div>
       )}
       {vue === VUE.ACCUEIL && (
         <div className="kiosk-center">

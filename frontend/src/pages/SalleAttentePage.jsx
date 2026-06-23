@@ -336,6 +336,18 @@ export default function SalleAttentePage() {
         )}
       </main>
 
+      {/* ── Bandeau défilant bas de page ─────────────────────────── */}
+      <div className="salle-ticker" aria-hidden="true">
+        <div className="salle-ticker-inner">
+          <span className="salle-ticker-texte">
+            ⚕ HealthGate — Système de triage intelligent aux urgences &nbsp;·&nbsp;
+            École Centrale Casablanca &nbsp;·&nbsp; PLBD-4 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            ⚕ HealthGate — Système de triage intelligent aux urgences &nbsp;·&nbsp;
+            École Centrale Casablanca &nbsp;·&nbsp; PLBD-4 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          </span>
+        </div>
+      </div>
+
       {/* ── Toasts (bas-droite) ──────────────────────────────────── */}
       {toasts.length > 0 && (
         <div className="salle-toasts" aria-live="polite">
