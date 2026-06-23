@@ -33,13 +33,13 @@ export default function QuestionnairePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Lecture automatique de l'instruction principale à l'arrivée sur la page
+  // Lecture automatique de l'instruction principale — 1s après montage
   useEffect(() => {
     const texte = patient.prenom
       ? `${t('ou_mal')} ${patient.prenom} ? ${t('instruction_corps')}`
       : `${t('ou_mal')} ${t('instruction_corps')}`
-    parler(texte, langue)
-    return arreter
+    const timer = setTimeout(() => parler(texte, langue), 1000)
+    return () => { clearTimeout(timer); arreter() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

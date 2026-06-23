@@ -59,11 +59,19 @@ export default function AccueilPage() {
     return () => clearTimeout(timer)
   }, [vue, navigate])
 
-  // Lecture TTS unique à l'apparition de la vue bienvenue
+  // Lecture TTS — bienvenue (1s après affichage)
   useEffect(() => {
     if (vue !== VUE.BIENVENUE || !prenomBienvenue) return
-    parler(t('tts_bienvenue', { prenom: prenomBienvenue }), langue)
-    return arreter
+    const timer = setTimeout(() => parler(t('tts_bienvenue', { prenom: prenomBienvenue }), langue), 1000)
+    return () => { clearTimeout(timer); arreter() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vue])
+
+  // Lecture TTS — instruction scan (1s après passage à VUE.SCAN)
+  useEffect(() => {
+    if (vue !== VUE.SCAN) return
+    const timer = setTimeout(() => parler(t('tts_scan'), langue), 1000)
+    return () => { clearTimeout(timer); arreter() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vue])
 
@@ -245,11 +253,11 @@ export default function AccueilPage() {
 
             <button
               className="kiosk-btn kiosk-btn--secondary"
-              onClick={activer}
+              onClick={() => { activer(); setTimeout(() => parler(t('tts_test'), langue), 300) }}
               style={{ marginTop: 16, fontSize: '0.9em', background: 'rgba(20,184,166,0.10)', border: '1px solid rgba(20,184,166,0.3)', color: '#2dd4bf' }}
-              title="Activer le son pour les lectures vocales"
+              title="Tester la synthèse vocale"
             >
-              🔊 Activer le son
+              🔊 Tester le son
             </button>
           </div>
         </div>

@@ -381,12 +381,13 @@ function VueMesure({
 
   const texteInstruction = etape.instructionTTS ? t(etape.instructionTTS) : null
 
-  // Lecture auto une fois à chaque nouvelle étape
+  // Lecture auto 1s après le passage à l'état PRET (nouvelle étape ou retour)
   useEffect(() => {
-    if (texteInstruction) parler(texteInstruction, langue)
-    return arreter
+    if (etat !== ETAT.PRET || !texteInstruction) return
+    const timer = setTimeout(() => parler(texteInstruction, langue), 1000)
+    return () => { clearTimeout(timer); arreter() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indexEtape])
+  }, [etat, indexEtape])
 
   const relireInstruction = () => { if (texteInstruction) parler(texteInstruction, langue) }
   const couleur       = evaluerCouleur(etape.cle, valeur)

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 const LANG_MAP = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
 const SUPPORTE = typeof window !== 'undefined' && 'speechSynthesis' in window
@@ -11,26 +11,65 @@ export function activerAudio() {
   window.speechSynthesis.speak(silence)
 }
 
+// Attend que les voix soient chargées (Chromium charge les voix de façon asynchrone)
+function attendreVoix() {
+  return new Promise((resolve) => {
+    const voix = window.speechSynthesis.getVoices()
+    if (voix.length > 0) {
+      resolve(voix)
+      return
+    }
+    const handler = () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', handler)
+      resolve(window.speechSynthesis.getVoices())
+    }
+    window.speechSynthesis.addEventListener('voiceschanged', handler)
+    // Timeout de sécurité 3s — parle quand même si voiceschanged ne fire jamais
+    setTimeout(() => {
+      window.speechSynthesis.removeEventListener('voiceschanged', handler)
+      resolve(window.speechSynthesis.getVoices())
+    }, 3000)
+  })
+}
+
 export function useTextToSpeech() {
   const [estEnTrainDeParler, setEstEnTrainDeParler] = useState(false)
+  const timerRef = useRef(null)
 
   const activer = useCallback(() => { activerAudio() }, [])
 
   const parler = useCallback((texte, langue) => {
+    console.log('[TTS] parler:', texte, langue)
+    console.log('[TTS] speechSynthesis disponible:', !!window?.speechSynthesis)
     if (!SUPPORTE || !texte) return
+
     window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(texte)
-    utterance.lang   = LANG_MAP[langue] ?? 'fr-FR'
-    utterance.rate   = 0.95
-    utterance.volume = 1.0
-    utterance.onstart = () => setEstEnTrainDeParler(true)
-    utterance.onend   = () => setEstEnTrainDeParler(false)
-    utterance.onerror = () => setEstEnTrainDeParler(false)
-    window.speechSynthesis.speak(utterance)
+    clearTimeout(timerRef.current)
+
+    // Délai 500ms : laisse le temps au navigateur de finaliser le cancel()
+    timerRef.current = setTimeout(async () => {
+      const voix = await attendreVoix()
+      console.log('[TTS] voix disponibles:', voix.length)
+
+      const langCible = LANG_MAP[langue] ?? 'fr-FR'
+      const utterance = new SpeechSynthesisUtterance(texte)
+      utterance.lang   = langCible
+      utterance.rate   = 0.95
+      utterance.volume = 1.0
+      utterance.onstart = () => setEstEnTrainDeParler(true)
+      utterance.onend   = () => setEstEnTrainDeParler(false)
+      utterance.onerror = (e) => {
+        console.log('[TTS] erreur:', e.error, '— lang:', langCible)
+        setEstEnTrainDeParler(false)
+      }
+
+      window.speechSynthesis.speak(utterance)
+    }, 500)
   }, [])
 
   const arreter = useCallback(() => {
     if (!SUPPORTE) return
+    clearTimeout(timerRef.current)
     window.speechSynthesis.cancel()
     setEstEnTrainDeParler(false)
   }, [])
