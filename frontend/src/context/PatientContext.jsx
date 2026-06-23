@@ -129,6 +129,7 @@ export function PatientProvider({ children }) {
   const reinitialiser    = ()      => {
     deconnecterBorne()
     dispatch({ type: 'REINITIALISER' })
+    setAudioActif(false)
   }
 
   return (

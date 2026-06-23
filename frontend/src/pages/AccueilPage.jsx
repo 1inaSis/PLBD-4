@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
-import { scannerCIN, saisirManuel, demarrerDemo, abandonnerSession } from '../services/api'
+import { scannerCIN, saisirManuel, abandonnerSession } from '../services/api'
 import IndicateurEtape from '../components/IndicateurEtape'
 import ConfirmationPatient from '../components/ConfirmationPatient'
 import { IllustrationScanCIN } from '../components/IllustrationsGestes'
@@ -167,28 +167,6 @@ export default function AccueilPage() {
       setErreurForm(`Erreur : ${err.message}`)
     } finally {
       setEnSoumission(false)
-    }
-  }
-
-  // ── Mode démo (accessible uniquement via /demo mais gardé ici pour usage interne)
-  const lancerDemo = async () => {
-    activer()
-    enterFullscreen()
-    setErreur(null)
-    try {
-      const data = await demarrerDemo()
-      setIdentite({
-        session_id: data.session_id,
-        nom:        data.nom,
-        prenom:     data.prenom,
-        age:        data.age,
-        sexe:       data.sexe ?? 0,
-        numero_cin: '',
-      })
-      setPrenomBienvenue(data.prenom)
-      setVue(VUE.BIENVENUE)
-    } catch {
-      setErreur(t('erreur_mode_demo'))
     }
   }
 
@@ -384,13 +362,6 @@ export default function AccueilPage() {
         </div>
       )}
 
-      {/* Bouton démo masqué — accessible via /demo uniquement */}
-      <button
-        onClick={lancerDemo}
-        style={{ display: 'none' }}
-        data-testid="btn-demo-hidden"
-        aria-hidden="true"
-      />
     </div>
   )
 }
