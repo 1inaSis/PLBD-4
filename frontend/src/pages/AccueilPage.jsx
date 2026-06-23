@@ -203,6 +203,12 @@ export default function AccueilPage() {
 
       {/* ── Accueil ─────────────────────────────────────────────── */}
       {vue === VUE.ACCUEIL && (
+        <svg className="accueil-croix-medicale" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+          <rect x="80" y="20" width="40" height="160" rx="8" />
+          <rect x="20" y="80" width="160" height="40" rx="8" />
+        </svg>
+      )}
+      {vue === VUE.ACCUEIL && (
         <div className="kiosk-center">
           <div className="kiosk-card">
             <span className="eyebrow">{t('titre_app')}</span>

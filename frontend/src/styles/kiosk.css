@@ -3572,3 +3572,372 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .tts-btn--actif { animation: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MEDICAL DESIGN SYSTEM 2.0 — HealthGate Soutenance
+   Palette médicale · Bleu médical #00b4d8 · Vert santé #06d6a0
+   Remplace le système cyan/violet par un système médical cohérent
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --hg-bg:       #0d1b2a;
+  --hg-blue:     #00b4d8;
+  --hg-green:    #06d6a0;
+  --hg-red:      #ef233c;
+  --hg-orange:   #fb8500;
+  --hg-glow-b:   rgba(0,180,216,0.35);
+  --hg-glow-g:   rgba(6,214,160,0.25);
+}
+
+/* Fond médical — croix médicales répétées en filigrane */
+body {
+  background-color: #0d1b2a !important;
+  background-image:
+    url("data:image/svg+xml,%3Csvg width='80' height='80' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='34' y='22' width='12' height='36' fill='%2300b4d8' fill-opacity='0.045' rx='2'/%3E%3Crect x='22' y='34' width='36' height='12' fill='%2300b4d8' fill-opacity='0.045' rx='2'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 15% 20%, rgba(0,180,216,0.11) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 80%, rgba(6,214,160,0.07) 0%, transparent 45%),
+    linear-gradient(160deg, #0d1b2a 0%, #0f2437 60%, #0d1b2a 100%) !important;
+  background-size: 80px 80px, 100% 100%, 100% 100%, 100% 100% !important;
+}
+
+/* Glassmorphisme médical */
+.kiosk-card {
+  background: rgba(255,255,255,0.055) !important;
+  border: 1px solid rgba(0,180,216,0.22) !important;
+  box-shadow:
+    0 0 0 1px rgba(0,180,216,0.05),
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    0 8px 32px rgba(0,0,0,0.50),
+    0 0 60px rgba(0,180,216,0.05) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;
+}
+.kiosk-card:hover {
+  border-color: rgba(0,180,216,0.38) !important;
+  box-shadow:
+    0 0 0 1px rgba(0,180,216,0.10),
+    inset 0 1px 0 rgba(255,255,255,0.09),
+    0 12px 40px rgba(0,0,0,0.45),
+    0 0 80px rgba(0,180,216,0.09) !important;
+}
+
+/* Bouton primaire — dégradé médical */
+.kiosk-btn--primary {
+  background: linear-gradient(135deg, #005f87 0%, #0096c7 48%, #06d6a0 100%) !important;
+  box-shadow: 0 4px 20px rgba(0,180,216,0.32) !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+}
+.kiosk-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.10) !important;
+  box-shadow: 0 6px 36px rgba(0,180,216,0.50), 0 2px 60px rgba(6,214,160,0.18) !important;
+  transform: translateY(-2px) scale(1.01) !important;
+}
+.kiosk-btn--primary:active:not(:disabled) {
+  transform: scale(0.96) !important;
+  filter: brightness(0.90) !important;
+}
+.kiosk-btn--primary:disabled {
+  background: rgba(0,180,216,0.18) !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+/* Bouton secondaire médical */
+.kiosk-btn--secondary {
+  background: rgba(0,180,216,0.06) !important;
+  border: 1px solid rgba(0,180,216,0.28) !important;
+  color: #00b4d8 !important;
+}
+.kiosk-btn--secondary:hover:not(:disabled) {
+  background: rgba(0,180,216,0.12) !important;
+  border-color: rgba(0,180,216,0.50) !important;
+  box-shadow: 0 0 18px rgba(0,180,216,0.14) !important;
+}
+
+/* Titre dégradé médical */
+.kiosk-titre {
+  background: linear-gradient(130deg, #ffffff 22%, #00b4d8 68%, #06d6a0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 20px rgba(0,180,216,0.18));
+}
+.kiosk-titre-sm {
+  background: linear-gradient(130deg, #ffffff 30%, #00b4d8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 14px rgba(0,180,216,0.14));
+}
+
+/* Eyebrow badge médical */
+.eyebrow {
+  display: inline-block;
+  background: rgba(0,180,216,0.12) !important;
+  border: 1px solid rgba(0,180,216,0.30) !important;
+  color: #00b4d8 !important;
+  border-radius: 6px;
+  padding: 3px 10px;
+  text-shadow: 0 0 12px rgba(0,180,216,0.28);
+}
+
+/* Indicateur d'étape médical */
+@keyframes etape-active-pulse {
+  0%,100% { box-shadow: 0 0 12px rgba(0,180,216,0.35); }
+  50%      { box-shadow: 0 0 24px rgba(0,180,216,0.65), 0 0 6px rgba(6,214,160,0.28); }
+}
+.etape--active .etape-bulle {
+  background: linear-gradient(135deg, #0096c7, #06d6a0) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 0 22px rgba(0,180,216,0.50) !important;
+  animation: etape-active-pulse 2.2s ease-in-out infinite;
+}
+.etape--terminee .etape-bulle {
+  background: rgba(6,214,160,0.16) !important;
+  border-color: #06d6a0 !important;
+  color: #06d6a0 !important;
+  box-shadow: 0 0 12px rgba(6,214,160,0.25) !important;
+}
+.etape-trait--actif {
+  background: linear-gradient(90deg, #06d6a0, rgba(0,180,216,0.35)) !important;
+  box-shadow: 0 0 6px rgba(6,214,160,0.30) !important;
+}
+.etape--active .etape-label  { color: #00b4d8 !important; text-shadow: 0 0 10px rgba(0,180,216,0.35); }
+.etape--terminee .etape-label { color: #06d6a0 !important; }
+
+/* Orbes de fond — couleurs médicales */
+.kiosk-shell::before {
+  background: radial-gradient(circle, rgba(0,180,216,0.09) 0%, transparent 70%) !important;
+}
+.kiosk-shell::after {
+  background: radial-gradient(circle, rgba(6,214,160,0.07) 0%, transparent 70%) !important;
+}
+
+/* ── Grande croix médicale animée — AccueilPage ─────────────────────────── */
+.accueil-croix-medicale {
+  position: fixed;
+  width: 520px;
+  height: 520px;
+  top: 50%;
+  left: 50%;
+  fill: #00b4d8;
+  opacity: 0.032;
+  animation: croix-medicale-rotate 45s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes croix-medicale-rotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ── Fond ESI coloré — ResultatPage ────────────────────────────────────── */
+.resultat-esi-shell--1 { background-color: rgba(239,35,60,0.07) !important; }
+.resultat-esi-shell--2 { background-color: rgba(251,133,0,0.05) !important; }
+.resultat-esi-shell--3 { background-color: rgba(251,191,36,0.05) !important; }
+.resultat-esi-shell--4 { background-color: rgba(6,214,160,0.05) !important; }
+.resultat-esi-shell--5 { background-color: rgba(6,214,160,0.04) !important; }
+
+/* Particules douces ESI 4/5 — bonne nouvelle */
+@keyframes sparkle-float {
+  0%   { transform: translateY(0) scale(1); opacity: 0.5; }
+  50%  { transform: translateY(-28px) scale(1.2); opacity: 0.85; }
+  100% { transform: translateY(-56px) scale(0.8); opacity: 0; }
+}
+.resultat-esi-shell--4::before,
+.resultat-esi-shell--5::before {
+  content: '\2726  \2726  \2726';
+  position: fixed;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.1rem;
+  color: #06d6a0;
+  letter-spacing: 1.6rem;
+  animation: sparkle-float 3.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.resultat-esi-shell--4::after,
+.resultat-esi-shell--5::after {
+  content: '\2726  \2726  \2726';
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  color: rgba(6,214,160,0.55);
+  letter-spacing: 2.4rem;
+  animation: sparkle-float 3.2s ease-in-out 1.6s infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Salle d'attente — tableau aéroport médical ─────────────────────────── */
+.salle-shell {
+  background:
+    linear-gradient(rgba(0,180,216,0.013) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,180,216,0.013) 1px, transparent 1px),
+    linear-gradient(160deg, #030d18 0%, #050f1e 60%, #030912 100%) !important;
+  background-size: 60px 60px, 60px 60px, 100% 100% !important;
+}
+.salle-shell::before {
+  background: radial-gradient(circle, rgba(0,180,216,0.05) 0%, transparent 70%) !important;
+}
+.salle-shell::after {
+  background: radial-gradient(circle, rgba(6,214,160,0.04) 0%, transparent 70%) !important;
+}
+.salle-nom-hopital {
+  background: linear-gradient(135deg, #ffffff 10%, #00b4d8 55%, #06d6a0 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  filter: drop-shadow(0 0 10px rgba(0,180,216,0.32)) !important;
+}
+.salle-heure {
+  font-family: 'Courier New', 'Roboto Mono', Consolas, monospace !important;
+  font-size: clamp(2.4rem, 4vw, 3.8rem) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.07em !important;
+  background: linear-gradient(135deg, #00b4d8, #06d6a0) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  filter: drop-shadow(0 0 12px rgba(0,180,216,0.52)) !important;
+}
+.salle-header {
+  background: linear-gradient(90deg,
+    rgba(0,180,216,0.07), rgba(6,214,160,0.04), rgba(0,180,216,0.07)) !important;
+  border-bottom: 1px solid rgba(0,180,216,0.12) !important;
+  background-size: 200% 200% !important;
+  animation: header-shimmer 8s ease infinite !important;
+}
+.salle-ws-badge--connecte {
+  background: rgba(6,214,160,0.10) !important;
+  border: 1px solid rgba(6,214,160,0.32) !important;
+  color: #06d6a0 !important;
+  box-shadow: 0 0 10px rgba(6,214,160,0.18) !important;
+}
+.salle-ticker {
+  background: linear-gradient(90deg,
+    rgba(0,180,216,0.09), rgba(6,214,160,0.07), rgba(0,180,216,0.09));
+  border-top: 1px solid rgba(0,180,216,0.16);
+}
+.salle-ticker-texte { color: rgba(0,180,216,0.82); }
+.salle-stat-valeur {
+  background: linear-gradient(135deg, #ffffff, #00b4d8) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  filter: drop-shadow(0 0 8px rgba(0,180,216,0.28)) !important;
+}
+
+/* ── Dashboard médecin ──────────────────────────────────────────────────── */
+.medecin-header {
+  background: linear-gradient(90deg,
+    rgba(0,180,216,0.06), rgba(6,214,160,0.04), rgba(0,180,216,0.06)) !important;
+  border-bottom: 1px solid rgba(0,180,216,0.10) !important;
+  background-size: 200% 200% !important;
+  animation: header-shimmer 9s ease infinite !important;
+}
+.medecin-chat-envoyer {
+  background: linear-gradient(135deg, #0096c7, #00b4d8) !important;
+  color: #fff !important;
+}
+.medecin-chat-envoyer:hover {
+  background: linear-gradient(135deg, #00b4d8, #06d6a0) !important;
+  box-shadow: 0 0 14px rgba(0,180,216,0.35) !important;
+}
+
+/* ── Boutons Q/A — OUI/NON médical ─────────────────────────────────────── */
+.q-btn-oui {
+  background: linear-gradient(135deg, rgba(6,214,160,0.12), rgba(6,214,160,0.18)) !important;
+  border: 1px solid rgba(6,214,160,0.38) !important;
+  color: #06d6a0 !important;
+}
+.q-btn-oui:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(6,214,160,0.22), rgba(6,214,160,0.30)) !important;
+  box-shadow: 0 0 20px rgba(6,214,160,0.25) !important;
+}
+.q-btn-non {
+  background: linear-gradient(135deg, rgba(239,35,60,0.10), rgba(239,35,60,0.16)) !important;
+  border: 1px solid rgba(239,35,60,0.35) !important;
+  color: #ef233c !important;
+}
+.q-btn-non:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(239,35,60,0.20), rgba(239,35,60,0.28)) !important;
+  box-shadow: 0 0 20px rgba(239,35,60,0.22) !important;
+}
+.q-btn-choix {
+  background: rgba(0,180,216,0.07) !important;
+  border: 1px solid rgba(0,180,216,0.22) !important;
+  color: #caf0f8 !important;
+}
+.q-btn-choix:hover:not(:disabled) {
+  background: rgba(0,180,216,0.15) !important;
+  border-color: rgba(0,180,216,0.45) !important;
+  box-shadow: 0 0 16px rgba(0,180,216,0.15) !important;
+}
+.q-btn-choix--selectionne {
+  background: linear-gradient(135deg, rgba(0,180,216,0.18), rgba(6,214,160,0.12)) !important;
+  border-color: #00b4d8 !important;
+  color: #00b4d8 !important;
+  box-shadow: 0 0 18px rgba(0,180,216,0.22) !important;
+}
+
+/* ── Zone corps humain — glow médical ───────────────────────────────────── */
+.zone-clickable:hover { filter: brightness(1.3) drop-shadow(0 0 6px rgba(0,180,216,0.55)); }
+.zone-clickable--active { filter: brightness(1.2) drop-shadow(0 0 8px rgba(239,35,60,0.65)); }
+
+/* ── Chips zones sélectionnées ──────────────────────────────────────────── */
+.zone-tag {
+  background: rgba(0,180,216,0.10) !important;
+  border-color: rgba(0,180,216,0.30) !important;
+  color: #00b4d8 !important;
+}
+.zone-tag:hover { background: rgba(0,180,216,0.18) !important; }
+
+/* ── Microphone dictée ──────────────────────────────────────────────────── */
+.mic-btn--actif {
+  background: rgba(239,35,60,0.15) !important;
+  border-color: rgba(239,35,60,0.50) !important;
+  color: #ef233c !important;
+  box-shadow: 0 0 12px rgba(239,35,60,0.25) !important;
+}
+
+/* ── Badge WS connecté ──────────────────────────────────────────────────── */
+.ws-badge--ok {
+  color: #06d6a0 !important;
+  background: rgba(6,214,160,0.10) !important;
+  border: 1px solid rgba(6,214,160,0.28) !important;
+}
+
+/* ── Bouton langue actif ─────────────────────────────────────────────────── */
+.kiosk-btn--langue.kiosk-btn--actif {
+  background: linear-gradient(135deg, rgba(0,180,216,0.16), rgba(6,214,160,0.14)) !important;
+  border: 1px solid rgba(0,180,216,0.40) !important;
+  color: #00b4d8 !important;
+  box-shadow: 0 0 16px rgba(0,180,216,0.16) !important;
+}
+
+/* ── Toasts salle ────────────────────────────────────────────────────────── */
+.salle-toast--nouveau {
+  border-color: rgba(0,180,216,0.40) !important;
+  background: rgba(0,180,216,0.10) !important;
+}
+.salle-toast--prise_en_charge {
+  border-color: rgba(6,214,160,0.40) !important;
+  background: rgba(6,214,160,0.10) !important;
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .accueil-croix-medicale { animation: none; }
+  .etape--active .etape-bulle { animation: none; }
+  .resultat-esi-shell--4::before,
+  .resultat-esi-shell--5::before,
+  .resultat-esi-shell--4::after,
+  .resultat-esi-shell--5::after { animation: none; }
+}

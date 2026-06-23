@@ -92,7 +92,7 @@ export default function ResultatPage() {
   }
 
   return (
-    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
+    <div className={`kiosk-shell${sortie ? ' page-exit' : ''}${esi ? ` resultat-esi-shell--${esi}` : ''}`} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
       <IndicateurEtape etapeCourante={5} />
       <SelecteurLangue />
       <BoutonAudio />
