@@ -3949,7 +3949,7 @@ body {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --v3-bg:         #060b14;
+  --v3-bg:         #0d1f35;
   --v3-blue:       #2563eb;
   --v3-cyan:       #06b6d4;
   --v3-green:      #10b981;
@@ -3957,21 +3957,21 @@ body {
   --v3-orange:     #f97316;
   --v3-yellow:     #eab308;
   --v3-text:       #f8fafc;
-  --v3-text-sec:   #94a3b8;
-  --v3-border:     rgba(255,255,255,0.08);
+  --v3-text-sec:   #cbd5e1;
+  --v3-border:     rgba(255,255,255,0.15);
   --v3-border-acc: rgba(37,99,235,0.40);
   --ease-spring:   cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Fond #060b14 + grain subtil + croix bleues */
 body {
-  background-color: #060b14 !important;
+  background-color: #0d1f35 !important;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"),
     url("data:image/svg+xml,%3Csvg width='80' height='80' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='34' y='22' width='12' height='36' fill='%232563eb' fill-opacity='0.036' rx='2'/%3E%3Crect x='22' y='34' width='36' height='12' fill='%232563eb' fill-opacity='0.036' rx='2'/%3E%3C/svg%3E"),
     radial-gradient(ellipse at 10% 15%, rgba(37,99,235,0.11) 0%, transparent 50%),
     radial-gradient(ellipse at 90% 85%, rgba(6,182,212,0.07) 0%, transparent 45%),
-    linear-gradient(160deg, #060b14 0%, #080f1a 55%, #060b14 100%) !important;
+    linear-gradient(160deg, #0d1f35 0%, #0f2440 55%, #0d1f35 100%) !important;
   background-size: 200px 200px, 80px 80px, 100% 100%, 100% 100%, 100% 100% !important;
 }
 
@@ -4006,22 +4006,22 @@ body {
 
 /* ── Glassmorphisme v3 ──────────────────────────────────────────────────── */
 .kiosk-card {
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  background: rgba(255,255,255,0.09) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.06),
-    0 4px 24px rgba(0,0,0,0.55),
-    0 1px 2px rgba(0,0,0,0.4) !important;
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 4px 24px rgba(0,0,0,0.45),
+    0 1px 2px rgba(0,0,0,0.30) !important;
   backdrop-filter: blur(24px) saturate(180%) !important;
   animation: fadeInUp 0.45s var(--ease-spring) both;
 }
 .kiosk-card:hover {
-  background: rgba(255,255,255,0.07) !important;
-  border-color: rgba(37,99,235,0.40) !important;
+  background: rgba(255,255,255,0.13) !important;
+  border-color: rgba(37,99,235,0.45) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.08),
-    0 8px 32px rgba(0,0,0,0.55),
-    0 0 30px rgba(37,99,235,0.10) !important;
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    0 8px 32px rgba(0,0,0,0.40),
+    0 0 30px rgba(37,99,235,0.14) !important;
   transform: translateY(-1px) !important;
 }
 
@@ -4052,13 +4052,13 @@ body {
 
 /* Bouton secondaire v3 */
 .kiosk-btn--secondary {
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid rgba(255,255,255,0.10) !important;
-  color: #94a3b8 !important;
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  color: #cbd5e1 !important;
 }
 .kiosk-btn--secondary:hover:not(:disabled) {
-  background: rgba(255,255,255,0.08) !important;
-  border-color: rgba(255,255,255,0.18) !important;
+  background: rgba(255,255,255,0.11) !important;
+  border-color: rgba(255,255,255,0.22) !important;
   color: #f8fafc !important;
   box-shadow: none !important;
 }
@@ -4130,8 +4130,8 @@ body {
 .accueil-particles { position: absolute; inset: 0; overflow: hidden; }
 
 @keyframes particle-float {
-  0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; }
-  50%       { transform: translateY(-44px) scale(1.4); opacity: 0.05; }
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.90; }
+  50%       { transform: translateY(-44px) scale(1.4); opacity: 0.08; }
 }
 .accueil-particles span { position: absolute; border-radius: 50%; animation: particle-float linear infinite; }
 .accueil-particles span:nth-child(1)  { left:  4%; top: 18%; width: 3px; height: 3px; animation-duration:  8.0s; animation-delay:  0.0s; background: #2563eb; }
@@ -4160,7 +4160,7 @@ body {
   position: absolute;
   bottom: 0; left: 0;
   width: 100%; height: 60px;
-  opacity: 0.18;
+  opacity: 0.35;
 }
 .ecg-path {
   fill: none;
@@ -4201,9 +4201,9 @@ body {
   box-shadow: 0 0 20px rgba(239,68,68,0.20) !important;
 }
 .q-btn-choix {
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid rgba(255,255,255,0.09) !important;
-  color: #94a3b8 !important;
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  color: #cbd5e1 !important;
 }
 .q-btn-choix:hover:not(:disabled) {
   background: rgba(255,255,255,0.08) !important;
@@ -4240,7 +4240,7 @@ body {
 
 /* ── Salle d'attente v3 — tableau aéroport ──────────────────────────────── */
 .salle-shell {
-  background-color: #030710 !important;
+  background-color: #0d1f35 !important;
   background-image:
     linear-gradient(rgba(37,99,235,0.012) 1px, transparent 1px),
     linear-gradient(90deg, rgba(37,99,235,0.012) 1px, transparent 1px) !important;
@@ -4253,7 +4253,7 @@ body {
   background: radial-gradient(circle, rgba(6,182,212,0.04) 0%, transparent 70%) !important;
 }
 .salle-header {
-  background: rgba(3,7,16,0.88) !important;
+  background: rgba(13,31,53,0.75) !important;
   border-bottom: 1px solid rgba(37,99,235,0.14) !important;
   backdrop-filter: blur(20px) !important;
   animation: none !important;
@@ -4326,9 +4326,9 @@ body {
 }
 
 /* ── Dashboard médecin v3 ───────────────────────────────────────────────── */
-.medecin-shell { background: #060b14 !important; }
+.medecin-shell { background: #0d1f35 !important; }
 .medecin-header {
-  background: rgba(6,11,20,0.92) !important;
+  background: rgba(13,31,53,0.82) !important;
   border-bottom: 1px solid rgba(255,255,255,0.07) !important;
   backdrop-filter: blur(20px) !important;
   animation: none !important;
@@ -4412,13 +4412,13 @@ body {
 /* Même fond riche body appliqué directement à salle-shell et medecin-shell */
 .salle-shell,
 .medecin-shell {
-  background-color: #060b14 !important;
+  background-color: #0d1f35 !important;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"),
     url("data:image/svg+xml,%3Csvg width='80' height='80' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='34' y='22' width='12' height='36' fill='%232563eb' fill-opacity='0.036' rx='2'/%3E%3Crect x='22' y='34' width='36' height='12' fill='%232563eb' fill-opacity='0.036' rx='2'/%3E%3C/svg%3E"),
     radial-gradient(ellipse at 10% 15%, rgba(37,99,235,0.11) 0%, transparent 50%),
     radial-gradient(ellipse at 90% 85%, rgba(6,182,212,0.07) 0%, transparent 45%),
-    linear-gradient(160deg, #060b14 0%, #080f1a 55%, #060b14 100%) !important;
+    linear-gradient(160deg, #0d1f35 0%, #0f2440 55%, #0d1f35 100%) !important;
   background-size: 200px 200px, 80px 80px, 100% 100%, 100% 100%, 100% 100% !important;
 }
 
@@ -4430,15 +4430,15 @@ body {
 
 /* ── Salle : header glassmorphisme ──────────────────────────────────────── */
 .salle-header {
-  background: rgba(6,11,20,0.82) !important;
+  background: rgba(13,31,53,0.75) !important;
   border-bottom: 1px solid rgba(37,99,235,0.16) !important;
   backdrop-filter: blur(24px) saturate(180%) !important;
 }
 
 /* ── Salle : lignes patients — glassmorphisme ───────────────────────────── */
 .salle-ligne:not(.salle-ligne--entete) {
-  background: rgba(255,255,255,0.035) !important;
-  border: 1px solid rgba(255,255,255,0.07) !important;
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(255,255,255,0.13) !important;
   border-radius: 10px !important;
   backdrop-filter: blur(12px) !important;
   margin-bottom: 6px !important;
@@ -4446,8 +4446,8 @@ body {
   animation: slideInBottom 0.4s var(--ease-spring) both;
 }
 .salle-ligne:not(.salle-ligne--entete):hover {
-  background: rgba(255,255,255,0.06) !important;
-  border-color: rgba(37,99,235,0.32) !important;
+  background: rgba(255,255,255,0.11) !important;
+  border-color: rgba(37,99,235,0.42) !important;
   transform: translateX(3px) !important;
 }
 
@@ -4460,7 +4460,7 @@ body {
 
 /* ── Médecin : header glassmorphisme ────────────────────────────────────── */
 .medecin-header {
-  background: rgba(6,11,20,0.82) !important;
+  background: rgba(13,31,53,0.75) !important;
   border-bottom: 1px solid rgba(255,255,255,0.08) !important;
   backdrop-filter: blur(24px) saturate(180%) !important;
 }
@@ -4484,8 +4484,8 @@ body {
 
 /* ── Médecin : section dossier ──────────────────────────────────────────── */
 .dossier-section {
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid rgba(255,255,255,0.07) !important;
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
   border-radius: 12px !important;
   backdrop-filter: blur(16px) !important;
 }
@@ -4499,7 +4499,7 @@ body {
 
 /* ── Médecin : panel chat glassmorphisme ────────────────────────────────── */
 .medecin-chat-panel {
-  background: rgba(6,11,20,0.96) !important;
+  background: rgba(13,31,53,0.94) !important;
   border: 1px solid rgba(37,99,235,0.28) !important;
   backdrop-filter: blur(24px) !important;
   border-radius: 14px 14px 0 0 !important;
@@ -4539,7 +4539,7 @@ body {
   color: #64748b !important;
   transition: color 0.2s, border-color 0.2s !important;
 }
-.medecin-tab:hover { color: #94a3b8 !important; }
+.medecin-tab:hover { color: #cbd5e1 !important; }
 .medecin-tab--actif { color: #60a5fa !important; border-bottom-color: #2563eb !important; }
 .medecin-tab-badge {
   background: rgba(37,99,235,0.20) !important;
@@ -4556,13 +4556,13 @@ body {
 
 /* ── Demo shell — même fond que borne ──────────────────────────────────── */
 .demo-shell {
-  background-color: #060b14 !important;
+  background-color: #0d1f35 !important;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"),
     url("data:image/svg+xml,%3Csvg width='80' height='80' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='34' y='22' width='12' height='36' fill='%232563eb' fill-opacity='0.036' rx='2'/%3E%3Crect x='22' y='34' width='36' height='12' fill='%232563eb' fill-opacity='0.036' rx='2'/%3E%3C/svg%3E"),
     radial-gradient(ellipse at 15% 10%, rgba(37,99,235,0.12) 0%, transparent 50%),
     radial-gradient(ellipse at 85% 90%, rgba(6,182,212,0.07) 0%, transparent 45%),
-    linear-gradient(160deg, #060b14 0%, #08101c 55%, #060b14 100%) !important;
+    linear-gradient(160deg, #0d1f35 0%, #0f2440 55%, #0d1f35 100%) !important;
   background-size: 200px 200px, 80px 80px, 100% 100%, 100% 100%, 100% 100% !important;
 }
 
