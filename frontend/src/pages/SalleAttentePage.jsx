@@ -336,18 +336,6 @@ export default function SalleAttentePage() {
         )}
       </main>
 
-      {/* ── Bandeau défilant bas de page ─────────────────────────── */}
-      <div className="salle-ticker" aria-hidden="true">
-        <div className="salle-ticker-inner">
-          <span className="salle-ticker-texte">
-            ⚕ HealthGate — Système de triage intelligent aux urgences &nbsp;·&nbsp;
-            École Centrale Casablanca &nbsp;·&nbsp; PLBD-4 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-            ⚕ HealthGate — Système de triage intelligent aux urgences &nbsp;·&nbsp;
-            École Centrale Casablanca &nbsp;·&nbsp; PLBD-4 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-          </span>
-        </div>
-      </div>
-
       {/* ── Toasts (bas-droite) ──────────────────────────────────── */}
       {toasts.length > 0 && (
         <div className="salle-toasts" aria-live="polite">
@@ -365,7 +353,7 @@ export default function SalleAttentePage() {
           onClick={ouvrirPin}
           disabled={resetEnCours}
           style={{
-            position: 'fixed', bottom: 52, left: 12,
+            position: 'fixed', bottom: 36, left: 12,
             padding: '4px 10px', fontSize: '0.72rem',
             background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)',
             borderRadius: 6, color: 'rgba(255,255,255,0.4)', cursor: 'pointer',
@@ -376,7 +364,7 @@ export default function SalleAttentePage() {
         </button>
       ) : (
         <div style={{
-          position: 'fixed', bottom: 44, left: 12,
+          position: 'fixed', bottom: 36, left: 12,
           background: 'rgba(15,20,30,0.96)', border: '1px solid rgba(255,255,255,0.2)',
           borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8,
           minWidth: 200, boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
@@ -420,20 +408,6 @@ export default function SalleAttentePage() {
           </div>
         </div>
       )}
-
-      {/* ── Vague décorative ─────────────────────────────────────── */}
-      <div className="salle-vague" aria-hidden="true">
-        <svg viewBox="0 0 1440 70" preserveAspectRatio="none" className="salle-vague-svg">
-          <path
-            d="M0,35 C240,70 480,0 720,35 C960,70 1200,10 1440,35 L1440,70 L0,70 Z"
-            fill="rgba(0,212,255,0.04)"
-          />
-          <path
-            d="M0,50 C300,15 600,65 900,30 C1100,10 1300,50 1440,40 L1440,70 L0,70 Z"
-            fill="rgba(124,58,237,0.03)"
-          />
-        </svg>
-      </div>
 
       {/* ── Ticker défilant ───────────────────────────────────────── */}
       <div className="salle-ticker" aria-hidden="true">

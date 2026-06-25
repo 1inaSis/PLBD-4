@@ -3181,26 +3181,6 @@ body {
   to   { transform: translateX(-100%); }
 }
 
-/* ── Vague décorative ─────────────────────────────────────────────────────── */
-.salle-vague {
-  position: fixed;
-  bottom: 44px; left: 0; right: 0;
-  height: 70px;
-  pointer-events: none;
-  z-index: 199;
-  overflow: hidden;
-}
-@keyframes wave-drift {
-  0%   { transform: translateX(-30px); }
-  50%  { transform: translateX(30px); }
-  100% { transform: translateX(-30px); }
-}
-.salle-vague-svg {
-  width: 100%;
-  height: 100%;
-  animation: wave-drift 8s ease-in-out infinite;
-}
-
 /* ── Header borne — shimmer animé ─────────────────────────────────────────── */
 .kiosk-shell > header {
   background: linear-gradient(90deg,
@@ -3486,9 +3466,6 @@ body {
 
   /* Désactive le ticker défilant */
   .salle-ticker-track { animation: none !important; }
-
-  /* Désactive la vague */
-  .salle-vague-svg { animation: none !important; }
 
   /* Simplifie les animations ESI : uniquement opacité, pas de transform */
   .salle-esi-badge--1 { animation: esi45-breathe 2s ease-in-out infinite !important; }
