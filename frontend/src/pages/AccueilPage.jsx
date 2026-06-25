@@ -142,6 +142,34 @@ export default function AccueilPage() {
     setErreurForm(null)
   }
 
+  const changerDate = (e) => {
+    const prev = formulaire.date_naissance
+    const raw  = e.target.value
+
+    // Suppression : laisser passer sans reformatter
+    if (raw.length < prev.length) {
+      setFormulaire((p) => ({ ...p, date_naissance: raw }))
+      setErreurForm(null)
+      return
+    }
+
+    // Ne garder que les chiffres
+    const chiffres = raw.replace(/\D/g, '')
+
+    // Construire la valeur formatée JJ/MM/AAAA
+    let formate = ''
+    if (chiffres.length <= 2) {
+      formate = chiffres
+    } else if (chiffres.length <= 4) {
+      formate = chiffres.slice(0, 2) + '/' + chiffres.slice(2)
+    } else {
+      formate = chiffres.slice(0, 2) + '/' + chiffres.slice(2, 4) + '/' + chiffres.slice(4, 8)
+    }
+
+    setFormulaire((p) => ({ ...p, date_naissance: formate }))
+    setErreurForm(null)
+  }
+
   const validerManuel = async () => {
     activer()
     const { nom, prenom, date_naissance } = formulaire
@@ -333,8 +361,9 @@ export default function AccueilPage() {
                   type="text"
                   placeholder="JJ/MM/AAAA"
                   value={formulaire.date_naissance}
-                  onChange={changerChamp}
+                  onChange={changerDate}
                   inputMode="numeric"
+                  maxLength={10}
                 />
                 <span className="cin-hint">{t('format_date_hint')}</span>
               </div>
