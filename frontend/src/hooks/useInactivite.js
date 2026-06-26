@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-const DELAI_AVERTISSEMENT_MS = 2 * 60 * 1000  // 2 minutes
+const DELAI_AVERTISSEMENT_MS = 5 * 60 * 1000  // 5 minutes
 const DUREE_COMPTE_S         = 30
 
 export function useInactivite({ onExpiration, actif = true }) {

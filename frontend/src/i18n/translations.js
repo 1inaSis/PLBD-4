@@ -128,9 +128,13 @@ export const TRANSLATIONS = {
     etape2_titre:             'Étape 2 / 5 · Symptômes',
     instruction_corps:        'Appuyez sur le schéma pour sélectionner vos zones douloureuses.',
     alerte_urgence_detectee:  '⚠️ Urgence détectée — Le personnel soignant est alerté. Vous serez pris en charge très rapidement.',
-    // ConstantesPage — saisie tension
-    tension_systolique:       'Systolique (mmHg)',
-    tension_diastolique:      'Diastolique (mmHg)',
+    // ConstantesPage — saisie KF-65R
+    tension_sys:              'SYS (Systolique)',
+    tension_dia:              'DIA (Diastolique)',
+    tension_pul:              'PUL (Pouls)',
+    const_kf65r_guide:        'Mesurez avec le tensiomètre KF-65R et saisissez les 3 valeurs dans l\'ordre',
+    const_kf65r_valider:      'Valider les 3 mesures',
+    tts_instruction_kf65r:    'Mesurez votre tension avec le tensiomètre KF-65R et saisissez les 3 valeurs dans l\'ordre.',
     bio_attention:            'Attention',
     // QuestionsPage
     ia_analyse_symptomes:     "L'IA analyse vos symptômes et constantes pour personnaliser les questions.",
@@ -272,9 +276,13 @@ export const TRANSLATIONS = {
     etape2_titre:             'Step 2 / 5 · Symptoms',
     instruction_corps:        'Tap the diagram to select your painful areas.',
     alerte_urgence_detectee:  '⚠️ Emergency detected — Medical staff have been alerted. You will be seen very shortly.',
-    // ConstantesPage — saisie tension
-    tension_systolique:       'Systolic (mmHg)',
-    tension_diastolique:      'Diastolic (mmHg)',
+    // ConstantesPage — saisie KF-65R
+    tension_sys:              'SYS (Systolic)',
+    tension_dia:              'DIA (Diastolic)',
+    tension_pul:              'PUL (Pulse)',
+    const_kf65r_guide:        'Measure with the KF-65R blood pressure monitor and enter the 3 values in order',
+    const_kf65r_valider:      'Confirm the 3 values',
+    tts_instruction_kf65r:    'Measure your blood pressure with the KF-65R monitor and enter the 3 values in order.',
     bio_attention:            'Warning',
     // QuestionsPage
     ia_analyse_symptomes:     'AI is analysing your symptoms and vitals to personalise your questions.',
@@ -416,9 +424,13 @@ export const TRANSLATIONS = {
     etape2_titre:             'الخطوة 2 / 5 · الأعراض',
     instruction_corps:        'المس الرسم لتحديد مناطق الألم.',
     alerte_urgence_detectee:  '⚠️ تم الكشف عن حالة طارئة — تم تنبيه الطاقم الطبي. ستتلقى الرعاية الفورية.',
-    // ConstantesPage — saisie tension
-    tension_systolique:       'الانقباضي (ملم زئبق)',
-    tension_diastolique:      'الانبساطي (ملم زئبق)',
+    // ConstantesPage — saisie KF-65R
+    tension_sys:              'SYS (الانقباضي)',
+    tension_dia:              'DIA (الانبساطي)',
+    tension_pul:              'PUL (النبض)',
+    const_kf65r_guide:        'قس باستخدام جهاز KF-65R وأدخل القيم الثلاث بالترتيب',
+    const_kf65r_valider:      'تأكيد القيم الثلاث',
+    tts_instruction_kf65r:    'قس ضغط دمك بجهاز KF-65R وأدخل القيم الثلاث بالترتيب.',
     bio_attention:            'انتبه',
     // QuestionsPage
     ia_analyse_symptomes:     'يحلل الذكاء الاصطناعي أعراضك ومؤشراتك لتخصيص الأسئلة.',

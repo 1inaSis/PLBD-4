@@ -60,33 +60,29 @@ const ETAPES = [
     typeMesure:     'spo2',
     simulerLocal:   true,
     simulerValeurs: () => ({
-      spo2:       Math.floor(Math.random() * 4)  + 96,
-      heart_rate: Math.floor(Math.random() * 21) + 65,
+      spo2: Math.floor(Math.random() * 4) + 96,
     }),
-    double:         true,
     label:          'const_spo2_label',
     instruction:    'guide3_spo2',
     instructionTTS: 'tts_instruction_spo2',
     messageNull:    'const_spo2_null',
     icone:        '🫁',
     illustration: IllustrationSpo2,
-    valeurs: [
-      { cle: 'spo2',       label: 'bio_spo2',      unite: '%',   formatter: (v) => Number(v).toFixed(1) },
-      { cle: 'heart_rate', label: 'const_fc_label', unite: 'bpm', formatter: (v) => Math.round(Number(v)) },
-    ],
+    unite:        '%',
+    formatter:    (v) => Number(v).toFixed(1),
   },
 
   {
     cle:            'bp_systolic',
     typeMesure:     'tension',
     manuelle:       true,
-    instruction:    'const_bp_guide',
-    instructionTTS: 'tts_instruction_tension',
-    label:       'const_bp_label',
-    unite:       'mmHg',
-    icone:       '💉',
-    illustration: IllustrationTension,
-    formatter:   (v, all) => `${Math.round(v)} / ${Math.round(all?.bp_diastolic ?? 0)}`,
+    instruction:    'const_kf65r_guide',
+    instructionTTS: 'tts_instruction_kf65r',
+    label:          'const_bp_label',
+    unite:          'mmHg',
+    icone:          '💉',
+    illustration:   IllustrationTension,
+    formatter:      (v, all) => `${Math.round(v)} / ${Math.round(all?.bp_diastolic ?? 0)}`,
   },
 ]
 
@@ -272,6 +268,21 @@ export default function ConstantesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])
 
+  // ── Étapes simulerLocal (SpO2) : passage auto en 3s une fois COMPLET ─────────
+  useEffect(() => {
+    if (etat !== ETAT.COMPLET || !etapeActuelle.simulerLocal) return
+    const timer = setTimeout(() => {
+      if (indexEtape < ETAPES.length - 1) {
+        setIndexEtape(i => i + 1)
+        setEtat(ETAT.PRET)
+      } else {
+        setPhase(PHASE.RECAP)
+      }
+    }, 3000)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat, indexEtape])
+
   // ── ATTENTE → COMPLET dès que la valeur primaire arrive ─────────────────────
   useEffect(() => {
     console.log(`[Constantes] auto-avance — etat=${etat} etape=${etapeActuelle?.cle} valeurActuelle=${valeurActuelle}`)
@@ -294,9 +305,9 @@ export default function ConstantesPage() {
     setEtat(ETAT.COMPTE)
   }
 
-  // ── Valider tension saisie manuelle ─────────────────────────────────────────
-  const validerTensionManuelle = ({ bp_systolic, bp_diastolic }) => {
-    setConstantesLocal(prev => ({ ...prev, bp_systolic, bp_diastolic }))
+  // ── Valider KF-65R (SYS, DIA, PUL) — PUL remplace la FC simulée ────────────
+  const validerTensionManuelle = ({ bp_systolic, bp_diastolic, heart_rate }) => {
+    setConstantesLocal(prev => ({ ...prev, bp_systolic, bp_diastolic, heart_rate }))
     setEtat(ETAT.COMPLET)
   }
 
@@ -380,8 +391,9 @@ function VueMesure({
   const { t, langue }  = useTranslation()
   const { parler, arreter, estEnTrainDeParler, supporte } = useTextToSpeech()
   const { audioActif } = usePatient()
-  const estSimulee    = !!etape.simulee
-  const estManuelle   = !!etape.manuelle
+  const estSimulee      = !!etape.simulee
+  const estManuelle     = !!etape.manuelle
+  const estSimulerLocal = !!etape.simulerLocal
 
   const texteInstruction = etape.instructionTTS ? t(etape.instructionTTS) : null
 
@@ -453,7 +465,7 @@ function VueMesure({
           </>
         )}
 
-        {/* PRET : saisie manuelle tension artérielle */}
+        {/* PRET : saisie manuelle KF-65R */}
         {etat === ETAT.PRET && estManuelle && (
           <>
             {supporte && texteInstruction && (
@@ -466,8 +478,8 @@ function VueMesure({
                 >🔊</button>
               </div>
             )}
-            <SaisieTension
-              instruction={t(etape.instruction ?? 'const_bp_guide')}
+            <SaisieKF65R
+              instruction={t(etape.instruction ?? 'const_kf65r_guide')}
               onValider={onValiderManuel}
               t={t}
             />
@@ -548,7 +560,7 @@ function VueMesure({
             </div>
 
             {/* Mesure réelle réussie : confirmation + bouton */}
-            {!estSimulee && messageCapture !== 'timeout' && (
+            {!estSimulee && !estSimulerLocal && messageCapture !== 'timeout' && (
               <>
                 <div className="seq-ok" role="status">{t('const_mesure_ok')}</div>
                 <button className="kiosk-btn kiosk-btn--primary" onClick={onEtapeSuivante}>
@@ -557,8 +569,8 @@ function VueMesure({
               </>
             )}
 
-            {/* Auto-avance (étape simulée ou timeout) */}
-            {(estSimulee || messageCapture === 'timeout') && (
+            {/* Auto-avance (étape simulée, simulerLocal, ou timeout) */}
+            {(estSimulee || estSimulerLocal || messageCapture === 'timeout') && (
               <p className="kiosk-note" role="status">
                 {t('const_auto_passage')}
               </p>
@@ -656,24 +668,36 @@ function VueRecap({ constantes, onContinuer, onRecommencer }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Saisie manuelle de la tension artérielle
+// Saisie KF-65R : SYS / DIA / PUL
 // ═════════════════════════════════════════════════════════════════════════════
-function evaluerCouleurTension(sys, dia) {
-  if (sys > 160 || sys < 90 || dia > 100 || dia < 60) return 'rouge'
-  if (sys >= 130 || dia >= 85) return 'orange'
+function evaluerCouleurKF65R(type, v) {
+  if (type === 'sys') {
+    if (v > 160 || v < 90) return 'rouge'
+    if (v >= 130) return 'orange'
+    return 'vert'
+  }
+  // dia
+  if (v > 100 || v < 60) return 'rouge'
+  if (v >= 85) return 'orange'
   return 'vert'
 }
 
-function SaisieTension({ instruction, onValider, t }) {
+function SaisieKF65R({ instruction, onValider, t }) {
   const [sys, setSys] = useState('')
   const [dia, setDia] = useState('')
+  const [pul, setPul] = useState('')
 
   const sysN = Number(sys)
   const diaN = Number(dia)
-  const peutValider = sys !== '' && dia !== '' && sysN > 0 && diaN > 0
-  const couleur = peutValider ? evaluerCouleurTension(sysN, diaN) : null
+  const pulN = Number(pul)
 
-  const LIBELLES_TENSION = { vert: t('bio_normal'), orange: t('bio_attention'), rouge: t('bio_critique') }
+  const sysValide = sys !== '' && sysN >= 70 && sysN <= 200
+  const diaValide = dia !== '' && diaN >= 40 && diaN <= 130
+  const pulValide = pul !== '' && pulN >= 40 && pulN <= 180
+  const peutValider = sysValide && diaValide && pulValide
+
+  const couleurSys = sysValide ? evaluerCouleurKF65R('sys', sysN) : null
+  const couleurDia = diaValide ? evaluerCouleurKF65R('dia', diaN) : null
 
   return (
     <div className="tension-manuelle">
@@ -681,53 +705,72 @@ function SaisieTension({ instruction, onValider, t }) {
 
       <div className="tension-inputs">
         <div className="tension-input-groupe">
-          <label className="tension-input-label" htmlFor="tension-sys">
-            {t('tension_systolique')}
+          <label className="tension-input-label" htmlFor="kf65r-sys">
+            {t('tension_sys')}
           </label>
           <input
-            id="tension-sys"
+            id="kf65r-sys"
             type="number"
-            className="tension-input"
+            className={`tension-input${couleurSys ? ` tension-input--${couleurSys}` : ''}`}
             placeholder="120"
             value={sys}
             onChange={e => setSys(e.target.value)}
-            min={40} max={300}
+            min={70} max={200}
             inputMode="numeric"
           />
+          {couleurSys && (
+            <div className={`bio-badge bio-badge--${couleurSys}`} style={{ alignSelf: 'center', marginTop: 4 }}>
+              <span className="bio-badge-dot" />
+              {t(couleurSys === 'vert' ? 'bio_normal' : couleurSys === 'orange' ? 'bio_attention' : 'bio_critique')}
+            </div>
+          )}
         </div>
 
-        <span className="tension-separateur">/</span>
-
         <div className="tension-input-groupe">
-          <label className="tension-input-label" htmlFor="tension-dia">
-            {t('tension_diastolique')}
+          <label className="tension-input-label" htmlFor="kf65r-dia">
+            {t('tension_dia')}
           </label>
           <input
-            id="tension-dia"
+            id="kf65r-dia"
             type="number"
-            className="tension-input"
+            className={`tension-input${couleurDia ? ` tension-input--${couleurDia}` : ''}`}
             placeholder="80"
             value={dia}
             onChange={e => setDia(e.target.value)}
-            min={20} max={200}
+            min={40} max={130}
+            inputMode="numeric"
+          />
+          {couleurDia && (
+            <div className={`bio-badge bio-badge--${couleurDia}`} style={{ alignSelf: 'center', marginTop: 4 }}>
+              <span className="bio-badge-dot" />
+              {t(couleurDia === 'vert' ? 'bio_normal' : couleurDia === 'orange' ? 'bio_attention' : 'bio_critique')}
+            </div>
+          )}
+        </div>
+
+        <div className="tension-input-groupe">
+          <label className="tension-input-label" htmlFor="kf65r-pul">
+            {t('tension_pul')}
+          </label>
+          <input
+            id="kf65r-pul"
+            type="number"
+            className="tension-input"
+            placeholder="72"
+            value={pul}
+            onChange={e => setPul(e.target.value)}
+            min={40} max={180}
             inputMode="numeric"
           />
         </div>
       </div>
 
-      {couleur && (
-        <div className={`bio-badge bio-badge--${couleur}`} style={{ alignSelf: 'center' }}>
-          <span className="bio-badge-dot" />
-          {LIBELLES_TENSION[couleur]}
-        </div>
-      )}
-
       <button
         className="kiosk-btn kiosk-btn--primary"
         disabled={!peutValider}
-        onClick={() => onValider({ bp_systolic: sysN, bp_diastolic: diaN })}
+        onClick={() => onValider({ bp_systolic: sysN, bp_diastolic: diaN, heart_rate: pulN })}
       >
-        {t('const_bp_valider')}
+        {t('const_kf65r_valider')}
       </button>
     </div>
   )

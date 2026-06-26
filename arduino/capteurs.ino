@@ -77,7 +77,7 @@ void mesurerTemperature() {
   }
   float valeur_brute = (somme - vMin - vMax) / (NB - 2);
 
-  if (valeur_brute < 15.0 || valeur_brute > 45.0) {
+  if (valeur_brute < 28.0) {
     Serial.print(F("{\"temperature\": null, \"mlx_ok\": true, \"valeur_brute\": "));
     Serial.print(valeur_brute, 1);
     Serial.println(F(", \"source\": \"erreur\"}"));
@@ -86,17 +86,14 @@ void mesurerTemperature() {
 
   float temp_finale;
   bool fievre = false;
-  if (valeur_brute >= 28.0 && valeur_brute <= 40.0) {
-    if (valeur_brute > 37.0) {
-      temp_finale = valeur_brute;
-      fievre = true;
-    } else {
-      temp_finale = 36.0 + (valeur_brute - 28.0) / 12.0 * 2.0;
-      if (temp_finale < 36.0) temp_finale = 36.0;
-      if (temp_finale > 38.0) temp_finale = 38.0;
-    }
-  } else {
+  if (valeur_brute > 45.0) {
     temp_finale = valeur_brute;
+    fievre = true;
+  } else {
+    // 28°C ≤ valeur_brute ≤ 45°C → normalisation vers 36–38°C
+    temp_finale = 36.0 + (valeur_brute - 28.0) * (2.0 / 17.0);
+    if (temp_finale < 36.0) temp_finale = 36.0;
+    if (temp_finale > 38.0) temp_finale = 38.0;
   }
 
   Serial.print(F("{\"temperature\": "));

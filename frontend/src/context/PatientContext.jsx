@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useRef, useCallback, useState } from 'react'
+import { createContext, useContext, useReducer, useRef, useCallback, useState, useEffect } from 'react'
 
 // ── État initial ─────────────────────────────────────────────────────────────
 const etatInitial = {
@@ -116,6 +116,15 @@ export function PatientProvider({ children }) {
     wsRef.current?.close()
     wsRef.current = null
   }, [])
+
+  // Ping toutes les 2 minutes pour maintenir la session active côté serveur
+  useEffect(() => {
+    if (!patient.session_id) return
+    const interval = setInterval(() => {
+      fetch(`/api/session/ping?session_id=${patient.session_id}`).catch(() => {})
+    }, 2 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [patient.session_id])
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const setIdentite      = (data)  => dispatch({ type: 'SET_IDENTITE',      payload: data })

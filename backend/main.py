@@ -1344,6 +1344,15 @@ async def api_session_abandon(body: AbandonRequest):
     return {"statut": "abandonné"}
 
 
+@app.get("/api/session/ping")
+async def api_session_ping(session_id: str = Query(...)):
+    """Remet à jour le timestamp d'activité pour maintenir la session active."""
+    if session_id not in patients_session:
+        raise HTTPException(status_code=404, detail="Session introuvable")
+    patients_session[session_id]["derniere_activite"] = datetime.now().isoformat()
+    return {"statut": "ok", "session_id": session_id}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # WebSocket — /ws
 # ═══════════════════════════════════════════════════════════════════════════════
