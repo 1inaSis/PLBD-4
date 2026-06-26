@@ -268,21 +268,6 @@ export default function ConstantesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, indexEtape])
 
-  // ── Étapes simulerLocal (SpO2) : passage auto en 3s une fois COMPLET ─────────
-  useEffect(() => {
-    if (etat !== ETAT.COMPLET || !etapeActuelle.simulerLocal) return
-    const timer = setTimeout(() => {
-      if (indexEtape < ETAPES.length - 1) {
-        setIndexEtape(i => i + 1)
-        setEtat(ETAT.PRET)
-      } else {
-        setPhase(PHASE.RECAP)
-      }
-    }, 3000)
-    return () => clearTimeout(timer)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etat, indexEtape])
-
   // ── ATTENTE → COMPLET dès que la valeur primaire arrive ─────────────────────
   useEffect(() => {
     console.log(`[Constantes] auto-avance — etat=${etat} etape=${etapeActuelle?.cle} valeurActuelle=${valeurActuelle}`)
@@ -379,6 +364,37 @@ export default function ConstantesPage() {
         />
       )}
     </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+function CompteSVG({ compte }) {
+  const rayon    = 50
+  const circonf  = 2 * Math.PI * rayon
+  const dashoffset = (1 - compte / 5) * circonf
+  return (
+    <svg
+      width="130" height="130" viewBox="0 0 130 130"
+      role="status" aria-live="assertive" aria-label={compte}
+      style={{ display: 'block', margin: '0 auto' }}
+    >
+      <circle cx="65" cy="65" r={rayon} fill="none" stroke="#1e2a3a" strokeWidth="10" />
+      <circle
+        cx="65" cy="65" r={rayon}
+        fill="none"
+        stroke="#00d4ff"
+        strokeWidth="10"
+        strokeDasharray={circonf}
+        strokeDashoffset={dashoffset}
+        strokeLinecap="round"
+        transform="rotate(-90 65 65)"
+        style={{ transition: 'stroke-dashoffset 0.85s linear' }}
+      />
+      <text x="65" y="65" textAnchor="middle" dominantBaseline="central"
+        fontSize="38" fontWeight="800" fill="#00d4ff">
+        {compte}
+      </text>
+    </svg>
   )
 }
 
@@ -486,18 +502,11 @@ function VueMesure({
           </>
         )}
 
-        {/* COMPTE : compte à rebours texte 5→1 */}
+        {/* COMPTE : compte à rebours circulaire SVG 5→1 */}
         {etat === ETAT.COMPTE && (
           <div className="seq-attente">
             <p className="kiosk-soustitre">{t('const_preparez')}</p>
-            <div
-              className="countdown-texte"
-              role="status"
-              aria-live="assertive"
-              style={{ fontSize: '5rem', fontWeight: 800, color: '#00d4ff', textAlign: 'center', lineHeight: 1 }}
-            >
-              {compte ?? 5}
-            </div>
+            <CompteSVG compte={compte ?? 5} />
           </div>
         )}
 
@@ -559,8 +568,8 @@ function VueMesure({
               {t(LIBELLES_COULEUR[couleurBadge])}
             </div>
 
-            {/* Mesure réelle réussie : confirmation + bouton */}
-            {!estSimulee && !estSimulerLocal && messageCapture !== 'timeout' && (
+            {/* Mesure réussie (réelle ou locale) : confirmation + bouton */}
+            {!estSimulee && messageCapture !== 'timeout' && (
               <>
                 <div className="seq-ok" role="status">{t('const_mesure_ok')}</div>
                 <button className="kiosk-btn kiosk-btn--primary" onClick={onEtapeSuivante}>
@@ -569,8 +578,8 @@ function VueMesure({
               </>
             )}
 
-            {/* Auto-avance (étape simulée, simulerLocal, ou timeout) */}
-            {(estSimulee || estSimulerLocal || messageCapture === 'timeout') && (
+            {/* Auto-avance (étape simulée ou timeout) */}
+            {(estSimulee || messageCapture === 'timeout') && (
               <p className="kiosk-note" role="status">
                 {t('const_auto_passage')}
               </p>
