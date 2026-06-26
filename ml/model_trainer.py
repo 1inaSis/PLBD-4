@@ -592,10 +592,13 @@ def predire_esi(donnees_patient: dict) -> dict:
     _bleed = int(donnees_patient.get("severe_bleeding", 0))
 
     regle_clinique = False
-    if _spo2 < 85 or _bpsys < 80 or _fc > 150:
+    if _spo2 < 90 or _bpsys < 80 or _fc > 150:
         esi_predit, regle_clinique = 1, True
     elif _loc or _bleed:
         esi_predit, regle_clinique = 1, True
+    elif _pain >= 9:
+        if esi_predit > 2:
+            esi_predit, regle_clinique = 2, True
     elif _chest and (_pain >= 7 or _spo2 < 92 or _fc > 120 or _bpsys < 90):
         if esi_predit > 2:
             esi_predit, regle_clinique = 2, True

@@ -885,10 +885,12 @@ async def api_triage(body: TriageRequest):
     _bleed = int(donnees_modele.get("severe_bleeding", 0))
     _esi_force: Optional[int] = None
 
-    if _spo2 < 85 or _bpsys < 80 or _fc > 150:
+    if _spo2 < 90 or _bpsys < 80 or _fc > 150:
         _esi_force = 1
     elif _loc or _bleed:
         _esi_force = 1
+    elif _pain >= 9:
+        _esi_force = 2
     elif _chest and (_pain >= 7 or _spo2 < 92 or _fc > 120 or _bpsys < 90):
         _esi_force = 2
 
