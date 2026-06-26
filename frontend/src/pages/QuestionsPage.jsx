@@ -20,6 +20,7 @@ import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 
 const DELAI_PASSER_MS = 8_000
 const MAX_QUESTIONS   = 5
@@ -289,6 +290,12 @@ function VueErreur({ message, onReessayer, onRetour }) {
   )
 }
 
+// ── Constantes pour la reconnaissance vocale (oui_non / choix) ───────────────
+const MOTS_OUI  = ['oui', 'yes', 'نعم', "d'accord", 'ok', 'ouais']
+const MOTS_NON  = ['non', 'no', 'لا', 'pas', 'jamais', 'nope']
+const normaliser = s =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+
 // ── Vue principale : une seule question ──────────────────────────────────────
 function VueQuestion({
   question, numQuestion, maxQuestions,
@@ -331,6 +338,24 @@ function VueQuestion({
       reconnaissanceRef.current = null
     }
   }
+
+  // ── Reconnaissance vocale pour oui_non et choix ───────────────────────────
+  const voixQ = useVoiceInput({
+    langue,
+    onResult: (transcript) => {
+      if (question.type === 'oui_non') {
+        const txt = transcript.toLowerCase().trim()
+        if (MOTS_OUI.some(m => txt.includes(m)))      onRepondre('oui')
+        else if (MOTS_NON.some(m => txt.includes(m))) onRepondre('non')
+        // Sinon : ignore silencieusement
+      } else if (question.type === 'choix') {
+        const tn    = normaliser(transcript)
+        const match = question.choix?.find(opt => opt && tn.includes(normaliser(opt)))
+        if (match) onRepondre(match)
+        // Sinon : ignore silencieusement
+      }
+    },
+  })
 
   // Lecture automatique de la question (conditionnel via audioActif dans parler)
   useEffect(() => {
@@ -382,27 +407,67 @@ function VueQuestion({
 
         {/* Réponses — type oui_non */}
         {question.type === 'oui_non' && (
-          <div className="q-oui-non">
-            <button className="kiosk-btn q-btn-oui" onClick={() => onRepondre('oui')}>
-              <span className="q-btn-icone">✓</span> OUI
-            </button>
-            <button className="kiosk-btn q-btn-non" onClick={() => onRepondre('non')}>
-              <span className="q-btn-icone">✗</span> NON
-            </button>
+          <div>
+            <div className="q-oui-non">
+              <button className="kiosk-btn q-btn-oui" onClick={() => onRepondre('oui')}>
+                <span className="q-btn-icone">✓</span> OUI
+              </button>
+              <button className="kiosk-btn q-btn-non" onClick={() => onRepondre('non')}>
+                <span className="q-btn-icone">✗</span> NON
+              </button>
+            </div>
+            {voixQ.supporte && (
+              <div style={{ textAlign: 'center', marginTop: 8 }}>
+                <button
+                  type="button"
+                  className={`voice-btn${voixQ.ecoute ? ' voice-btn--actif' : ''}`}
+                  onClick={voixQ.ecoute ? voixQ.arreter : voixQ.demarrer}
+                  aria-label={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
+                  title={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
+                >
+                  {voixQ.ecoute ? '⏹' : '🎤'}
+                </button>
+                {voixQ.ecoute && (
+                  <span style={{ fontSize: '0.85rem', color: '#94a3b8', marginLeft: 8 }}>
+                    {t('voice_ecoute')}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {/* Réponses — type choix */}
         {question.type === 'choix' && Array.isArray(question.choix) && (
-          <div
-            className="q-choix-grille"
-            style={{ gridTemplateColumns: question.choix.length <= 2 ? '1fr 1fr' : '1fr' }}
-          >
-            {question.choix.map((option, i) => (
-              <button key={i} className="kiosk-btn q-btn-choix" onClick={() => onRepondre(option)}>
-                {option}
-              </button>
-            ))}
+          <div>
+            <div
+              className="q-choix-grille"
+              style={{ gridTemplateColumns: question.choix.length <= 2 ? '1fr 1fr' : '1fr' }}
+            >
+              {question.choix.map((option, i) => (
+                <button key={i} className="kiosk-btn q-btn-choix" onClick={() => onRepondre(option)}>
+                  {option}
+                </button>
+              ))}
+            </div>
+            {voixQ.supporte && (
+              <div style={{ textAlign: 'center', marginTop: 8 }}>
+                <button
+                  type="button"
+                  className={`voice-btn${voixQ.ecoute ? ' voice-btn--actif' : ''}`}
+                  onClick={voixQ.ecoute ? voixQ.arreter : voixQ.demarrer}
+                  aria-label={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
+                  title={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
+                >
+                  {voixQ.ecoute ? '⏹' : '🎤'}
+                </button>
+                {voixQ.ecoute && (
+                  <span style={{ fontSize: '0.85rem', color: '#94a3b8', marginLeft: 8 }}>
+                    {t('voice_ecoute')}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
