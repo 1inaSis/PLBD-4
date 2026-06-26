@@ -73,7 +73,7 @@ def _capturer(chemin: str) -> bool:
         subprocess.run(
             ['rpicam-still', '-o', chemin,
              '--width', '1920', '--height', '1080',
-             '--immediate', '--timeout', '1000', '--nopreview'],
+             '--timeout', '2000', '--nopreview'],
             check=True, timeout=TIMEOUT_CAPTURE
         )
         return os.path.exists(chemin)
