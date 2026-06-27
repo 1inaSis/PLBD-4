@@ -21,6 +21,7 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import '../styles/kiosk.css'
 import { useVoiceInput } from '../hooks/useVoiceInput'
+import ZoneSaisieMixte from '../components/ZoneSaisieMixte'
 
 const DELAI_PASSER_MS = 8_000
 const MAX_QUESTIONS   = 5
@@ -307,38 +308,6 @@ function VueQuestion({
   const { parler, arreter, estEnTrainDeParler, supporte } = useTextToSpeech()
   const pctProgression = Math.round(((numQuestion - 1) / maxQuestions) * 100)
 
-  // Microphone pour questions texte_libre
-  const [ecouteVocale, setEcouteVocale] = useState(false)
-  const reconnaissanceRef = useRef(null)
-  const supporteVocal = typeof window !== 'undefined' &&
-    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
-  const LANG_VOCAL = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
-
-  const basculerDictee = () => {
-    if (!ecouteVocale) {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-      const reco = new SR()
-      reco.lang = LANG_VOCAL[langue] ?? 'fr-FR'
-      reco.continuous = true
-      reco.interimResults = true
-      reco.onresult = (e) => {
-        let finals = ''
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) finals += e.results[i][0].transcript + ' '
-        }
-        if (finals.trim()) onTexteChange(prev => (prev ? prev.trimEnd() + ' ' : '') + finals.trim())
-      }
-      reco.onend = () => { reconnaissanceRef.current = null; setEcouteVocale(false) }
-      reco.onerror = () => { reconnaissanceRef.current = null; setEcouteVocale(false) }
-      reco.start()
-      reconnaissanceRef.current = reco
-      setEcouteVocale(true)
-    } else {
-      reconnaissanceRef.current?.stop()
-      reconnaissanceRef.current = null
-    }
-  }
-
   // ── Reconnaissance vocale pour oui_non et choix ───────────────────────────
   const voixQ = useVoiceInput({
     langue,
@@ -474,28 +443,13 @@ function VueQuestion({
         {/* Réponses — type texte_libre */}
         {question.type === 'texte_libre' && (
           <div className="q-texte-libre-wrapper">
-            <div className="symptome-textarea-wrap">
-              <textarea
-                className="symptome-input"
-                placeholder={ecouteVocale ? t('mic_ecoute') : t('decrivez_mots')}
-                value={texteLibre}
-                onChange={e => onTexteChange(e.target.value)}
-                rows={3}
-                maxLength={300}
-                autoFocus
-              />
-              {supporteVocal && (
-                <button
-                  type="button"
-                  className={`mic-btn${ecouteVocale ? ' mic-btn--actif' : ''}`}
-                  onClick={basculerDictee}
-                  title={ecouteVocale ? t('mic_arret') : t('mic_dicter')}
-                  aria-label={ecouteVocale ? t('mic_arret') : t('mic_dicter')}
-                >
-                  {ecouteVocale ? '⏹' : '🎤'}
-                </button>
-              )}
-            </div>
+            <ZoneSaisieMixte
+              value={texteLibre}
+              onChange={onTexteChange}
+              langue={langue}
+              placeholder={t('decrivez_mots')}
+              rows={3}
+            />
             <button
               className="kiosk-btn kiosk-btn--primary"
               onClick={() => onRepondre(texteLibre || '')}

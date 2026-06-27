@@ -3,7 +3,7 @@
 // et décrit librement ses symptômes. POST /api/symptomes envoie
 // le texte + les zones ; le NLP extrait les features côté serveur.
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import { soumettreSymptomes, abandonnerSession } from '../services/api'
@@ -16,7 +16,7 @@ import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import BoutonAudio from '../components/BoutonAudio'
-import ClavierAlpha from '../components/ClavierAlpha'
+import ZoneSaisieMixte from '../components/ZoneSaisieMixte'
 import '../styles/kiosk.css'
 
 export default function QuestionnairePage() {
@@ -55,39 +55,6 @@ export default function QuestionnairePage() {
   const [erreur, setErreur]               = useState(null)
   const [urgenceDetectee, setUrgenceDetectee] = useState(false)
   const [sortie, setSortie]               = useState(false)
-  const [clavierActif, setClavierActif]   = useState(false)
-
-  // ── Reconnaissance vocale ─────────────────────────────────────────────────
-  const [ecouteVocale, setEcouteVocale]   = useState(false)
-  const reconnaissanceRef                 = useRef(null)
-  const supporteVocal = typeof window !== 'undefined' &&
-    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
-  const LANG_VOCAL = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
-
-  const basculerDictee = () => {
-    if (!ecouteVocale) {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-      const reco = new SR()
-      reco.lang = LANG_VOCAL[langue] ?? 'fr-FR'
-      reco.continuous = true
-      reco.interimResults = true
-      reco.onresult = (e) => {
-        let finals = ''
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) finals += e.results[i][0].transcript + ' '
-        }
-        if (finals.trim()) setTexteSymptome(prev => (prev ? prev.trimEnd() + ' ' : '') + finals.trim())
-      }
-      reco.onend = () => { reconnaissanceRef.current = null; setEcouteVocale(false) }
-      reco.onerror = () => { reconnaissanceRef.current = null; setEcouteVocale(false) }
-      reco.start()
-      reconnaissanceRef.current = reco
-      setEcouteVocale(true)
-    } else {
-      reconnaissanceRef.current?.stop()
-      reconnaissanceRef.current = null
-    }
-  }
 
   const navigerVers = useCallback((path, opts) => {
     setSortie(true)
@@ -190,46 +157,17 @@ export default function QuestionnairePage() {
 
             {/* Champ de description libre */}
             <div className="symptome-groupe">
-              <label className="symptome-label" htmlFor="symptome-texte">
+              <label className="symptome-label">
                 {t('symptomes_label')} <span className="symptome-optionnel">{t('symptomes_opt')}</span>
               </label>
-              <div className="symptome-textarea-wrap">
-                <textarea
-                  id="symptome-texte"
-                  className="symptome-input"
-                  placeholder={ecouteVocale ? t('mic_ecoute') : t('symptomes_ph')}
-                  value={texteSymptome}
-                  onChange={e => setTexteSymptome(e.target.value)}
-                  rows={4}
-                  maxLength={500}
-                  inputMode="none"
-                  onFocus={() => setClavierActif(true)}
-                  onClick={() => setClavierActif(true)}
-                />
-                {supporteVocal && (
-                  <button
-                    type="button"
-                    className={`mic-btn${ecouteVocale ? ' mic-btn--actif' : ''}`}
-                    onClick={basculerDictee}
-                    title={ecouteVocale ? t('mic_arret') : t('mic_dicter')}
-                    aria-label={ecouteVocale ? t('mic_arret') : t('mic_dicter')}
-                  >
-                    {ecouteVocale ? '⏹' : '🎤'}
-                  </button>
-                )}
-              </div>
-              <span className="symptome-compteur">{texteSymptome.length} / 500</span>
-            </div>
-
-            {clavierActif && (
-              <ClavierAlpha
+              <ZoneSaisieMixte
                 value={texteSymptome}
                 onChange={setTexteSymptome}
-                onConfirm={() => setClavierActif(false)}
-                onFermer={() => setClavierActif(false)}
                 langue={langue}
+                placeholder={t('saisie_placeholder')}
               />
-            )}
+              <span className="symptome-compteur">{texteSymptome.length} / 500</span>
+            </div>
 
             {/* Alerte urgence détectée par le NLP */}
             {urgenceDetectee && (
