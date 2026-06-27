@@ -73,6 +73,13 @@ fi
 
 # ── 6. Boucle de lancement Chromium (relance automatique après crash) ─────────
 echo "[KIOSK] Demarrage de la boucle Chromium (auto-restart en cas de crash)"
+
+# ── 5b. Pré-autoriser le microphone dans le profil Chromium ──────────────────
+mkdir -p "${HOME}/.config/chromium/Default"
+cat > "${HOME}/.config/chromium/Default/Preferences" << 'CHROMEPREF'
+{"profile":{"content_settings":{"exceptions":{"media_stream_mic":{"http://localhost:5173,*":{"last_modified":"0","setting":1}}}}}}
+CHROMEPREF
+
 while true; do
     chromium-browser \
         --kiosk \
@@ -90,10 +97,11 @@ while true; do
         --incognito \
         --window-size=800,480 \
         --window-position=0,0 \
-        --use-fake-ui-for-media-stream=false \
-        --allow-running-insecure-content \
+        --allow-insecure-localhost \
         --unsafely-treat-insecure-origin-as-secure=http://localhost:5173 \
-        --auto-accept-this-tab-capture \
+        --use-fake-ui-for-media-stream=false \
+        --enable-features=MediaStreamTrack \
+        --disable-features=MediaStreamInsecure \
         --app="${URL_BORNE}" \
         2>/dev/null
 
