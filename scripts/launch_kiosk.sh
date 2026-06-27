@@ -80,6 +80,9 @@ cat > "${HOME}/.config/chromium/Default/Preferences" << 'CHROMEPREF'
 {"profile":{"content_settings":{"exceptions":{"media_stream_mic":{"http://localhost:5173,*":{"last_modified":"0","setting":1}}}}}}
 CHROMEPREF
 
+# ── 5c. Donner accès au périphérique audio système ────────────────────────────
+sudo chmod 666 /dev/snd/* 2>/dev/null || true
+
 while true; do
     chromium-browser \
         --kiosk \

@@ -6,21 +6,24 @@ const LAYOUTS = {
     ['a', 'z', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
     ['q', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm'],
     ['SHIFT', 'w', 'x', 'c', 'v', 'b', 'n', '←'],
-    [',.', 'ESPACE', '✓'],
+    ["'", '-', '.', '@', 'ESPACE', '✓'],
   ],
   en: [
     ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
     ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
     ['SHIFT', 'z', 'x', 'c', 'v', 'b', 'n', 'm', '←'],
-    [',.', 'ESPACE', '✓'],
+    ["'", '-', '.', '@', 'ESPACE', '✓'],
   ],
   ar: [
     ['ض', 'ص', 'ث', 'ق', 'ف', 'غ', 'ع', 'ه', 'خ', 'ح', 'ج'],
     ['ش', 'س', 'ي', 'ب', 'ل', 'ا', 'ت', 'ن', 'م', 'ك'],
-    ['ئ', 'ء', 'ؤ', 'ر', 'لا', 'ى', 'ة', 'و', 'ز', 'ظ'],
+    ['ئ', 'ء', 'ؤ', 'أ', 'إ', 'ر', 'لا', 'ى', 'ة', 'و', 'ز', 'ظ'],
     ['ESPACE', '←', '✓'],
   ],
 }
+
+// Touches spéciales (1 char) qui ne passent pas par SHIFT
+const SPECIAUX = new Set(["'", '-', '.', '@'])
 
 const W = {
   overlay: {
@@ -35,80 +38,82 @@ const W = {
     left: 0,
     right: 0,
     zIndex: 1000,
-    background: '#fff',
+    background: '#060b14',
+    backdropFilter: 'blur(24px)',
+    WebkitBackdropFilter: 'blur(24px)',
     borderRadius: '20px 20px 0 0',
-    boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
-    padding: '12px 6px 18px',
+    boxShadow: '0 -4px 20px rgba(0,212,255,0.15)',
+    padding: '10px 4px 16px',
     userSelect: 'none',
   },
   ligne: {
     display: 'flex',
     justifyContent: 'center',
     gap: '5px',
-    marginBottom: '5px',
+    marginBottom: '6px',
   },
   base: {
-    minHeight: '52px',
-    minWidth: '32px',
-    fontSize: '18px',
+    minHeight: '60px',
+    minWidth: '30px',
+    fontSize: '22px',
     fontWeight: 600,
-    background: '#f5f5f5',
-    border: '1px solid #ddd',
+    background: 'rgba(255,255,255,0.09)',
+    border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: '8px',
     cursor: 'pointer',
-    color: '#0f172a',
+    color: '#f8fafc',
     padding: '4px 6px',
     WebkitTapHighlightColor: 'transparent',
   },
   fonction: {
-    minHeight: '52px',
-    minWidth: '44px',
-    fontSize: '16px',
+    minHeight: '60px',
+    minWidth: '40px',
+    fontSize: '18px',
     fontWeight: 600,
-    background: '#e2e8f0',
-    border: '1px solid #cbd5e1',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '8px',
     cursor: 'pointer',
-    color: '#0f172a',
+    color: '#94a3b8',
     padding: '4px 8px',
     WebkitTapHighlightColor: 'transparent',
   },
   confirm: {
-    minHeight: '52px',
+    minHeight: '60px',
     minWidth: '64px',
-    fontSize: '18px',
+    fontSize: '22px',
     fontWeight: 700,
-    background: '#10b981',
-    border: 'none',
+    background: 'rgba(16,185,129,0.2)',
+    border: '1px solid rgba(16,185,129,0.4)',
     borderRadius: '8px',
     cursor: 'pointer',
-    color: '#fff',
+    color: '#10b981',
     padding: '4px 12px',
     WebkitTapHighlightColor: 'transparent',
   },
   back: {
-    minHeight: '52px',
-    minWidth: '44px',
-    fontSize: '18px',
+    minHeight: '60px',
+    minWidth: '40px',
+    fontSize: '22px',
     fontWeight: 700,
-    background: '#ef4444',
-    border: 'none',
+    background: 'rgba(239,68,68,0.2)',
+    border: '1px solid rgba(239,68,68,0.4)',
     borderRadius: '8px',
     cursor: 'pointer',
-    color: '#fff',
+    color: '#ef4444',
     padding: '4px 8px',
     WebkitTapHighlightColor: 'transparent',
   },
   espace: {
-    minHeight: '52px',
-    minWidth: '140px',
-    fontSize: '16px',
+    minHeight: '60px',
+    minWidth: '130px',
+    fontSize: '18px',
     fontWeight: 600,
-    background: '#e2e8f0',
-    border: '1px solid #cbd5e1',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '8px',
     cursor: 'pointer',
-    color: '#0f172a',
+    color: '#94a3b8',
     padding: '4px 12px',
     WebkitTapHighlightColor: 'transparent',
   },
@@ -129,7 +134,8 @@ export default function ClavierAlpha({
     if (touche === '←')      { onChange(value.slice(0, -1)); return }
     if (touche === 'ESPACE') { onChange(value + ' '); return }
     if (touche === 'SHIFT')  { setMajuscule((m) => !m); return }
-    if (touche === ',.')     { onChange(value + ','); return }
+    // Caractères spéciaux (apostrophe, tiret, point, @) : pas de majuscule
+    if (SPECIAUX.has(touche)) { onChange(value + touche); return }
     onChange(value + (majuscule ? touche.toUpperCase() : touche))
   }
 
@@ -138,25 +144,22 @@ export default function ClavierAlpha({
     if (touche === '←')      return W.back
     if (touche === 'ESPACE') return W.espace
     if (touche === 'SHIFT')  return majuscule
-      ? { ...W.fonction, background: '#bfdbfe', color: '#1d4ed8' }
+      ? { ...W.fonction, background: 'rgba(0,180,216,0.3)', border: '1px solid #06b6d4', color: '#38bdf8' }
       : W.fonction
-    if (touche === ',.') return W.fonction
+    if (SPECIAUX.has(touche)) return W.fonction
     return W.base
   }
 
   const getLabel = (touche) => {
     if (touche === 'SHIFT')  return '⇧'
     if (touche === 'ESPACE') return '⎵'
-    if (touche === ',.')     return ',.'
-    if (majuscule && touche.length === 1) return touche.toUpperCase()
+    if (majuscule && touche.length === 1 && !SPECIAUX.has(touche)) return touche.toUpperCase()
     return touche
   }
 
   const portail = (
     <>
-      {/* Overlay transparent — clic extérieur ferme le clavier */}
       <div style={W.overlay} onPointerDown={() => onFermer?.()} />
-
       <div
         style={W.wrapper}
         dir={langue === 'ar' ? 'rtl' : 'ltr'}

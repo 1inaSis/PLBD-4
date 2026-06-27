@@ -2,19 +2,20 @@
 //
 // Paramètres :
 //   langue  : 'fr' | 'en' | 'ar'  → mappé vers 'fr-FR', 'en-US', 'ar-SA'
-//   onResult(transcript) : callback appelé avec le texte reconnu (final)
+//   onResult(transcript) : callback appelé avec le texte reconnu
 //   onEnd()              : callback optionnel appelé quand la reconnaissance s'arrête
-//   timeout              : délai ms avant arrêt auto si silence (défaut 10 000)
+//   timeout              : délai ms avant arrêt auto si silence (défaut 15 000)
 //
 // Retourne :
-//   { supporte, ecoute, demarrer, arreter }
-//   supporte : bool (false si API absente ou permission micro refusée)
-//   ecoute   : bool (true pendant l'écoute active)
+//   { supporte, ecoute, erreurPermission, demarrer, arreter }
+//   supporte        : bool (false si API absente)
+//   ecoute          : bool (true pendant l'écoute active)
+//   erreurPermission: string | null (message si micro refusé)
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 const LANG_MAP = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
-const TIMEOUT_DEFAUT = 10_000
+const TIMEOUT_DEFAUT = 15_000
 
 const SR_API = typeof window !== 'undefined'
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -26,10 +27,11 @@ export function useVoiceInput({
   onEnd,
   timeout  = TIMEOUT_DEFAUT,
 } = {}) {
-  const [supporte, setSupporte] = useState(!!SR_API)
-  const [ecoute, setEcoute]     = useState(false)
+  const supporte = !!SR_API
 
-  // Refs stables pour éviter les closures périmées
+  const [ecoute, setEcoute]                 = useState(false)
+  const [erreurPermission, setErreurPermission] = useState(null)
+
   const recoRef     = useRef(null)
   const timerRef    = useRef(null)
   const onResultRef = useRef(onResult)
@@ -38,27 +40,11 @@ export function useVoiceInput({
   useEffect(() => { onResultRef.current = onResult }, [onResult])
   useEffect(() => { onEndRef.current    = onEnd    }, [onEnd])
 
-  // ── Permission microphone au montage ──────────────────────────────────────
-  useEffect(() => {
-    if (!SR_API) return
-    if (!navigator.mediaDevices?.getUserMedia) return
-
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => {
-        stream.getTracks().forEach(t => t.stop())
-        console.log('[VOICE] Permission micro: granted')
-      })
-      .catch(err => {
-        console.log('[VOICE] Permission micro: denied', err.name)
-        setSupporte(false)
-      })
-  }, [])
-
   // ── arreter ───────────────────────────────────────────────────────────────
   const arreter = useCallback(() => {
     clearTimeout(timerRef.current)
     if (recoRef.current) {
-      recoRef.current.onend = null   // évite un double-appel de onEnd
+      recoRef.current.onend = null
       try { recoRef.current.stop() } catch { /* ignoré */ }
       recoRef.current = null
     }
@@ -66,18 +52,36 @@ export function useVoiceInput({
     onEndRef.current?.()
   }, [])
 
-  // ── demarrer ──────────────────────────────────────────────────────────────
-  const demarrer = useCallback(() => {
-    if (!supporte || recoRef.current) return   // déjà en écoute ou non supporté
+  // ── demarrer — demande permission micro AU MOMENT du clic ─────────────────
+  const demarrer = useCallback(async () => {
+    if (!supporte || recoRef.current) return
 
+    // 1. Demande permission micro (déclenche la popup Chromium)
+    if (navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream.getTracks().forEach(t => t.stop())
+        console.log('[VOICE] Permission micro: granted')
+        setErreurPermission(null)
+      } catch (err) {
+        console.log('[VOICE] Permission micro: denied', err.name)
+        setErreurPermission('Autorisez le micro dans Chromium')
+        return
+      }
+    }
+
+    // 2. Lance la reconnaissance vocale
     const reco = new SR_API()
     reco.lang            = LANG_MAP[langue] ?? 'fr-FR'
-    reco.interimResults  = false
+    reco.interimResults  = true
     reco.continuous      = false
 
     reco.onresult = (e) => {
       clearTimeout(timerRef.current)
-      const transcript = e.results[0]?.[0]?.transcript ?? ''
+      // Prend le meilleur transcript disponible (final ou interim)
+      const transcript = Array.from(e.results)
+        .map(r => r[0]?.transcript ?? '')
+        .join('')
       if (transcript.trim()) onResultRef.current?.(transcript.trim())
     }
 
@@ -92,14 +96,12 @@ export function useVoiceInput({
       clearTimeout(timerRef.current)
       recoRef.current = null
       setEcoute(false)
-      // Erreurs gérées silencieusement (pas de throw)
     }
 
     reco.start()
     recoRef.current = reco
     setEcoute(true)
 
-    // Timeout : arrêt automatique si silence
     timerRef.current = setTimeout(arreter, timeout)
   }, [supporte, langue, timeout, arreter])
 
@@ -115,5 +117,5 @@ export function useVoiceInput({
     }
   }, [])
 
-  return { supporte, ecoute, demarrer, arreter }
+  return { supporte, ecoute, erreurPermission, demarrer, arreter }
 }
