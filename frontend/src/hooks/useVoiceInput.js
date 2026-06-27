@@ -2,15 +2,16 @@
 //
 // Paramètres :
 //   langue  : 'fr' | 'en' | 'ar'  → mappé vers 'fr-FR', 'en-US', 'ar-SA'
-//   onResult(transcript) : callback appelé avec le texte reconnu
+//   onResult(transcript) : callback appelé avec le texte reconnu (résultat final)
 //   onEnd()              : callback optionnel appelé quand la reconnaissance s'arrête
 //   timeout              : délai ms avant arrêt auto si silence (défaut 15 000)
 //
 // Retourne :
-//   { supporte, ecoute, erreurPermission, demarrer, arreter }
-//   supporte        : bool (false si API absente)
-//   ecoute          : bool (true pendant l'écoute active)
-//   erreurPermission: string | null (message si micro refusé)
+//   { supporte, ecoute, erreurPermission, transcriptInterim, demarrer, arreter }
+//   supporte          : bool (false si API absente)
+//   ecoute            : bool (true pendant l'écoute active)
+//   erreurPermission  : string | null (message si micro refusé)
+//   transcriptInterim : string (texte en cours de reconnaissance, non validé)
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 
@@ -29,8 +30,9 @@ export function useVoiceInput({
 } = {}) {
   const supporte = !!SR_API
 
-  const [ecoute, setEcoute]                 = useState(false)
-  const [erreurPermission, setErreurPermission] = useState(null)
+  const [ecoute, setEcoute]                       = useState(false)
+  const [erreurPermission, setErreurPermission]   = useState(null)
+  const [transcriptInterim, setTranscriptInterim] = useState('')
 
   const recoRef     = useRef(null)
   const timerRef    = useRef(null)
@@ -49,6 +51,7 @@ export function useVoiceInput({
       recoRef.current = null
     }
     setEcoute(false)
+    setTranscriptInterim('')
     onEndRef.current?.()
   }, [])
 
@@ -56,21 +59,27 @@ export function useVoiceInput({
   const demarrer = useCallback(async () => {
     if (!supporte || recoRef.current) return
 
-    // 1. Demande permission micro (déclenche la popup Chromium)
-    if (navigator.mediaDevices?.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        stream.getTracks().forEach(t => t.stop())
-        console.log('[VOICE] Permission micro: granted')
-        setErreurPermission(null)
-      } catch (err) {
-        console.log('[VOICE] Permission micro: denied', err.name)
-        setErreurPermission('Autorisez le micro dans Chromium')
-        return
+    // 1. Vérifie si permission déjà accordée dans cette session
+    if (sessionStorage.getItem('micro_autorise') !== 'oui') {
+      if (navigator.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          stream.getTracks().forEach(t => t.stop())
+          sessionStorage.setItem('micro_autorise', 'oui')
+          console.log('[VOICE] Permission micro: granted')
+          setErreurPermission(null)
+        } catch (err) {
+          console.log('[VOICE] Permission micro: denied', err.name)
+          setErreurPermission('Autorisez le micro dans Chromium')
+          return
+        }
       }
     }
 
-    // 2. Lance la reconnaissance vocale
+    // 2. Couper le TTS si en cours (empêche le micro de capter la voix TTS)
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+
+    // 3. Lance la reconnaissance vocale
     const reco = new SR_API()
     reco.lang            = LANG_MAP[langue] ?? 'fr-FR'
     reco.interimResults  = true
@@ -78,17 +87,29 @@ export function useVoiceInput({
 
     reco.onresult = (e) => {
       clearTimeout(timerRef.current)
-      // Prend le meilleur transcript disponible (final ou interim)
-      const transcript = Array.from(e.results)
-        .map(r => r[0]?.transcript ?? '')
-        .join('')
-      if (transcript.trim()) onResultRef.current?.(transcript.trim())
+      let final = ''
+      let interim = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) final += t
+        else interim += t
+      }
+      if (final.trim()) {
+        setTranscriptInterim('')
+        onResultRef.current?.(final.trim())
+      } else if (interim) {
+        setTranscriptInterim(interim)
+      }
+      // Reset du timeout car parole détectée
+      clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(arreter, timeout)
     }
 
     reco.onend = () => {
       clearTimeout(timerRef.current)
       recoRef.current = null
       setEcoute(false)
+      setTranscriptInterim('')
       onEndRef.current?.()
     }
 
@@ -96,6 +117,7 @@ export function useVoiceInput({
       clearTimeout(timerRef.current)
       recoRef.current = null
       setEcoute(false)
+      setTranscriptInterim('')
     }
 
     reco.start()
@@ -117,5 +139,5 @@ export function useVoiceInput({
     }
   }, [])
 
-  return { supporte, ecoute, erreurPermission, demarrer, arreter }
+  return { supporte, ecoute, erreurPermission, transcriptInterim, demarrer, arreter }
 }
