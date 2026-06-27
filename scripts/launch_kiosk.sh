@@ -90,6 +90,10 @@ while true; do
         --incognito \
         --window-size=800,480 \
         --window-position=0,0 \
+        --use-fake-ui-for-media-stream=false \
+        --allow-running-insecure-content \
+        --unsafely-treat-insecure-origin-as-secure=http://localhost:5173 \
+        --auto-accept-this-tab-capture \
         --app="${URL_BORNE}" \
         2>/dev/null
 

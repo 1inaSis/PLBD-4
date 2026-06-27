@@ -4569,3 +4569,11 @@ body {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.4); }
   50%       { box-shadow: 0 0 0 8px rgba(255, 68, 68, 0); }
 }
+
+/* ── Scroll autorisé sur les interfaces non-borne ────────────────────────── */
+/* Les pages borne (.kiosk-shell) gardent overflow: hidden via leur propre règle */
+.salle-shell,
+.medecin-shell,
+.demo-shell {
+  overflow-y: auto;
+}

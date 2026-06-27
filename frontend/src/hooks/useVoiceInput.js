@@ -8,7 +8,7 @@
 //
 // Retourne :
 //   { supporte, ecoute, demarrer, arreter }
-//   supporte : bool (false si Web Speech API absente)
+//   supporte : bool (false si API absente ou permission micro refusée)
 //   ecoute   : bool (true pendant l'écoute active)
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -16,18 +16,18 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 const LANG_MAP = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
 const TIMEOUT_DEFAUT = 10_000
 
+const SR_API = typeof window !== 'undefined'
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+  : null
+
 export function useVoiceInput({
   langue   = 'fr',
   onResult,
   onEnd,
   timeout  = TIMEOUT_DEFAUT,
 } = {}) {
-  // Détection de l'API (côté client uniquement)
-  const supporte =
-    typeof window !== 'undefined' &&
-    !!(window.SpeechRecognition || window.webkitSpeechRecognition)
-
-  const [ecoute, setEcoute] = useState(false)
+  const [supporte, setSupporte] = useState(!!SR_API)
+  const [ecoute, setEcoute]     = useState(false)
 
   // Refs stables pour éviter les closures périmées
   const recoRef     = useRef(null)
@@ -37,6 +37,22 @@ export function useVoiceInput({
 
   useEffect(() => { onResultRef.current = onResult }, [onResult])
   useEffect(() => { onEndRef.current    = onEnd    }, [onEnd])
+
+  // ── Permission microphone au montage ──────────────────────────────────────
+  useEffect(() => {
+    if (!SR_API) return
+    if (!navigator.mediaDevices?.getUserMedia) return
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        stream.getTracks().forEach(t => t.stop())
+        console.log('[VOICE] Permission micro: granted')
+      })
+      .catch(err => {
+        console.log('[VOICE] Permission micro: denied', err.name)
+        setSupporte(false)
+      })
+  }, [])
 
   // ── arreter ───────────────────────────────────────────────────────────────
   const arreter = useCallback(() => {
@@ -54,8 +70,7 @@ export function useVoiceInput({
   const demarrer = useCallback(() => {
     if (!supporte || recoRef.current) return   // déjà en écoute ou non supporté
 
-    const SR   = window.SpeechRecognition || window.webkitSpeechRecognition
-    const reco = new SR()
+    const reco = new SR_API()
     reco.lang            = LANG_MAP[langue] ?? 'fr-FR'
     reco.interimResults  = false
     reco.continuous      = false
