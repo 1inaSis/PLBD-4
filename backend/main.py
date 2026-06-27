@@ -296,9 +296,12 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:3000",  # CRA / preview
-        "http://localhost:8080",  # hardware daemon
+        "http://localhost:5173",            # Vite dev (HTTP)
+        "http://localhost:3000",            # CRA / preview
+        "http://localhost:8080",            # hardware daemon
+        "https://localhost:5173",           # Vite preview HTTPS (Pi)
+        "https://172.22.6.62:5173",         # iPad → Pi HTTPS
+        "https://TOUAREG.local:5173",       # mDNS
     ],
     allow_credentials=True,
     allow_methods=["*"],

@@ -12,7 +12,8 @@ export function creerWebSocket(role, onMessage, medecin_id = '') {
   const params = new URLSearchParams({ role })
   if (medecin_id) params.set('medecin_id', medecin_id)
 
-  const ws = new WebSocket(`/ws?${params}`)
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const ws = new WebSocket(`${protocol}//${window.location.host}/ws?${params}`)
 
   ws.onmessage = (e) => {
     try {

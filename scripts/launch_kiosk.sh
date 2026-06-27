@@ -14,7 +14,7 @@
 
 set -e
 
-URL_BORNE="http://localhost:5173"
+URL_BORNE="https://localhost:5173"
 TIMEOUT_FRONTEND=120   # secondes max à attendre avant que le frontend réponde
 DELAI_CRASH=5          # secondes avant relance si Chromium plante
 
@@ -51,7 +51,7 @@ done
 # ── 4. Attendre que le frontend soit disponible ───────────────────────────────
 echo "[KIOSK] Attente du frontend sur ${URL_BORNE}..."
 SECONDES=0
-until curl -s --max-time 2 "${URL_BORNE}" > /dev/null 2>&1; do
+until curl -sk --max-time 2 "${URL_BORNE}" > /dev/null 2>&1; do
     sleep 2
     SECONDES=$((SECONDES + 2))
     if [ "${SECONDES}" -ge "${TIMEOUT_FRONTEND}" ]; then
@@ -77,7 +77,7 @@ echo "[KIOSK] Demarrage de la boucle Chromium (auto-restart en cas de crash)"
 # ── 5b. Pré-autoriser le microphone dans le profil Chromium ──────────────────
 mkdir -p "${HOME}/.config/chromium/Default"
 cat > "${HOME}/.config/chromium/Default/Preferences" << 'CHROMEPREF'
-{"profile":{"content_settings":{"exceptions":{"media_stream_mic":{"http://localhost:5173,*":{"last_modified":"0","setting":1}}}}}}
+{"profile":{"content_settings":{"exceptions":{"media_stream_mic":{"https://localhost:5173,*":{"last_modified":"0","setting":1},"http://localhost:5173,*":{"last_modified":"0","setting":1}}}}}}
 CHROMEPREF
 
 # ── 5c. Donner accès au périphérique audio système ────────────────────────────
@@ -101,10 +101,10 @@ while true; do
         --window-size=800,480 \
         --window-position=0,0 \
         --allow-insecure-localhost \
-        --unsafely-treat-insecure-origin-as-secure=http://localhost:5173 \
+        --ignore-certificate-errors \
+        --ignore-certificate-errors-spki-list \
         --use-fake-ui-for-media-stream=false \
         --enable-features=MediaStreamTrack \
-        --disable-features=MediaStreamInsecure \
         --app="${URL_BORNE}" \
         2>/dev/null
 
