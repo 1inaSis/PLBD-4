@@ -28,6 +28,7 @@ import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import BoutonAudio from '../components/BoutonAudio'
+import ClavierNumerique from '../components/ClavierNumerique'
 import '../styles/kiosk.css'
 
 const PRIORITE_COULEUR = { rouge: 5, orange: 4, jaune: 3, vert: 2, gris: 1 }
@@ -695,6 +696,7 @@ function SaisieKF65R({ instruction, onValider, t }) {
   const [sys, setSys] = useState('')
   const [dia, setDia] = useState('')
   const [pul, setPul] = useState('')
+  const [focusChamp, setFocusChamp] = useState(null) // 'sys' | 'dia' | 'pul' | null
 
   const sysN = Number(sys)
   const diaN = Number(dia)
@@ -725,7 +727,9 @@ function SaisieKF65R({ instruction, onValider, t }) {
             value={sys}
             onChange={e => setSys(e.target.value)}
             min={70} max={200}
-            inputMode="numeric"
+            inputMode="none"
+            onFocus={() => setFocusChamp('sys')}
+            onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
           />
           {couleurSys && (
             <div className={`bio-badge bio-badge--${couleurSys}`} style={{ alignSelf: 'center', marginTop: 4 }}>
@@ -747,7 +751,9 @@ function SaisieKF65R({ instruction, onValider, t }) {
             value={dia}
             onChange={e => setDia(e.target.value)}
             min={40} max={130}
-            inputMode="numeric"
+            inputMode="none"
+            onFocus={() => setFocusChamp('dia')}
+            onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
           />
           {couleurDia && (
             <div className={`bio-badge bio-badge--${couleurDia}`} style={{ alignSelf: 'center', marginTop: 4 }}>
@@ -769,10 +775,21 @@ function SaisieKF65R({ instruction, onValider, t }) {
             value={pul}
             onChange={e => setPul(e.target.value)}
             min={40} max={180}
-            inputMode="numeric"
+            inputMode="none"
+            onFocus={() => setFocusChamp('pul')}
+            onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
           />
         </div>
       </div>
+
+      {focusChamp && (
+        <ClavierNumerique
+          value={focusChamp === 'sys' ? sys : focusChamp === 'dia' ? dia : pul}
+          onChange={focusChamp === 'sys' ? setSys : focusChamp === 'dia' ? setDia : setPul}
+          onConfirm={() => setFocusChamp(null)}
+          maxLength={3}
+        />
+      )}
 
       <button
         className="kiosk-btn kiosk-btn--primary"

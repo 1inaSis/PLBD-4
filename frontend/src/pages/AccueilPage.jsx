@@ -13,6 +13,8 @@ import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import { useFullscreen } from '../hooks/useFullscreen'
+import ClavierNumerique from '../components/ClavierNumerique'
+import ClavierAlpha from '../components/ClavierAlpha'
 import '../styles/kiosk.css'
 
 const VUE = {
@@ -48,6 +50,7 @@ export default function AccueilPage() {
   const [formulaire, setFormulaire] = useState({ nom: '', prenom: '', date_naissance: '' })
   const [erreurForm, setErreurForm] = useState(null)
   const [enSoumission, setEnSoumission] = useState(false)
+  const [focusChamp, setFocusChamp] = useState(null) // 'nom' | 'prenom' | 'date' | null
 
   // Auto-navigation après message de bienvenue (2 s)
   useEffect(() => {
@@ -335,6 +338,9 @@ export default function AccueilPage() {
                   value={formulaire.nom}
                   onChange={changerChamp}
                   autoComplete="family-name"
+                  inputMode="none"
+                  onFocus={() => setFocusChamp('nom')}
+                  onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
                 />
               </div>
 
@@ -349,6 +355,9 @@ export default function AccueilPage() {
                   value={formulaire.prenom}
                   onChange={changerChamp}
                   autoComplete="given-name"
+                  inputMode="none"
+                  onFocus={() => setFocusChamp('prenom')}
+                  onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
                 />
               </div>
 
@@ -362,12 +371,35 @@ export default function AccueilPage() {
                   placeholder="JJ/MM/AAAA"
                   value={formulaire.date_naissance}
                   onChange={changerDate}
-                  inputMode="numeric"
+                  inputMode="none"
                   maxLength={10}
+                  onFocus={() => setFocusChamp('date')}
+                  onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
                 />
                 <span className="cin-hint">{t('format_date_hint')}</span>
               </div>
             </div>
+
+            {focusChamp === 'date' && (
+              <ClavierNumerique
+                value={formulaire.date_naissance}
+                onChange={(v) => setFormulaire((p) => ({ ...p, date_naissance: v }))}
+                onConfirm={() => setFocusChamp(null)}
+                modeDate
+              />
+            )}
+            {(focusChamp === 'nom' || focusChamp === 'prenom') && (
+              <ClavierAlpha
+                value={focusChamp === 'nom' ? formulaire.nom : formulaire.prenom}
+                onChange={
+                  focusChamp === 'nom'
+                    ? (v) => setFormulaire((p) => ({ ...p, nom: v }))
+                    : (v) => setFormulaire((p) => ({ ...p, prenom: v }))
+                }
+                onConfirm={() => setFocusChamp(null)}
+                langue={langue}
+              />
+            )}
 
             <div className="kiosk-actions">
               <button

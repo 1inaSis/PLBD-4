@@ -16,6 +16,7 @@ import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import BoutonAudio from '../components/BoutonAudio'
+import ClavierAlpha from '../components/ClavierAlpha'
 import '../styles/kiosk.css'
 
 export default function QuestionnairePage() {
@@ -54,6 +55,7 @@ export default function QuestionnairePage() {
   const [erreur, setErreur]               = useState(null)
   const [urgenceDetectee, setUrgenceDetectee] = useState(false)
   const [sortie, setSortie]               = useState(false)
+  const [clavierActif, setClavierActif]   = useState(false)
 
   // ── Reconnaissance vocale ─────────────────────────────────────────────────
   const [ecouteVocale, setEcouteVocale]   = useState(false)
@@ -200,6 +202,9 @@ export default function QuestionnairePage() {
                   onChange={e => setTexteSymptome(e.target.value)}
                   rows={4}
                   maxLength={500}
+                  inputMode="none"
+                  onFocus={() => setClavierActif(true)}
+                  onBlur={() => setTimeout(() => setClavierActif(false), 150)}
                 />
                 {supporteVocal && (
                   <button
@@ -215,6 +220,15 @@ export default function QuestionnairePage() {
               </div>
               <span className="symptome-compteur">{texteSymptome.length} / 500</span>
             </div>
+
+            {clavierActif && (
+              <ClavierAlpha
+                value={texteSymptome}
+                onChange={setTexteSymptome}
+                onConfirm={() => setClavierActif(false)}
+                langue={langue}
+              />
+            )}
 
             {/* Alerte urgence détectée par le NLP */}
             {urgenceDetectee && (
