@@ -23,12 +23,18 @@ const LAYOUTS = {
 }
 
 const W = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 999,
+    background: 'transparent',
+  },
   wrapper: {
     position: 'fixed',
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 9999,
+    zIndex: 1000,
     background: '#fff',
     borderRadius: '20px 20px 0 0',
     boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
@@ -112,25 +118,26 @@ export default function ClavierAlpha({
   value = '',
   onChange,
   onConfirm,
+  onFermer,
   langue = 'fr',
 }) {
   const [majuscule, setMajuscule] = useState(false)
   const layout = LAYOUTS[langue] ?? LAYOUTS.fr
 
   const gererTouche = (touche) => {
-    if (touche === '✓')     { onConfirm?.(); return }
-    if (touche === '←')     { onChange(value.slice(0, -1)); return }
+    if (touche === '✓')      { onConfirm?.(); onFermer?.(); return }
+    if (touche === '←')      { onChange(value.slice(0, -1)); return }
     if (touche === 'ESPACE') { onChange(value + ' '); return }
-    if (touche === 'SHIFT') { setMajuscule((m) => !m); return }
-    if (touche === ',.')    { onChange(value + ','); return }
+    if (touche === 'SHIFT')  { setMajuscule((m) => !m); return }
+    if (touche === ',.')     { onChange(value + ','); return }
     onChange(value + (majuscule ? touche.toUpperCase() : touche))
   }
 
   const getStyle = (touche) => {
-    if (touche === '✓')     return W.confirm
-    if (touche === '←')     return W.back
+    if (touche === '✓')      return W.confirm
+    if (touche === '←')      return W.back
     if (touche === 'ESPACE') return W.espace
-    if (touche === 'SHIFT') return majuscule
+    if (touche === 'SHIFT')  return majuscule
       ? { ...W.fonction, background: '#bfdbfe', color: '#1d4ed8' }
       : W.fonction
     if (touche === ',.') return W.fonction
@@ -145,32 +152,37 @@ export default function ClavierAlpha({
     return touche
   }
 
-  const clavier = (
-    <div
-      style={W.wrapper}
-      dir={langue === 'ar' ? 'rtl' : 'ltr'}
-      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
-      onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
-    >
-      {layout.map((ligne, iLigne) => (
-        <div key={iLigne} style={W.ligne}>
-          {ligne.map((touche, iTouche) => (
-            <button
-              key={iTouche}
-              style={getStyle(touche)}
-              onPointerDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                gererTouche(touche)
-              }}
-            >
-              {getLabel(touche)}
-            </button>
-          ))}
-        </div>
-      ))}
-    </div>
+  const portail = (
+    <>
+      {/* Overlay transparent — clic extérieur ferme le clavier */}
+      <div style={W.overlay} onPointerDown={() => onFermer?.()} />
+
+      <div
+        style={W.wrapper}
+        dir={langue === 'ar' ? 'rtl' : 'ltr'}
+        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+      >
+        {layout.map((ligne, iLigne) => (
+          <div key={iLigne} style={W.ligne}>
+            {ligne.map((touche, iTouche) => (
+              <button
+                key={iTouche}
+                style={getStyle(touche)}
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  gererTouche(touche)
+                }}
+              >
+                {getLabel(touche)}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
   )
 
-  return ReactDOM.createPortal(clavier, document.body)
+  return ReactDOM.createPortal(portail, document.body)
 }

@@ -340,7 +340,7 @@ export default function AccueilPage() {
                   autoComplete="family-name"
                   inputMode="none"
                   onFocus={() => setFocusChamp('nom')}
-                  onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
+                  onClick={() => setFocusChamp('nom')}
                 />
               </div>
 
@@ -357,7 +357,7 @@ export default function AccueilPage() {
                   autoComplete="given-name"
                   inputMode="none"
                   onFocus={() => setFocusChamp('prenom')}
-                  onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
+                  onClick={() => setFocusChamp('prenom')}
                 />
               </div>
 
@@ -374,7 +374,7 @@ export default function AccueilPage() {
                   inputMode="none"
                   maxLength={10}
                   onFocus={() => setFocusChamp('date')}
-                  onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
+                  onClick={() => setFocusChamp('date')}
                 />
                 <span className="cin-hint">{t('format_date_hint')}</span>
               </div>
@@ -385,6 +385,7 @@ export default function AccueilPage() {
                 value={formulaire.date_naissance}
                 onChange={(v) => setFormulaire((p) => ({ ...p, date_naissance: v }))}
                 onConfirm={() => setFocusChamp(null)}
+                onFermer={() => setFocusChamp(null)}
                 modeDate
               />
             )}
@@ -397,6 +398,7 @@ export default function AccueilPage() {
                     : (v) => setFormulaire((p) => ({ ...p, prenom: v }))
                 }
                 onConfirm={() => setFocusChamp(null)}
+                onFermer={() => setFocusChamp(null)}
                 langue={langue}
               />
             )}

@@ -204,7 +204,7 @@ export default function QuestionnairePage() {
                   maxLength={500}
                   inputMode="none"
                   onFocus={() => setClavierActif(true)}
-                  onBlur={() => setTimeout(() => setClavierActif(false), 150)}
+                  onClick={() => setClavierActif(true)}
                 />
                 {supporteVocal && (
                   <button
@@ -226,6 +226,7 @@ export default function QuestionnairePage() {
                 value={texteSymptome}
                 onChange={setTexteSymptome}
                 onConfirm={() => setClavierActif(false)}
+                onFermer={() => setClavierActif(false)}
                 langue={langue}
               />
             )}

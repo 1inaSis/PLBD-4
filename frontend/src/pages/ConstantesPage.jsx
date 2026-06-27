@@ -729,7 +729,7 @@ function SaisieKF65R({ instruction, onValider, t }) {
             min={70} max={200}
             inputMode="none"
             onFocus={() => setFocusChamp('sys')}
-            onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
+            onClick={() => setFocusChamp('sys')}
           />
           {couleurSys && (
             <div className={`bio-badge bio-badge--${couleurSys}`} style={{ alignSelf: 'center', marginTop: 4 }}>
@@ -753,7 +753,7 @@ function SaisieKF65R({ instruction, onValider, t }) {
             min={40} max={130}
             inputMode="none"
             onFocus={() => setFocusChamp('dia')}
-            onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
+            onClick={() => setFocusChamp('dia')}
           />
           {couleurDia && (
             <div className={`bio-badge bio-badge--${couleurDia}`} style={{ alignSelf: 'center', marginTop: 4 }}>
@@ -777,7 +777,7 @@ function SaisieKF65R({ instruction, onValider, t }) {
             min={40} max={180}
             inputMode="none"
             onFocus={() => setFocusChamp('pul')}
-            onBlur={() => setTimeout(() => setFocusChamp(null), 150)}
+            onClick={() => setFocusChamp('pul')}
           />
         </div>
       </div>
@@ -787,6 +787,7 @@ function SaisieKF65R({ instruction, onValider, t }) {
           value={focusChamp === 'sys' ? sys : focusChamp === 'dia' ? dia : pul}
           onChange={focusChamp === 'sys' ? setSys : focusChamp === 'dia' ? setDia : setPul}
           onConfirm={() => setFocusChamp(null)}
+          onFermer={() => setFocusChamp(null)}
           maxLength={3}
         />
       )}

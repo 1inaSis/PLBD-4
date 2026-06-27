@@ -4,12 +4,18 @@ import ReactDOM from 'react-dom'
 const TOUCHES = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '←', '0', '✓']
 
 const W = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 999,
+    background: 'transparent',
+  },
   wrapper: {
     position: 'fixed',
     bottom: 0,
     left: 0,
     width: '100vw',
-    zIndex: 9999,
+    zIndex: 1000,
     background: '#fff',
     borderRadius: '20px 20px 0 0',
     boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
@@ -74,6 +80,7 @@ export default function ClavierNumerique({
   value = '',
   onChange,
   onConfirm,
+  onFermer,
   modeDate = false,
   maxLength = 10,
 }) {
@@ -104,34 +111,39 @@ export default function ClavierNumerique({
     }
   }
 
-  const clavier = (
-    <div
-      style={W.wrapper}
-      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
-      onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
-    >
-      <div style={W.grid}>
-        {TOUCHES.map((touche, i) => {
-          const style = touche === '✓' ? W.confirm : touche === '←' ? W.back : W.base
-          return (
-            <button
-              key={i}
-              style={style}
-              onPointerDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                if (touche === '✓') onConfirm?.()
-                else if (touche === '←') supprimerDernier()
-                else insererChiffre(touche)
-              }}
-            >
-              {touche}
-            </button>
-          )
-        })}
+  const portail = (
+    <>
+      {/* Overlay transparent — clic extérieur ferme le clavier */}
+      <div style={W.overlay} onPointerDown={() => onFermer?.()} />
+
+      <div
+        style={W.wrapper}
+        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+      >
+        <div style={W.grid}>
+          {TOUCHES.map((touche, i) => {
+            const style = touche === '✓' ? W.confirm : touche === '←' ? W.back : W.base
+            return (
+              <button
+                key={i}
+                style={style}
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (touche === '✓') { onConfirm?.(); onFermer?.() }
+                  else if (touche === '←') supprimerDernier()
+                  else insererChiffre(touche)
+                }}
+              >
+                {touche}
+              </button>
+            )
+          })}
+        </div>
       </div>
-    </div>
+    </>
   )
 
-  return ReactDOM.createPortal(clavier, document.body)
+  return ReactDOM.createPortal(portail, document.body)
 }
