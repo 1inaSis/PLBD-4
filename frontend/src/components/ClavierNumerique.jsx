@@ -1,59 +1,74 @@
 import ReactDOM from 'react-dom'
 
-const STYLE_WRAPPER = {
-  position: 'fixed',
-  bottom: 0,
-  left: '50%',
-  transform: 'translateX(-50%)',
-  zIndex: 9999,
-  background: '#fff',
-  borderRadius: '20px 20px 0 0',
-  boxShadow: '0 -8px 40px rgba(0,0,0,0.35)',
-  padding: '16px',
-  width: '280px',
-}
-
-const STYLE_GRID = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: '10px',
-}
-
-const STYLE_BTN_BASE = {
-  height: '64px',
-  fontSize: '1.5rem',
-  fontWeight: 700,
-  background: '#f1f5f9',
-  border: '1px solid #cbd5e1',
-  borderRadius: '12px',
-  cursor: 'pointer',
-  color: '#0f172a',
-}
-
-const STYLE_BTN_CONFIRM = {
-  height: '64px',
-  fontSize: '1.5rem',
-  fontWeight: 700,
-  background: '#10b981',
-  border: 'none',
-  borderRadius: '12px',
-  cursor: 'pointer',
-  color: '#fff',
-}
-
-const STYLE_BTN_BACK = {
-  height: '64px',
-  fontSize: '1.5rem',
-  fontWeight: 700,
-  background: '#f87171',
-  border: 'none',
-  borderRadius: '12px',
-  cursor: 'pointer',
-  color: '#fff',
-}
-
 // Layout : 7 8 9 / 4 5 6 / 1 2 3 / ← 0 ✓
 const TOUCHES = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '←', '0', '✓']
+
+const W = {
+  wrapper: {
+    position: 'fixed',
+    bottom: 0,
+    left: 0,
+    width: '100vw',
+    zIndex: 9999,
+    background: '#fff',
+    borderRadius: '20px 20px 0 0',
+    boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
+    padding: '16px 12px 20px',
+    userSelect: 'none',
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '8px',
+    maxWidth: '340px',
+    margin: '0 auto',
+  },
+  base: {
+    height: '64px',
+    minWidth: '64px',
+    fontSize: '24px',
+    fontWeight: 700,
+    background: '#f5f5f5',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#0f172a',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  confirm: {
+    height: '64px',
+    minWidth: '64px',
+    fontSize: '24px',
+    fontWeight: 700,
+    background: '#10b981',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  back: {
+    height: '64px',
+    minWidth: '64px',
+    fontSize: '24px',
+    fontWeight: 700,
+    background: '#ef4444',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    WebkitTapHighlightColor: 'transparent',
+  },
+}
 
 export default function ClavierNumerique({
   value = '',
@@ -90,20 +105,22 @@ export default function ClavierNumerique({
   }
 
   const clavier = (
-    <div style={STYLE_WRAPPER}>
-      <div style={STYLE_GRID}>
+    <div
+      style={W.wrapper}
+      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+      onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+    >
+      <div style={W.grid}>
         {TOUCHES.map((touche, i) => {
-          let style = STYLE_BTN_BASE
-          if (touche === '✓') style = STYLE_BTN_CONFIRM
-          if (touche === '←') style = STYLE_BTN_BACK
-
+          const style = touche === '✓' ? W.confirm : touche === '←' ? W.back : W.base
           return (
             <button
               key={i}
               style={style}
               onPointerDown={(e) => {
                 e.preventDefault()
-                if (touche === '✓') onConfirm()
+                e.stopPropagation()
+                if (touche === '✓') onConfirm?.()
                 else if (touche === '←') supprimerDernier()
                 else insererChiffre(touche)
               }}

@@ -22,83 +22,90 @@ const LAYOUTS = {
   ],
 }
 
-const STYLE_WRAPPER = {
-  position: 'fixed',
-  bottom: 0,
-  left: 0,
-  right: 0,
-  zIndex: 9999,
-  background: '#1e293b',
-  borderRadius: '20px 20px 0 0',
-  boxShadow: '0 -8px 40px rgba(0,0,0,0.5)',
-  padding: '12px 8px',
-}
-
-const STYLE_LIGNE = {
-  display: 'flex',
-  justifyContent: 'center',
-  gap: '5px',
-  marginBottom: '5px',
-}
-
-const STYLE_BTN_BASE = {
-  minHeight: '48px',
-  minWidth: '36px',
-  fontSize: '1.1rem',
-  background: '#334155',
-  border: 'none',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  color: '#f8fafc',
-  padding: '4px',
-}
-
-const STYLE_BTN_FONCTION = {
-  minHeight: '48px',
-  minWidth: '36px',
-  fontSize: '1.1rem',
-  background: '#475569',
-  border: 'none',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  color: '#f8fafc',
-  padding: '4px',
-}
-
-const STYLE_BTN_CONFIRM = {
-  minHeight: '48px',
-  minWidth: '36px',
-  fontSize: '1.1rem',
-  background: '#10b981',
-  border: 'none',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  color: '#f8fafc',
-  padding: '4px',
-}
-
-const STYLE_BTN_BACK = {
-  minHeight: '48px',
-  minWidth: '36px',
-  fontSize: '1.1rem',
-  background: '#f87171',
-  border: 'none',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  color: '#f8fafc',
-  padding: '4px',
-}
-
-const STYLE_BTN_ESPACE = {
-  minHeight: '48px',
-  minWidth: '120px',
-  fontSize: '1.1rem',
-  background: '#475569',
-  border: 'none',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  color: '#f8fafc',
-  padding: '4px',
+const W = {
+  wrapper: {
+    position: 'fixed',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    background: '#fff',
+    borderRadius: '20px 20px 0 0',
+    boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
+    padding: '12px 6px 18px',
+    userSelect: 'none',
+  },
+  ligne: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '5px',
+    marginBottom: '5px',
+  },
+  base: {
+    minHeight: '52px',
+    minWidth: '32px',
+    fontSize: '18px',
+    fontWeight: 600,
+    background: '#f5f5f5',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#0f172a',
+    padding: '4px 6px',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  fonction: {
+    minHeight: '52px',
+    minWidth: '44px',
+    fontSize: '16px',
+    fontWeight: 600,
+    background: '#e2e8f0',
+    border: '1px solid #cbd5e1',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#0f172a',
+    padding: '4px 8px',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  confirm: {
+    minHeight: '52px',
+    minWidth: '64px',
+    fontSize: '18px',
+    fontWeight: 700,
+    background: '#10b981',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#fff',
+    padding: '4px 12px',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  back: {
+    minHeight: '52px',
+    minWidth: '44px',
+    fontSize: '18px',
+    fontWeight: 700,
+    background: '#ef4444',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#fff',
+    padding: '4px 8px',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  espace: {
+    minHeight: '52px',
+    minWidth: '140px',
+    fontSize: '16px',
+    fontWeight: 600,
+    background: '#e2e8f0',
+    border: '1px solid #cbd5e1',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#0f172a',
+    padding: '4px 12px',
+    WebkitTapHighlightColor: 'transparent',
+  },
 }
 
 export default function ClavierAlpha({
@@ -108,63 +115,52 @@ export default function ClavierAlpha({
   langue = 'fr',
 }) {
   const [majuscule, setMajuscule] = useState(false)
-
   const layout = LAYOUTS[langue] ?? LAYOUTS.fr
 
   const gererTouche = (touche) => {
-    if (touche === '✓') {
-      onConfirm()
-      return
-    }
-    if (touche === '←') {
-      onChange(value.slice(0, -1))
-      return
-    }
-    if (touche === 'ESPACE') {
-      onChange(value + ' ')
-      return
-    }
-    if (touche === 'SHIFT') {
-      setMajuscule((m) => !m)
-      return
-    }
-    if (touche === ',.') {
-      onChange(value + ',')
-      return
-    }
-    const char = majuscule ? touche.toUpperCase() : touche
-    onChange(value + char)
+    if (touche === '✓')     { onConfirm?.(); return }
+    if (touche === '←')     { onChange(value.slice(0, -1)); return }
+    if (touche === 'ESPACE') { onChange(value + ' '); return }
+    if (touche === 'SHIFT') { setMajuscule((m) => !m); return }
+    if (touche === ',.')    { onChange(value + ','); return }
+    onChange(value + (majuscule ? touche.toUpperCase() : touche))
   }
 
   const getStyle = (touche) => {
-    if (touche === '✓') return STYLE_BTN_CONFIRM
-    if (touche === '←') return STYLE_BTN_BACK
-    if (touche === 'ESPACE') return STYLE_BTN_ESPACE
+    if (touche === '✓')     return W.confirm
+    if (touche === '←')     return W.back
+    if (touche === 'ESPACE') return W.espace
     if (touche === 'SHIFT') return majuscule
-      ? { ...STYLE_BTN_FONCTION, background: '#64748b', color: '#38bdf8' }
-      : STYLE_BTN_FONCTION
-    if (touche === ',.') return STYLE_BTN_FONCTION
-    return STYLE_BTN_BASE
+      ? { ...W.fonction, background: '#bfdbfe', color: '#1d4ed8' }
+      : W.fonction
+    if (touche === ',.') return W.fonction
+    return W.base
   }
 
   const getLabel = (touche) => {
-    if (touche === 'SHIFT') return '⇧'
+    if (touche === 'SHIFT')  return '⇧'
     if (touche === 'ESPACE') return '⎵'
-    if (touche === ',.') return ',.'
+    if (touche === ',.')     return ',.'
     if (majuscule && touche.length === 1) return touche.toUpperCase()
     return touche
   }
 
   const clavier = (
-    <div style={STYLE_WRAPPER} dir={langue === 'ar' ? 'rtl' : 'ltr'}>
+    <div
+      style={W.wrapper}
+      dir={langue === 'ar' ? 'rtl' : 'ltr'}
+      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+      onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+    >
       {layout.map((ligne, iLigne) => (
-        <div key={iLigne} style={STYLE_LIGNE}>
+        <div key={iLigne} style={W.ligne}>
           {ligne.map((touche, iTouche) => (
             <button
               key={iTouche}
               style={getStyle(touche)}
               onPointerDown={(e) => {
                 e.preventDefault()
+                e.stopPropagation()
                 gererTouche(touche)
               }}
             >
