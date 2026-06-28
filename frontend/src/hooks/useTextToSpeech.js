@@ -47,7 +47,8 @@ function choisirVoix(voix, langue) {
 
 export function useTextToSpeech() {
   const [estEnTrainDeParler, setEstEnTrainDeParler] = useState(false)
-  const timerRef    = useRef(null)
+  const timerRef      = useRef(null)
+  const dejaParleRef  = useRef('')   // anti-double-lecture : stocke le dernier texte lu
   const { audioActif } = usePatient()
   const audioActifRef = useRef(audioActif)
   useEffect(() => { audioActifRef.current = audioActif }, [audioActif])
@@ -60,9 +61,12 @@ export function useTextToSpeech() {
     console.log('[TTS] audioActif:', audioActifRef.current)
     if (!audioActifRef.current) return
     if (!SUPPORTE || !texte) return
+    // Anti-double-lecture : ignorer si le même texte est déjà en cours de lecture
+    if (dejaParleRef.current === texte && estEnTrainDeParler) return
 
     window.speechSynthesis.cancel()
     clearTimeout(timerRef.current)
+    dejaParleRef.current = texte
 
     timerRef.current = setTimeout(async () => {
       const voix = await attendreVoix()
@@ -89,6 +93,7 @@ export function useTextToSpeech() {
     if (!SUPPORTE) return
     clearTimeout(timerRef.current)
     window.speechSynthesis.cancel()
+    dejaParleRef.current = ''
     setEstEnTrainDeParler(false)
   }, [])
 
