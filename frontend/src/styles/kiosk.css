@@ -4635,3 +4635,27 @@ body {
   margin-left: auto;
 }
 .zsm-micro-indispo { font-size: 0.8rem; color: #f87171; }
+
+/* Zone "prête à modifier" — pulse vert 1s après transcription */
+.zsm-zone--pret {
+  border-color: rgba(16,185,129,0.7) !important;
+  animation: zsm-border-pulse 1s ease forwards;
+}
+@keyframes zsm-border-pulse {
+  0%   { border-color: rgba(16,185,129,0.9); box-shadow: 0 0 0 3px rgba(16,185,129,0.25); }
+  60%  { border-color: rgba(16,185,129,0.6); box-shadow: 0 0 0 6px rgba(16,185,129,0.08); }
+  100% { border-color: rgba(255,255,255,0.15); box-shadow: none; }
+}
+
+/* Hint discret "vous pouvez modifier" */
+.zsm-modifiable-hint {
+  font-size: 0.82rem; color: #10b981;
+  animation: zsm-fade-out 2s ease forwards;
+  align-self: flex-start;
+}
+@keyframes zsm-fade-out {
+  0%   { opacity: 0; transform: translateY(-3px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}

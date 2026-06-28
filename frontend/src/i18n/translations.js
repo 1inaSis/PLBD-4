@@ -106,6 +106,7 @@ export const TRANSLATIONS = {
     saisie_effacer:     'Effacer',
     saisie_ecoute:      "J'écoute…",
     saisie_placeholder: 'Décrivez vos symptômes ou répondez à la question…',
+    saisie_modifiable:  'Vous pouvez modifier le texte',
     // Tension manuelle + FC simulée
     const_bp_guide:   'Mesurez avec le tensiomètre manuel et saisissez les valeurs',
     const_bp_valider: 'Valider la tension',
@@ -281,6 +282,7 @@ export const TRANSLATIONS = {
     saisie_effacer:     'Clear',
     saisie_ecoute:      'Listening…',
     saisie_placeholder: 'Describe your symptoms or answer the question…',
+    saisie_modifiable:  'You can edit the text',
     const_bp_guide:   'Measure with the manual blood pressure cuff and enter the values',
     const_bp_valider: 'Confirm blood pressure',
     const_fc_sim:     'Heart rate recorded',
@@ -438,6 +440,7 @@ export const TRANSLATIONS = {
     saisie_effacer:     'مسح',
     saisie_ecoute:      'أستمع…',
     saisie_placeholder: 'صف أعراضك أو أجب على السؤال…',
+    saisie_modifiable:  'يمكنك تعديل النص',
     const_bp_guide:   'قس بجهاز ضغط الدم اليدوي وأدخل القيم',
     const_bp_valider: 'تأكيد ضغط الدم',
     const_fc_sim:     'تم تسجيل معدل ضربات القلب',

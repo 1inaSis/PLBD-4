@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import { useTranslation } from '../hooks/useTranslation'
 import ClavierAlpha from './ClavierAlpha'
@@ -11,13 +11,25 @@ export default function ZoneSaisieMixte({
   rows        = 5,
 }) {
   const { t } = useTranslation()
-  const [clavierOuvert, setClavierOuvert] = useState(false)
+  const [clavierOuvert, setClavierOuvert]     = useState(false)
+  const [texteModifiable, setTexteModifiable] = useState(false)
+  const timerRef = useRef(null)
+
+  // Déclenche le hint "modifiable" pendant 2s après une transcription finale
+  const signalerModifiable = useCallback(() => {
+    setTexteModifiable(true)
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setTexteModifiable(false), 2000)
+  }, [])
+
+  useEffect(() => () => clearTimeout(timerRef.current), [])
 
   const { supporte, ecoute, erreurPermission, transcriptInterim, demarrer, arreter } =
     useVoiceInput({
       langue,
       onResult: (transcript) => {
         onChange((value ? value.trimEnd() + ' ' : '') + transcript)
+        signalerModifiable()
       },
     })
 
@@ -31,6 +43,12 @@ export default function ZoneSaisieMixte({
     setClavierOuvert(true)
   }, [ecoute, arreter])
 
+  // Classe de la zone : pulse vert 1s après transcription
+  const classeZone = [
+    'zsm-zone',
+    texteModifiable && !ecoute ? 'zsm-zone--pret' : '',
+  ].filter(Boolean).join(' ')
+
   return (
     <div className="zsm-wrapper">
       {/* Badge écoute en cours */}
@@ -40,9 +58,16 @@ export default function ZoneSaisieMixte({
         </div>
       )}
 
+      {/* Hint discret "vous pouvez modifier" — 2s après transcription */}
+      {texteModifiable && !ecoute && (
+        <div className="zsm-modifiable-hint">
+          ✓ {t('saisie_modifiable')}
+        </div>
+      )}
+
       {/* Zone d'affichage cliquable */}
       <div
-        className="zsm-zone"
+        className={classeZone}
         role="textbox"
         aria-multiline="true"
         onClick={ouvrir}
