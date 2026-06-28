@@ -61,7 +61,7 @@ const ETAPES = [
     typeMesure:     'spo2',
     simulerLocal:   true,
     simulerValeurs: () => ({
-      spo2: Math.floor(Math.random() * 4) + 96,
+      spo2: Math.floor(Math.random() * 10) + 90,
     }),
     label:          'const_spo2_label',
     instruction:    'guide3_spo2',
