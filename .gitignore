@@ -38,3 +38,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# -- Certificats HTTPS (auto-signes, locaux au Pi)
+certs/
