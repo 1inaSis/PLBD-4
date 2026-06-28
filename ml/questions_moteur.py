@@ -186,25 +186,45 @@ def generer_question_suivante(
     if not api_key:
         return {"continuer": False}
 
-    _LANGUE_INSTRUCTIONS = {
-        'ar': 'Pose la question en arabe (العربية). اطرح السؤال باللغة العربية الفصحى فقط. يجب أن تكون الأسئلة وجميع خيارات الإجابة باللغة العربية حصراً.',
-        'en': 'Pose la question en anglais (English). Ask the question in English only. Questions and all answer choices must be in English exclusively.',
-        'fr': 'Pose la question en français. Les questions et tous les choix de réponses doivent être en français.',
-    }
-    langue_instruction = _LANGUE_INSTRUCTIONS.get(langue, _LANGUE_INSTRUCTIONS['fr'])
-
-    prompt_system = (
-        f"⚠️ LANGUE OBLIGATOIRE : {langue_instruction} "
-        "Tu dois ABSOLUMENT respecter cette langue pour la question et les choix de réponse. "
-        "Tu es un infirmier d'accueil urgentiste (IAO) expert en triage ESI. "
-        "Tu poses des questions médicales CIBLÉES une par une, en t'adaptant aux réponses précédentes. "
-        "Chaque question doit apporter de nouvelles informations pour affiner le score ESI. "
-        "Tu évites de répéter des informations déjà connues. "
-        "RÈGLE DE DIVERSITÉ DES TYPES sur 5 questions : max 2 'oui_non', max 1 'choix', au moins 2 'texte_libre'. "
-        "Les questions 'texte_libre' permettent d'obtenir des informations qualitatives précieuses : "
-        "durée des symptômes, intensité de la douleur (sur 10), description précise, contexte de survenue, "
-        "médicaments pris, antécédents pertinents. Elles sont particulièrement utiles pour affiner le triage."
-    )
+    if langue == 'ar':
+        prompt_system = (
+            "Tu es un médecin urgentiste. Tu poses des questions médicales en ARABE UNIQUEMENT. "
+            "RÈGLE ABSOLUE : Toutes tes questions doivent être EXCLUSIVEMENT en arabe. "
+            "Aucun mot français ou anglais n'est autorisé dans le texte de la question. "
+            "Aucun mélange de langues. Arabe pur uniquement. "
+            "Le JSON de réponse doit avoir la question en arabe complet. "
+            "Tu es un infirmier d'accueil urgentiste (IAO) expert en triage ESI. "
+            "Tu poses des questions médicales CIBLÉES une par une, en t'adaptant aux réponses précédentes. "
+            "Chaque question doit apporter de nouvelles informations pour affiner le score ESI. "
+            "Tu évites de répéter des informations déjà connues. "
+            "RÈGLE DE DIVERSITÉ DES TYPES sur 5 questions : max 2 'oui_non', max 1 'choix', au moins 2 'texte_libre'."
+        )
+    elif langue == 'en':
+        prompt_system = (
+            "You are an emergency physician. You ask medical questions in ENGLISH ONLY. "
+            "ABSOLUTE RULE: All questions must be EXCLUSIVELY in English. "
+            "No French or Arabic words allowed. Pure English only. "
+            "You are an expert triage IAO nurse. "
+            "You ask TARGETED medical questions one at a time, adapting to previous answers. "
+            "Each question must bring new information to refine the ESI score. "
+            "Avoid repeating already known information. "
+            "TYPE DIVERSITY RULE over 5 questions: max 2 'oui_non', max 1 'choix', at least 2 'texte_libre'."
+        )
+    else:  # fr par défaut
+        prompt_system = (
+            "Tu es un médecin urgentiste. Tu poses des questions médicales en FRANÇAIS UNIQUEMENT. "
+            "RÈGLE ABSOLUE : Toutes tes questions doivent être EXCLUSIVEMENT en français. "
+            "Aucun mot anglais ou arabe n'est autorisé. "
+            "Tu es un infirmier d'accueil urgentiste (IAO) expert en triage ESI. "
+            "Tu poses des questions médicales CIBLÉES une par une, en t'adaptant aux réponses précédentes. "
+            "Chaque question doit apporter de nouvelles informations pour affiner le score ESI. "
+            "Tu évites de répéter des informations déjà connues. "
+            "RÈGLE DE DIVERSITÉ DES TYPES sur 5 questions : max 2 'oui_non', max 1 'choix', au moins 2 'texte_libre'. "
+            "Les questions 'texte_libre' permettent d'obtenir des informations qualitatives précieuses : "
+            "durée des symptômes, intensité de la douleur (sur 10), description précise, contexte de survenue, "
+            "médicaments pris, antécédents pertinents. Elles sont particulièrement utiles pour affiner le triage."
+        )
+    langue_instruction = langue  # conservé pour le rappel dans prompt_user
 
     sexe_str = "Homme" if sex == 1 else "Femme"
     prompt_user = f"PATIENT : {age} ans, {sexe_str}\n\n"
@@ -243,8 +263,13 @@ def generer_question_suivante(
 
     features_utilisees = [r.get("feature_name") for r in reponses_precedentes if r.get("feature_name")]
 
+    _rappel_langue = {
+        'ar': '⚠️ RAPPEL : Question en ARABE UNIQUEMENT — aucun mot latin autorisé.',
+        'en': '⚠️ REMINDER: Question in ENGLISH ONLY — no French or Arabic words.',
+        'fr': '⚠️ RAPPEL : Question en FRANÇAIS UNIQUEMENT — aucun mot anglais ou arabe.',
+    }
     prompt_user += f"\n--- INSTRUCTION ---\n"
-    prompt_user += f"⚠️ RAPPEL LANGUE : {langue_instruction}\n"
+    prompt_user += _rappel_langue.get(langue, _rappel_langue['fr']) + "\n"
     prompt_user += f"C'est la question numéro {num_question} sur 5 maximum.\n"
 
     if num_question >= 3:
@@ -315,6 +340,13 @@ def generer_question_suivante(
                 )
             result = json.loads(content)
             if isinstance(result, dict):
+                # Vérification cohérence langue pour l'arabe
+                question_text = result.get('question', '')
+                if langue == 'ar' and question_text:
+                    nb_latins = sum(1 for c in question_text if c.isascii() and c.isalpha())
+                    if nb_latins > 3:
+                        print(f"[questions_moteur] Question arabe contient trop de caractères latins ({nb_latins}) → skip")
+                        return {'continuer': False, 'raison': 'langue_incorrecte'}
                 return result
         else:
             print(f"[Erreur API suivante] {response.status_code} - {response.text}")
