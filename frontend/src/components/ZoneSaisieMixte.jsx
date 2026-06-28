@@ -70,6 +70,7 @@ export default function ZoneSaisieMixte({
         className={classeZone}
         role="textbox"
         aria-multiline="true"
+        dir={langue === 'ar' ? 'rtl' : 'ltr'}
         onClick={ouvrir}
       >
         <span className="zsm-texte-final">{value}</span>
@@ -85,7 +86,7 @@ export default function ZoneSaisieMixte({
 
       {/* Barre d'actions */}
       <div className="zsm-actions">
-        {supporte && !erreurPermission && (
+        {supporte && !erreurPermission && window.isSecureContext && (
           <button
             className={`zsm-btn-parler${ecoute ? ' zsm-btn-parler--actif' : ''}`}
             onClick={gererMicro}
