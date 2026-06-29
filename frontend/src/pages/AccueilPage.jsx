@@ -32,10 +32,10 @@ export default function AccueilPage() {
   const { t, langue } = useTranslation()
   const { parler, arreter, activer } = useTextToSpeech()
 
-  const [vue, setVue]                   = useState(VUE.ACCUEIL)
-  const [donneesScan, setDonneesScan]   = useState(null)
-  const [erreur, setErreur]             = useState(null)
-  const [wsConnecte, setWsConnecte]     = useState(false)
+  const [vue, setVue]                         = useState(VUE.ACCUEIL)
+  const [donneesScan, setDonneesScan]         = useState(null)
+  const [erreur, setErreur]                   = useState(null)
+  const [wsConnecte, setWsConnecte]           = useState(false)
   const [prenomBienvenue, setPrenomBienvenue] = useState('')
 
   // Inactivité
@@ -47,26 +47,37 @@ export default function AccueilPage() {
   const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
   const { enterFullscreen } = useFullscreen()
 
-  // ── Mode illettré ─────────────────────────────────────────────────────────
+  // ── Choix initial : 📖 sais lire / 🎤 ne sais pas lire ──────────────────
   const [modeChoixLecture, setModeChoixLecture] = useState(true)
-  const relireTimerRef = useRef(null)
-  const [prenomCapté, setPrenomCapté] = useState('')
-  const [phaseIllettré, setPhaseIllettré] = useState('attente') // 'attente'|'prénom'|'confirmé'
 
+  const choisirLecture = () => {
+    activer()
+    setModeIllettré(false)
+    setModeChoixLecture(false)
+  }
+
+  const choisirIllettré = () => {
+    activer()            // déverrouille speechSynthesis (geste utilisateur)
+    setAudioActif(true)
+    setModeIllettré(true)
+    setModeChoixLecture(false)
+  }
+
+  // ── Formulaire manuel ─────────────────────────────────────────────────────
   const [sessionManuelId, setSessionManuelId] = useState(null)
-  const [formulaire, setFormulaire] = useState({ nom: '', prenom: '', date_naissance: '' })
-  const [erreurForm, setErreurForm] = useState(null)
-  const [enSoumission, setEnSoumission] = useState(false)
-  const [focusChamp, setFocusChamp] = useState(null) // 'nom' | 'prenom' | 'date' | null
+  const [formulaire, setFormulaire]           = useState({ nom: '', prenom: '', date_naissance: '' })
+  const [erreurForm, setErreurForm]           = useState(null)
+  const [enSoumission, setEnSoumission]       = useState(false)
+  const [focusChamp, setFocusChamp]           = useState(null)
 
-  // Auto-navigation après message de bienvenue (2 s)
+  // ── Auto-navigation après bienvenue ──────────────────────────────────────
   useEffect(() => {
     if (vue !== VUE.BIENVENUE) return
     const timer = setTimeout(() => navigate('/questionnaire'), 2000)
     return () => clearTimeout(timer)
   }, [vue, navigate])
 
-  // Lecture TTS — bienvenue personnalisée (300ms après affichage)
+  // TTS bienvenue personnalisée
   useEffect(() => {
     if (vue !== VUE.BIENVENUE || !prenomBienvenue) return
     const timer = setTimeout(() => parler(t('tts_bienvenue', { prenom: prenomBienvenue }), langue), 300)
@@ -74,7 +85,7 @@ export default function AccueilPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vue])
 
-  // Lecture TTS — instruction scan (300ms après passage à VUE.SCAN)
+  // TTS instruction scan
   useEffect(() => {
     if (vue !== VUE.SCAN) return
     const timer = setTimeout(() => parler(t('tts_scan'), langue), 300)
@@ -82,138 +93,43 @@ export default function AccueilPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vue])
 
-  // Lecture TTS — accueil quand l'audio est activé sur cette vue
+  // TTS accueil quand audio activé (mode normal)
   useEffect(() => {
-    if (!audioActif || vue !== VUE.ACCUEIL) return
+    if (!audioActif || vue !== VUE.ACCUEIL || modeIllettré) return
     parler(t('tts_accueil'), langue)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioActif])
 
+  // Initialisation WS
   useEffect(() => {
     reinitialiser()
-
     const ws = connecterBorne((msg) => {
-      if (msg.event === 'constantes_update') {
-        console.log('[WS borne] Constantes reçues :', msg.data)
-      }
+      if (msg.event === 'constantes_update') console.log('[WS borne] Constantes :', msg.data)
     })
-
     ws.onopen = () => setWsConnecte(true)
-    const _prevOnClose = ws.onclose
-    ws.onclose = (e) => {
-      setWsConnecte(false)
-      _prevOnClose?.(e)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const _prev = ws.onclose
+    ws.onclose = (e) => { setWsConnecte(false); _prev?.(e) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Modal question de lecture — TTS auto + relecture toutes les 10s ──────
-  useEffect(() => {
-    if (!modeChoixLecture) { clearTimeout(relireTimerRef.current); return }
-    const jouer = () => {
-      if (!('speechSynthesis' in window)) return
-      window.speechSynthesis.cancel()
-      const u = new SpeechSynthesisUtterance(t('illettré_tts_question'))
-      u.lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
-      u.rate = 0.9
-      window.speechSynthesis.speak(u)
-      relireTimerRef.current = setTimeout(jouer, 10000)
-    }
-    const init = setTimeout(jouer, 800)
-    return () => { clearTimeout(init); clearTimeout(relireTimerRef.current); window.speechSynthesis?.cancel() }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modeChoixLecture])
-
-  const choisirLecture = () => {
-    clearTimeout(relireTimerRef.current)
-    window.speechSynthesis?.cancel()
-    activer()
-    setModeIllettré(false)
-    setModeChoixLecture(false)
-  }
-
-  const choisirIllettré = () => {
-    clearTimeout(relireTimerRef.current)
-    window.speechSynthesis?.cancel()
-    activer()
-    setAudioActif(true)
-    setModeIllettré(true)
-    setModeChoixLecture(false)
-    setTimeout(() => parler(t('illettré_bienvenue'), langue), 600)
-    setPhaseIllettré('prénom')
-  }
-
-  // ── Reconnaissance vocale du prénom (mode illettré) ───────────────────────
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const voixPrénom = useVoiceInput({
-    langue,
-    onResult: (transcript) => {
-      const prenom = transcript.trim().split(' ')[0]
-      setPrenomCapté(prenom)
-      setFormulaire(prev => ({ ...prev, prenom }))
-      setTimeout(() => parler(`${t('illettré_prenom_recu')} ${prenom}`, langue), 300)
-      setPhaseIllettré('confirmé')
-      // Créer session et naviguer
-      setTimeout(async () => {
-        try {
-          const data = await saisirManuel(null, 'Patient', prenom, '')
-          setIdentite({
-            session_id: data.session_id,
-            nom:        data.nom,
-            prenom:     data.prenom,
-            age:        data.age,
-            sexe:       data.sexe ?? -1,
-            numero_cin: '',
-          })
-          setPrenomBienvenue(data.prenom)
-          setVue(VUE.BIENVENUE)
-        } catch {
-          navigate('/questionnaire')
-        }
-      }, 2000)
-    },
-  })
-
-  // Lance la reco vocale quand phaseIllettré === 'prénom'
-  useEffect(() => {
-    if (phaseIllettré === 'prénom' && voixPrénom.supporte) {
-      const timer = setTimeout(() => voixPrénom.demarrer(), 1500)
-      return () => clearTimeout(timer)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phaseIllettré])
-
-  // ── Activer / désactiver le guidage vocal ────────────────────────────────
+  // ── Toggle guidage vocal ──────────────────────────────────────────────────
   const toggleAudio = () => {
-    if (audioActif) {
-      arreter()
-      setAudioActif(false)
-    } else {
-      activer()  // déverrouille speechSynthesis (geste utilisateur)
-      setAudioActif(true)
-    }
+    if (audioActif) { arreter(); setAudioActif(false) }
+    else { activer(); setAudioActif(true) }
   }
 
   // ── Scan CIN ─────────────────────────────────────────────────────────────
   const lancerScan = async () => {
-    activer()
-    enterFullscreen()
-    setVue(VUE.SCAN)
-    setErreur(null)
-    setErreurForm(null)
+    activer(); enterFullscreen()
+    setVue(VUE.SCAN); setErreur(null); setErreurForm(null)
     try {
       const data = await scannerCIN()
       if (data.formulaire_manuel) {
         setSessionManuelId(data.session_id || null)
-        setFormulaire({
-          nom:            data.nom            || '',
-          prenom:         data.prenom         || '',
-          date_naissance: data.date_naissance || '',
-        })
+        setFormulaire({ nom: data.nom || '', prenom: data.prenom || '', date_naissance: data.date_naissance || '' })
         setVue(VUE.FORMULAIRE)
       } else {
-        setDonneesScan(data)
-        setVue(VUE.CONFIRMATION)
+        setDonneesScan(data); setVue(VUE.CONFIRMATION)
       }
     } catch {
       setSessionManuelId(null)
@@ -223,85 +139,48 @@ export default function AccueilPage() {
   }
 
   // ── Formulaire manuel ─────────────────────────────────────────────────────
-  const changerChamp = (e) => {
-    setFormulaire((prev) => ({ ...prev, [e.target.name]: e.target.value }))
-    setErreurForm(null)
-  }
+  const changerChamp = (e) => { setFormulaire(p => ({ ...p, [e.target.name]: e.target.value })); setErreurForm(null) }
 
   const changerDate = (e) => {
-    const prev = formulaire.date_naissance
-    const raw  = e.target.value
-
-    // Suppression : laisser passer sans reformatter
-    if (raw.length < prev.length) {
-      setFormulaire((p) => ({ ...p, date_naissance: raw }))
-      setErreurForm(null)
-      return
-    }
-
-    // Ne garder que les chiffres
-    const chiffres = raw.replace(/\D/g, '')
-
-    // Construire la valeur formatée JJ/MM/AAAA
-    let formate = ''
-    if (chiffres.length <= 2) {
-      formate = chiffres
-    } else if (chiffres.length <= 4) {
-      formate = chiffres.slice(0, 2) + '/' + chiffres.slice(2)
-    } else {
-      formate = chiffres.slice(0, 2) + '/' + chiffres.slice(2, 4) + '/' + chiffres.slice(4, 8)
-    }
-
-    setFormulaire((p) => ({ ...p, date_naissance: formate }))
-    setErreurForm(null)
+    const prev = formulaire.date_naissance; const raw = e.target.value
+    if (raw.length < prev.length) { setFormulaire(p => ({ ...p, date_naissance: raw })); return }
+    const c = raw.replace(/\D/g, '')
+    let f = c.length <= 2 ? c : c.length <= 4 ? c.slice(0,2)+'/'+c.slice(2) : c.slice(0,2)+'/'+c.slice(2,4)+'/'+c.slice(4,8)
+    setFormulaire(p => ({ ...p, date_naissance: f })); setErreurForm(null)
   }
 
   const validerManuel = async () => {
     activer()
     const { nom, prenom, date_naissance } = formulaire
-    if (!nom.trim() || !prenom.trim()) {
-      setErreurForm(t('erreur_nom_prenom_requis'))
-      return
-    }
-    setEnSoumission(true)
-    setErreurForm(null)
+    if (!nom.trim() || !prenom.trim()) { setErreurForm(t('erreur_nom_prenom_requis')); return }
+    setEnSoumission(true); setErreurForm(null)
     try {
       const data = await saisirManuel(sessionManuelId, nom.trim(), prenom.trim(), date_naissance.trim())
-      setIdentite({
-        session_id: data.session_id,
-        nom:        data.nom,
-        prenom:     data.prenom,
-        age:        data.age,
-        sexe:       data.sexe ?? -1,
-        numero_cin: '',
-      })
-      setPrenomBienvenue(data.prenom)
-      setVue(VUE.BIENVENUE)
-    } catch (err) {
-      setErreurForm(`Erreur : ${err.message}`)
-    } finally {
-      setEnSoumission(false)
-    }
+      setIdentite({ session_id: data.session_id, nom: data.nom, prenom: data.prenom, age: data.age, sexe: data.sexe ?? -1, numero_cin: '' })
+      setPrenomBienvenue(data.prenom); setVue(VUE.BIENVENUE)
+    } catch (err) { setErreurForm(`Erreur : ${err.message}`) }
+    finally { setEnSoumission(false) }
   }
 
-  // ── Scan réussi confirmé ──────────────────────────────────────────────────
+  // ── Confirmation scan ─────────────────────────────────────────────────────
   const confirmer = () => {
     activer()
-    setIdentite({
-      session_id:  donneesScan.session_id,
-      nom:         donneesScan.nom,
-      prenom:      donneesScan.prenom,
-      age:         donneesScan.age,
-      sexe:        donneesScan.sexe,
-      numero_cin:  donneesScan.numero_cin,
-    })
-    setPrenomBienvenue(donneesScan.prenom)
-    setVue(VUE.BIENVENUE)
+    setIdentite({ session_id: donneesScan.session_id, nom: donneesScan.nom, prenom: donneesScan.prenom, age: donneesScan.age, sexe: donneesScan.sexe, numero_cin: donneesScan.numero_cin })
+    setPrenomBienvenue(donneesScan.prenom); setVue(VUE.BIENVENUE)
   }
+  const recommencer = () => { setDonneesScan(null); setVue(VUE.ACCUEIL) }
 
-  const recommencer = () => {
-    setDonneesScan(null)
-    setVue(VUE.ACCUEIL)
+  // ── Callback fin identification illettré ──────────────────────────────────
+  const onIdentificationTerminée = async (prenom, nom, age, sexe) => {
+    try {
+      const data = await saisirManuel(null, nom || 'Patient', prenom || 'Patient', '')
+      setIdentite({ session_id: data.session_id, nom: nom || data.nom, prenom: prenom || data.prenom, age: age ?? data.age, sexe: sexe ?? data.sexe ?? -1, numero_cin: '' })
+      setPrenomBienvenue(prenom || data.prenom || '')
+    } catch {
+      setIdentite({ session_id: null, nom: nom || '', prenom: prenom || '', age: age ?? null, sexe: sexe ?? -1, numero_cin: '' })
+      setPrenomBienvenue(prenom || '')
+    }
+    setVue(VUE.BIENVENUE)
   }
 
   return (
@@ -311,62 +190,54 @@ export default function AccueilPage() {
       <BoutonPleinEcran />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
 
-      {/* ── Modal — Question de lecture (premier choix à chaque session) ── */}
+      {/* ── ÉCRAN 1 — Modal choix lecture (📖 / 🎤) ──────────────── */}
       {modeChoixLecture && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 3000,
           background: 'rgba(6,11,20,0.97)',
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          gap: 32, padding: 24,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 24, flexWrap: 'wrap', padding: 24,
         }}>
-          <div style={{ fontSize: '2.5rem' }}>🏥</div>
-          <h2 style={{
-            color: '#f8fafc', fontSize: '1.4rem', fontWeight: 700,
-            textAlign: 'center', margin: 0, lineHeight: 1.5,
-            maxWidth: 480,
-          }}>
-            {t('illettré_question')}
-          </h2>
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
-            {/* 📖 Je sais lire → mode normal */}
-            <button
-              onClick={choisirLecture}
-              style={{
-                width: 148, height: 148, borderRadius: 20,
-                background: 'rgba(255,255,255,0.08)',
-                border: '2px solid rgba(255,255,255,0.25)',
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                gap: 10, cursor: 'pointer',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>📖</span>
-              <span style={{ color: '#f8fafc', fontSize: '0.92rem', fontWeight: 600, textAlign: 'center' }}>
-                {t('illettré_oui_lecture')}
-              </span>
-            </button>
-            {/* 🎤 Je ne sais pas lire → mode assisté */}
-            <button
-              onClick={choisirIllettré}
-              style={{
-                width: 148, height: 148, borderRadius: 20,
-                background: 'rgba(0,212,255,0.12)',
-                border: '2px solid rgba(0,212,255,0.4)',
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                gap: 10, cursor: 'pointer',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>🎤</span>
-              <span style={{ color: '#00d4ff', fontSize: '0.92rem', fontWeight: 600, textAlign: 'center' }}>
-                {t('illettré_non_lecture')}
-              </span>
-            </button>
-          </div>
+          {/* 📖 Je sais lire */}
+          <button
+            onClick={choisirLecture}
+            style={{
+              width: 148, height: 148, borderRadius: 20,
+              background: 'rgba(255,255,255,0.08)', border: '2px solid rgba(255,255,255,0.25)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 10, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>📖</span>
+            <span style={{ color: '#f8fafc', fontSize: '0.92rem', fontWeight: 600, textAlign: 'center' }}>
+              {t('illettré_oui_lecture')}
+            </span>
+          </button>
+          {/* 🎤 Je ne sais pas lire */}
+          <button
+            onClick={choisirIllettré}
+            style={{
+              width: 148, height: 148, borderRadius: 20,
+              background: 'rgba(0,212,255,0.12)', border: '2px solid rgba(0,212,255,0.4)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 10, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>🎤</span>
+            <span style={{ color: '#00d4ff', fontSize: '0.92rem', fontWeight: 600, textAlign: 'center' }}>
+              {t('illettré_non_lecture')}
+            </span>
+          </button>
         </div>
+      )}
+
+      {/* ── ÉCRAN 2 — Identification illettré (4 étapes) ─────────── */}
+      {modeIllettré && !modeChoixLecture && vue === VUE.ACCUEIL && (
+        <VueIdentificationIllettré
+          langue={langue}
+          parler={parler}
+          onTerminé={onIdentificationTerminée}
+        />
       )}
 
       {/* Badge Mode Assisté */}
@@ -380,32 +251,12 @@ export default function AccueilPage() {
         </div>
       )}
 
-      {/* Indicateur écoute prénom (mode illettré) */}
-      {phaseIllettré === 'prénom' && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 1999, background: 'rgba(0,0,0,0.75)', borderRadius: 12,
-          padding: '10px 20px', color: '#00d4ff', fontSize: '1rem',
-        }}>
-          🎙 {t('illettré_bienvenue')}
-        </div>
-      )}
-      {phaseIllettré === 'confirmé' && prenomCapté && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 1999, background: 'rgba(0,0,0,0.75)', borderRadius: 12,
-          padding: '10px 20px', color: '#34d399', fontSize: '1rem',
-        }}>
-          ✓ {t('illettré_prenom_recu')} {prenomCapté}
-        </div>
-      )}
-
       <div className={`ws-badge ${wsConnecte ? 'ws-badge--ok' : 'ws-badge--off'}`}>
         {wsConnecte ? '● Connecté' : '○ Hors ligne'}
       </div>
 
-      {/* ── Accueil ─────────────────────────────────────────────── */}
-      {vue === VUE.ACCUEIL && (
+      {/* ── Accueil (mode normal uniquement) ────────────────────── */}
+      {vue === VUE.ACCUEIL && !modeIllettré && (
         <div className="accueil-fx" aria-hidden="true">
           <div className="accueil-particles">
             {Array.from({ length: 20 }, (_, i) => <span key={i} />)}
@@ -419,44 +270,32 @@ export default function AccueilPage() {
           </svg>
         </div>
       )}
-      {vue === VUE.ACCUEIL && (
+      {vue === VUE.ACCUEIL && !modeIllettré && (
         <div className="kiosk-center">
           <div className="kiosk-card">
             <span className="eyebrow">{t('titre_app')}</span>
             <h1 className="kiosk-titre">{t('bienvenue_principale')}</h1>
             <p className="kiosk-soustitre">{t('sous_titre')}</p>
             <GuideEtape etape={1} />
-
-            <div className="illustration-wrapper">
-              <IllustrationScanCIN />
-            </div>
-
-            {erreur && (
-              <div className="kiosk-alerte" role="alert">{erreur}</div>
-            )}
-
+            <div className="illustration-wrapper"><IllustrationScanCIN /></div>
+            {erreur && <div className="kiosk-alerte" role="alert">{erreur}</div>}
             <button className="kiosk-btn kiosk-btn--primary" onClick={lancerScan}>
               <svg className="kiosk-btn-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="2" y="5" width="20" height="14" rx="2" />
-                <path d="M2 10h20" />
+                <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
               </svg>
               {t('scanner_btn')}
             </button>
-
             <button
               className="kiosk-btn kiosk-btn--secondary"
               onClick={() => { setFormulaire({ nom: '', prenom: '', date_naissance: '' }); setSessionManuelId(null); setVue(VUE.FORMULAIRE) }}
             >
               {t('saisie_manuelle')}
             </button>
-
-            {/* Bouton guidage vocal — bien visible sur l'accueil */}
             <button
               className="kiosk-btn kiosk-btn--secondary"
               onClick={toggleAudio}
               style={{
-                marginTop: 8,
-                fontSize: '0.95em',
+                marginTop: 8, fontSize: '0.95em',
                 background: audioActif ? 'rgba(20,184,166,0.18)' : 'rgba(15,23,42,0.5)',
                 border: audioActif ? '1px solid rgba(20,184,166,0.5)' : '1px solid rgba(148,163,184,0.2)',
                 color: audioActif ? '#2dd4bf' : 'rgba(148,163,184,0.7)',
@@ -465,20 +304,18 @@ export default function AccueilPage() {
             >
               {audioActif
                 ? <><span className="audio-active-dot" aria-hidden="true" /> 🔊 {t('tts_audio_desactiver')}</>
-                : `🔇 ${t('tts_audio_activer')}`
-              }
+                : `🔇 ${t('tts_audio_activer')}`}
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Scan en cours ───────────────────────────────────────── */}
+      {/* ── Scan en cours ─────────────────────────────────────────── */}
       {vue === VUE.SCAN && (
         <div className="kiosk-center">
           <div className="kiosk-card kiosk-card--centree">
             <div className="camera-active-badge" role="status" aria-live="polite">
-              <span className="camera-active-dot" aria-hidden="true" />
-              {t('camera_active')}
+              <span className="camera-active-dot" aria-hidden="true" />{t('camera_active')}
             </div>
             <div className="kiosk-spinner" aria-label="Chargement" />
             <h2 className="kiosk-titre-sm">{t('scan_en_cours')}</h2>
@@ -487,100 +324,47 @@ export default function AccueilPage() {
         </div>
       )}
 
-      {/* ── Formulaire manuel ───────────────────────────────────── */}
+      {/* ── Formulaire manuel ──────────────────────────────────────── */}
       {vue === VUE.FORMULAIRE && (
         <div className="kiosk-center">
           <div className="kiosk-card">
             <span className="eyebrow">{t('saisie_manuelle')}</span>
             <h2 className="kiosk-titre-sm">{t('bienvenue')}</h2>
-
-            {erreurForm && (
-              <div className="kiosk-alerte" role="alert">{erreurForm}</div>
-            )}
-
+            {erreurForm && <div className="kiosk-alerte" role="alert">{erreurForm}</div>}
             <div className="cin-form">
               <div className="cin-field">
                 <label className="cin-label" htmlFor="cin-nom">{t('nom')}</label>
-                <input
-                  id="cin-nom"
-                  className="cin-input"
-                  name="nom"
-                  type="text"
-                  placeholder={t('nom')}
-                  value={formulaire.nom}
-                  onChange={changerChamp}
-                  autoComplete="family-name"
-                  inputMode="none"
-                  onFocus={() => setFocusChamp('nom')}
-                  onClick={() => setFocusChamp('nom')}
-                />
+                <input id="cin-nom" className="cin-input" name="nom" type="text" placeholder={t('nom')}
+                  value={formulaire.nom} onChange={changerChamp} autoComplete="family-name"
+                  inputMode="none" onFocus={() => setFocusChamp('nom')} onClick={() => setFocusChamp('nom')} />
               </div>
-
               <div className="cin-field">
                 <label className="cin-label" htmlFor="cin-prenom">{t('prenom')}</label>
-                <input
-                  id="cin-prenom"
-                  className="cin-input"
-                  name="prenom"
-                  type="text"
-                  placeholder={t('prenom')}
-                  value={formulaire.prenom}
-                  onChange={changerChamp}
-                  autoComplete="given-name"
-                  inputMode="none"
-                  onFocus={() => setFocusChamp('prenom')}
-                  onClick={() => setFocusChamp('prenom')}
-                />
+                <input id="cin-prenom" className="cin-input" name="prenom" type="text" placeholder={t('prenom')}
+                  value={formulaire.prenom} onChange={changerChamp} autoComplete="given-name"
+                  inputMode="none" onFocus={() => setFocusChamp('prenom')} onClick={() => setFocusChamp('prenom')} />
               </div>
-
               <div className="cin-field">
                 <label className="cin-label" htmlFor="cin-ddn">{t('date_naissance')}</label>
-                <input
-                  id="cin-ddn"
-                  className="cin-input"
-                  name="date_naissance"
-                  type="text"
-                  placeholder="JJ/MM/AAAA"
-                  value={formulaire.date_naissance}
-                  onChange={changerDate}
-                  inputMode="none"
-                  maxLength={10}
-                  onFocus={() => setFocusChamp('date')}
-                  onClick={() => setFocusChamp('date')}
-                />
+                <input id="cin-ddn" className="cin-input" name="date_naissance" type="text"
+                  placeholder="JJ/MM/AAAA" value={formulaire.date_naissance} onChange={changerDate}
+                  inputMode="none" maxLength={10} onFocus={() => setFocusChamp('date')} onClick={() => setFocusChamp('date')} />
                 <span className="cin-hint">{t('format_date_hint')}</span>
               </div>
             </div>
-
             {focusChamp === 'date' && (
-              <ClavierNumerique
-                value={formulaire.date_naissance}
-                onChange={(v) => setFormulaire((p) => ({ ...p, date_naissance: v }))}
-                onConfirm={() => setFocusChamp(null)}
-                onFermer={() => setFocusChamp(null)}
-                modeDate
-              />
+              <ClavierNumerique value={formulaire.date_naissance}
+                onChange={(v) => setFormulaire(p => ({ ...p, date_naissance: v }))}
+                onConfirm={() => setFocusChamp(null)} onFermer={() => setFocusChamp(null)} modeDate />
             )}
             {(focusChamp === 'nom' || focusChamp === 'prenom') && (
               <ClavierAlpha
                 value={focusChamp === 'nom' ? formulaire.nom : formulaire.prenom}
-                onChange={
-                  focusChamp === 'nom'
-                    ? (v) => setFormulaire((p) => ({ ...p, nom: v }))
-                    : (v) => setFormulaire((p) => ({ ...p, prenom: v }))
-                }
-                onConfirm={() => setFocusChamp(null)}
-                onFermer={() => setFocusChamp(null)}
-                langue={langue}
-              />
+                onChange={focusChamp === 'nom' ? (v) => setFormulaire(p => ({ ...p, nom: v })) : (v) => setFormulaire(p => ({ ...p, prenom: v }))}
+                onConfirm={() => setFocusChamp(null)} onFermer={() => setFocusChamp(null)} langue={langue} />
             )}
-
             <div className="kiosk-actions">
-              <button
-                className="kiosk-btn kiosk-btn--primary"
-                onClick={validerManuel}
-                disabled={enSoumission}
-              >
+              <button className="kiosk-btn kiosk-btn--primary" onClick={validerManuel} disabled={enSoumission}>
                 {enSoumission ? '…' : t('valider')}
               </button>
               <button className="kiosk-btn kiosk-btn--secondary" onClick={() => setVue(VUE.ACCUEIL)}>
@@ -591,29 +375,214 @@ export default function AccueilPage() {
         </div>
       )}
 
-      {/* ── Confirmation après scan réussi ──────────────────────── */}
+      {/* ── Confirmation scan réussi ───────────────────────────────── */}
       {vue === VUE.CONFIRMATION && (
-        <ConfirmationPatient
-          donnees={donneesScan}
-          onConfirmer={confirmer}
-          onRecommencer={recommencer}
-        />
+        <ConfirmationPatient donnees={donneesScan} onConfirmer={confirmer} onRecommencer={recommencer} />
       )}
 
-      {/* ── Message de bienvenue (2 s avant navigation) ─────────── */}
+      {/* ── Bienvenue (2s → navigation) ───────────────────────────── */}
       {vue === VUE.BIENVENUE && (
         <div className="kiosk-center">
           <div className="kiosk-card kiosk-card--centree" style={{ textAlign: 'center' }}>
             <span style={{ fontSize: '3rem' }}>👋</span>
-            <h2 className="kiosk-titre-sm" style={{ marginTop: 12 }}>
-              {t('bonjour')} {prenomBienvenue} !
-            </h2>
+            <h2 className="kiosk-titre-sm" style={{ marginTop: 12 }}>{t('bonjour')} {prenomBienvenue} !</h2>
             <p className="kiosk-soustitre">{t('evaluation')}</p>
             <div className="kiosk-spinner" style={{ marginTop: 16 }} aria-label="Chargement" />
           </div>
         </div>
       )}
+    </div>
+  )
+}
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Convertit texte parlé en nombre entier (pour l'âge)
+// ─────────────────────────────────────────────────────────────────────────────
+function convertirAge(transcript) {
+  const digits = transcript.replace(/[^\d]/g, '')
+  if (digits.length > 0) {
+    const n = parseInt(digits, 10)
+    if (n >= 1 && n <= 120) return n
+  }
+  const MOTS = {
+    'zéro':0,'un':1,'une':1,'deux':2,'trois':3,'quatre':4,'cinq':5,
+    'six':6,'sept':7,'huit':8,'neuf':9,'dix':10,'onze':11,'douze':12,
+    'treize':13,'quatorze':14,'quinze':15,'seize':16,'vingt':20,
+    'trente':30,'quarante':40,'cinquante':50,'soixante':60,'cent':100,
+  }
+  const lower = transcript.toLowerCase().trim()
+  let total = 0; let found = false
+  for (const [mot, val] of Object.entries(MOTS)) {
+    if (lower.includes(mot)) { total += val; found = true }
+  }
+  if (found && total >= 1 && total <= 120) return total
+  return null
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ÉCRAN 2 — Identification guidée mode illettré : prénom → nom → age → sexe
+// ─────────────────────────────────────────────────────────────────────────────
+function VueIdentificationIllettré({ langue, parler, onTerminé }) {
+  const { t } = useTranslation()
+  const [etape, setEtape]           = useState('prénom')  // 'prénom'|'nom'|'age'|'sexe'
+  const [valAffichee, setValAff]    = useState('')
+  const [enConfirmation, setEnConf] = useState(false)
+  const [tentative, setTentative]   = useState(0)
+
+  const etapeRef = useRef('prénom')
+  etapeRef.current = etape
+  const prenomRef = useRef('')
+  const nomRef    = useRef('')
+  const ageRef    = useRef(null)
+
+  const voix = useVoiceInput({
+    langue,
+    onResult: (transcript) => {
+      const cur = etapeRef.current
+      if (cur === 'sexe') return
+
+      let affiche = ''
+      if (cur === 'prénom') {
+        const mot = transcript.trim().split(/\s+/)[0]
+        affiche = mot.charAt(0).toUpperCase() + mot.slice(1).toLowerCase()
+        prenomRef.current = affiche
+      } else if (cur === 'nom') {
+        const mot = transcript.trim().split(/\s+/)[0]
+        affiche = mot.toUpperCase()
+        nomRef.current = affiche
+      } else if (cur === 'age') {
+        const n = convertirAge(transcript)
+        if (!n) { setTimeout(() => voix.demarrer(), 800); return }
+        affiche = String(n)
+        ageRef.current = n
+      }
+
+      if (!affiche) return
+      setValAff(affiche)
+      setEnConf(true)
+
+      const CLES_CONF = { prénom: 'ill_confirmer_prenom', nom: 'ill_confirmer_nom', age: 'ill_confirmer_age' }
+      const txt = (t(CLES_CONF[cur]) || '').replace('{val}', cur === 'age' ? `${affiche} ans` : affiche)
+      if (txt) setTimeout(() => parler(txt, langue), 300)
+    },
+  })
+
+  // TTS intro + lancement auto de la reconnaissance
+  useEffect(() => {
+    setEnConf(false)
+    setValAff('')
+
+    if (etape === 'sexe') {
+      const timer = setTimeout(() => parler(t('ill_sexe'), langue), 300)
+      return () => clearTimeout(timer)
+    }
+
+    const CLES = { prénom: 'ill_bienvenue_prenom', nom: 'ill_bienvenue_nom', age: 'ill_bienvenue_age' }
+    const t1 = setTimeout(() => parler(t(CLES[etape] || ''), langue), 300)
+    const t2 = setTimeout(() => voix.demarrer(), 2200)
+    return () => { clearTimeout(t1); clearTimeout(t2); voix.arreter() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etape, tentative])
+
+  const confirmer   = () => {
+    if (etape === 'prénom') setEtape('nom')
+    else if (etape === 'nom') setEtape('age')
+    else if (etape === 'age') setEtape('sexe')
+  }
+  const recommencer = () => setTentative(n => n + 1)
+  const choisirSexe = (sexe) => onTerminé(prenomRef.current, nomRef.current, ageRef.current, sexe)
+
+  const NUM = { prénom: 1, nom: 2, age: 3, sexe: 4 }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 2500,
+      background: '#060b14',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      gap: 28, padding: 24,
+    }}>
+      {/* Badge */}
+      <div style={{
+        position: 'absolute', top: 8, right: 8,
+        background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)',
+        borderRadius: 20, padding: '4px 12px', fontSize: '0.78rem', color: '#00d4ff',
+      }}>
+        🤝 {t('illettré_mode_badge')}
+      </div>
+
+      {/* Indicateur étape */}
+      <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.88rem' }}>
+        {NUM[etape]} / 4
+      </div>
+
+      {/* Étapes 1-3 : capture vocale */}
+      {etape !== 'sexe' && (
+        <>
+          {/* Micro — animé pendant l'écoute */}
+          {!enConfirmation && (
+            <div style={{
+              fontSize: '5rem', lineHeight: 1,
+              filter: voix.ecoute ? 'drop-shadow(0 0 20px #00d4ff)' : 'none',
+              transition: 'filter 0.3s',
+            }}>
+              🎤
+            </div>
+          )}
+
+          {/* Valeur captée */}
+          {valAffichee && (
+            <div style={{
+              fontSize: '2.8rem', fontWeight: 700, color: '#f8fafc',
+              textAlign: 'center', letterSpacing: 1,
+              padding: '16px 32px', background: 'rgba(255,255,255,0.06)',
+              borderRadius: 16, minWidth: 180,
+            }}>
+              {etape === 'age' ? `${valAffichee} ans` : valAffichee}
+            </div>
+          )}
+
+          {/* Confirmation 👍 / 👎 */}
+          {enConfirmation && (
+            <div style={{ display: 'flex', gap: 20 }}>
+              <button onClick={confirmer} style={{
+                width: 120, height: 120, borderRadius: 16, border: 'none',
+                background: 'rgba(16,185,129,0.25)', color: '#10b981',
+                fontSize: '3.5rem', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              }}>👍</button>
+              <button onClick={recommencer} style={{
+                width: 120, height: 120, borderRadius: 16, border: 'none',
+                background: 'rgba(239,68,68,0.25)', color: '#ef4444',
+                fontSize: '3.5rem', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              }}>👎</button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Étape 4 : sexe */}
+      {etape === 'sexe' && (
+        <div style={{ display: 'flex', gap: 24 }}>
+          <button onClick={() => choisirSexe(0)} style={{
+            width: 148, height: 148, borderRadius: 20,
+            background: 'rgba(56,189,248,0.15)', border: '2px solid rgba(56,189,248,0.4)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 8, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+          }}>
+            <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>👨</span>
+            <span style={{ color: '#38bdf8', fontWeight: 600, fontSize: '0.92rem' }}>{t('ill_homme')}</span>
+          </button>
+          <button onClick={() => choisirSexe(1)} style={{
+            width: 148, height: 148, borderRadius: 20,
+            background: 'rgba(244,114,182,0.15)', border: '2px solid rgba(244,114,182,0.4)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 8, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+          }}>
+            <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>👩</span>
+            <span style={{ color: '#f472b4', fontWeight: 600, fontSize: '0.92rem' }}>{t('ill_femme')}</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

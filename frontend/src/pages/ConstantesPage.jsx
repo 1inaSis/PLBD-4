@@ -443,6 +443,40 @@ function VueMesure({
   }, [audioActif])
 
   const relireInstruction = () => { if (texteInstruction) parler(texteInstruction, langue) }
+
+  // Auto-avance mode illettré : COMPLET → étape suivante après 4s (non manuelle)
+  useEffect(() => {
+    if (!modeIllettré || etat !== ETAT.COMPLET || estManuelle || estSimulee || messageCapture === 'timeout') return
+    // Lire le résultat à voix haute
+    let texteR = ''
+    if (etape.cle === 'temperature' && valeur != null) {
+      texteR = langue === 'ar'
+        ? `درجة حرارتك ${Number(valeur).toFixed(1)} درجة`
+        : langue === 'en'
+        ? `Your temperature is ${Number(valeur).toFixed(1)} degrees`
+        : `Votre température est ${Number(valeur).toFixed(1)} degrés`
+    } else if (etape.cle === 'spo2' && valeur != null) {
+      texteR = langue === 'ar'
+        ? `نسبة أكسجينك ${Math.round(valeur)} بالمئة`
+        : langue === 'en'
+        ? `Your oxygen level is ${Math.round(valeur)} percent`
+        : `Votre taux d'oxygène est ${Math.round(valeur)} pour cent`
+    }
+    if (texteR) parler(texteR, langue)
+    const timer = setTimeout(() => onEtapeSuivante(), 4000)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat, indexEtape])
+
+  // Auto-avance mode illettré : COMPLET après KF-65R manuel
+  useEffect(() => {
+    if (!modeIllettré || etat !== ETAT.COMPLET || !estManuelle) return
+    parler(t('ill_constantes_ok'), langue)
+    const timer = setTimeout(() => onEtapeSuivante(), 3500)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat, indexEtape])
+
   const couleur       = evaluerCouleur(etape.cle, valeur)
   const affichee      = !etape.double && valeur != null
     ? etape.formatter(valeur, constantes)
@@ -708,6 +742,7 @@ function evaluerCouleurKF65R(type, v) {
 }
 
 function SaisieKF65R({ instruction, onValider, t, modeIllettré = false, langue = 'fr' }) {
+  const { parler } = useTextToSpeech()
   const [sys, setSys] = useState('')
   const [dia, setDia] = useState('')
   const [pul, setPul] = useState('')
@@ -739,12 +774,38 @@ function SaisieKF65R({ instruction, onValider, t, modeIllettré = false, langue 
     },
   })
 
-  // En mode illettré, lecture TTS de l'instruction SYS au montage
+  // Mode illettré : TTS + lancement auto SYS au montage
   useEffect(() => {
     if (!modeIllettré) return
-    setChampVocal('sys')
+    const t1 = setTimeout(() => parler(t('ill_tension_sys'), langue), 400)
+    const t2 = setTimeout(() => { setChampVocal('sys'); voixSys.demarrer() }, 2000)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Mode illettré : TTS + lancement auto DIA / PUL quand champVocal avance
+  useEffect(() => {
+    if (!modeIllettré) return
+    if (champVocal === 'dia' && sys) {
+      const t1 = setTimeout(() => parler(t('ill_tension_dia'), langue), 300)
+      const t2 = setTimeout(() => voixDia.demarrer(), 1800)
+      return () => { clearTimeout(t1); clearTimeout(t2) }
+    }
+    if (champVocal === 'pul' && dia) {
+      const t1 = setTimeout(() => parler(t('ill_tension_pul'), langue), 300)
+      const t2 = setTimeout(() => voixPul.demarrer(), 1800)
+      return () => { clearTimeout(t1); clearTimeout(t2) }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [champVocal])
+
+  // Mode illettré : auto-submit quand SYS + DIA + PUL sont valides
+  useEffect(() => {
+    if (!modeIllettré || !peutValider) return
+    const timer = setTimeout(() => onValider({ bp_systolic: sysN, bp_diastolic: diaN, heart_rate: pulN }), 600)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [peutValider])
 
   const sysN = Number(sys)
   const diaN = Number(dia)

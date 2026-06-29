@@ -38,7 +38,8 @@ export default function QuestionnairePage() {
 
   // Lecture automatique de l'instruction principale — 300ms après montage
   useEffect(() => {
-    const timer = setTimeout(() => parler(t('tts_questionnaire'), langue), 300)
+    const cle = modeIllettré ? 'ill_symptomes_zones' : 'tts_questionnaire'
+    const timer = setTimeout(() => parler(t(cle), langue), 300)
     return () => { clearTimeout(timer); arreter() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -128,101 +129,110 @@ export default function QuestionnairePage() {
         </div>
       )}
 
-      <div className="questionnaire-layout">
+      {/* ── Mode illettré : corps seul + voix après zone touchée ── */}
+      {modeIllettré ? (
+        <div className="kiosk-center" style={{ flexDirection: 'column', gap: 16, padding: 12 }}>
+          <CorpsHumain zonesSelectionnees={zonesSelectionnees} onToggleZone={toggleZone} />
 
-        {/* ── Colonne gauche : Pictogramme ───────────────────────────── */}
-        <section className="questionnaire-col questionnaire-col--corps" aria-label="Sélection des zones douloureuses">
-          <CorpsHumain
-            zonesSelectionnees={zonesSelectionnees}
-            onToggleZone={toggleZone}
-          />
-        </section>
+          {zonesSelectionnees.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+              {zonesSelectionnees.map(id => (
+                <span key={id} style={{
+                  background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.3)',
+                  color: '#00d4ff', borderRadius: 20, padding: '4px 12px', fontSize: '0.88rem',
+                }}>
+                  {ZONES_MAP[id]}
+                </span>
+              ))}
+            </div>
+          )}
 
-        {/* ── Colonne droite : Saisie symptômes ──────────────────────── */}
-        <section className="questionnaire-col questionnaire-col--saisie" aria-label="Description des symptômes">
-          <div className="kiosk-card">
-            <span className="eyebrow">{t('etape2_titre')}</span>
-            <h2 className="kiosk-titre-sm">
-              {patient.prenom ? `${t('ou_mal').replace('?', ',').replace('؟', '،')} ${patient.prenom} ?` : t('ou_mal')}
-            </h2>
+          {zonesSelectionnees.length > 0 && (
+            <ModeIlletréSymptomes
+              langue={langue}
+              onTexte={(texte) => setTexteSymptome(texte)}
+              onFin={() => continuer()}
+            />
+          )}
 
-            {/* Chips des zones sélectionnées */}
-            {zonesSelectionnees.length > 0 ? (
-              <div className="zones-choisies">
-                <p className="zones-choisies-titre">{t('zones_select')}</p>
-                <div className="zones-tags">
-                  {zonesSelectionnees.map(id => (
-                    <button
-                      key={id}
-                      className="zone-tag"
-                      onClick={() => retirer(id)}
-                      aria-label={`Retirer ${ZONES_MAP[id]}`}
-                    >
-                      {ZONES_MAP[id]}
-                      <span className="zone-tag-suppr" aria-hidden="true"> ×</span>
-                    </button>
-                  ))}
+          {urgenceDetectee && (
+            <div className="kiosk-alerte kiosk-alerte--urgence" role="alert">{t('alerte_urgence_detectee')}</div>
+          )}
+          {erreur && <div className="kiosk-alerte" role="alert">{erreur}</div>}
+
+          <button
+            className="kiosk-btn kiosk-btn--primary"
+            onClick={continuer}
+            disabled={zonesSelectionnees.length === 0 || enChargement}
+            style={{ fontSize: '1.4rem', padding: '18px 52px', marginTop: 8 }}
+          >
+            {enChargement ? '…' : '→'}
+          </button>
+        </div>
+      ) : (
+        <div className="questionnaire-layout">
+
+          {/* ── Colonne gauche : Pictogramme ──────────────────────────── */}
+          <section className="questionnaire-col questionnaire-col--corps" aria-label="Sélection des zones douloureuses">
+            <CorpsHumain zonesSelectionnees={zonesSelectionnees} onToggleZone={toggleZone} />
+          </section>
+
+          {/* ── Colonne droite : Saisie symptômes ─────────────────────── */}
+          <section className="questionnaire-col questionnaire-col--saisie" aria-label="Description des symptômes">
+            <div className="kiosk-card">
+              <span className="eyebrow">{t('etape2_titre')}</span>
+              <h2 className="kiosk-titre-sm">
+                {patient.prenom ? `${t('ou_mal').replace('?', ',').replace('؟', '،')} ${patient.prenom} ?` : t('ou_mal')}
+              </h2>
+
+              {zonesSelectionnees.length > 0 ? (
+                <div className="zones-choisies">
+                  <p className="zones-choisies-titre">{t('zones_select')}</p>
+                  <div className="zones-tags">
+                    {zonesSelectionnees.map(id => (
+                      <button key={id} className="zone-tag" onClick={() => retirer(id)} aria-label={`Retirer ${ZONES_MAP[id]}`}>
+                        {ZONES_MAP[id]}<span className="zone-tag-suppr" aria-hidden="true"> ×</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <p className="kiosk-note" style={{ marginTop: 0 }}>
-                {t('instruction_corps')}
-              </p>
-            )}
-
-            {/* Champ de description libre */}
-            <div className="symptome-groupe">
-              <label className="symptome-label">
-                {t('symptomes_label')} <span className="symptome-optionnel">{t('symptomes_opt')}</span>
-              </label>
-              {modeIllettré ? (
-                <ModeIlletréSymptomes
-                  langue={langue}
-                  onTexte={(texte) => setTexteSymptome(texte)}
-                  onFin={() => continuer()}
-                />
               ) : (
+                <p className="kiosk-note" style={{ marginTop: 0 }}>{t('instruction_corps')}</p>
+              )}
+
+              <div className="symptome-groupe">
+                <label className="symptome-label">
+                  {t('symptomes_label')} <span className="symptome-optionnel">{t('symptomes_opt')}</span>
+                </label>
                 <ZoneSaisieMixte
                   value={texteSymptome}
                   onChange={setTexteSymptome}
                   langue={langue}
                   placeholder={t('saisie_placeholder')}
                 />
-              )}
-              {!modeIllettré && <span className="symptome-compteur">{texteSymptome.length} / 500</span>}
-            </div>
-
-            {/* Alerte urgence détectée par le NLP */}
-            {urgenceDetectee && (
-              <div className="kiosk-alerte kiosk-alerte--urgence" role="alert" aria-live="assertive">
-                {t('alerte_urgence_detectee')}
+                <span className="symptome-compteur">{texteSymptome.length} / 500</span>
               </div>
-            )}
 
-            {erreur && (
-              <div className="kiosk-alerte" role="alert">{erreur}</div>
-            )}
+              {urgenceDetectee && (
+                <div className="kiosk-alerte kiosk-alerte--urgence" role="alert" aria-live="assertive">
+                  {t('alerte_urgence_detectee')}
+                </div>
+              )}
+              {erreur && <div className="kiosk-alerte" role="alert">{erreur}</div>}
 
-            <div className="kiosk-actions">
-              <button
-                className="kiosk-btn kiosk-btn--primary"
-                onClick={continuer}
-                disabled={!peutContinuer || enChargement}
-              >
-                {enChargement ? '…' : t('continuer')}
-              </button>
-              <button
-                className="kiosk-btn kiosk-btn--secondary"
-                onClick={() => navigate('/')}
-                disabled={enChargement}
-              >
-                {t('retour')}
-              </button>
+              <div className="kiosk-actions">
+                <button className="kiosk-btn kiosk-btn--primary" onClick={continuer} disabled={!peutContinuer || enChargement}>
+                  {enChargement ? '…' : t('continuer')}
+                </button>
+                <button className="kiosk-btn kiosk-btn--secondary" onClick={() => navigate('/')} disabled={enChargement}>
+                  {t('retour')}
+                </button>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-      </div>
+        </div>
+      )}
     </div>
   )
 }

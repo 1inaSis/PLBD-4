@@ -76,11 +76,12 @@ export default function ResultatPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioActif])
 
-  // Mode illettré : lecture automatique + message de fin
+  // Mode illettré : lecture complète du résultat avec message d'attente
   useEffect(() => {
-    if (!modeIllettré || !texteResultat) return
-    const timerMerci = setTimeout(() => parler(t('illettré_merci'), langue), 6000)
-    return () => clearTimeout(timerMerci)
+    if (!modeIllettré || !esi || !esiLibelle || !esiDelai) return
+    const texte = t('ill_resultat').replace('{esi}', esiLibelle).replace('{delai}', esiDelai)
+    const timer = setTimeout(() => parler(texte, langue), 800)
+    return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -118,104 +119,119 @@ export default function ResultatPage() {
         </div>
       )}
 
-      <div className="kiosk-center">
-        <div className="resultat-carte kiosk-card">
+      {/* ── Vue mode illettré : badge ESI géant + attente ──────── */}
+      {modeIllettré ? (
+        <div className="kiosk-center">
+          <div className="kiosk-card kiosk-card--centree" style={{ gap: 28, textAlign: 'center', alignItems: 'center' }}>
+            {/* Numéro ticket */}
+            <div>
+              <span className="eyebrow">{t('votre_ticket')}</span>
+              <div className="resultat-ticket" style={{ fontSize: '2.5rem' }}>{numeroTicket}</div>
+            </div>
 
-          {/* Ticket numéroté */}
-          <div className="resultat-ticket-wrapper">
-            <span className="eyebrow">{t('votre_ticket')}</span>
-            <span className="resultat-ticket">{numeroTicket}</span>
-          </div>
-
-          {/* Badge ESI principal */}
-          {esi && style && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div
-                className="resultat-esi-badge"
-                style={{
-                  background: style.fond,
-                  border: `2px solid ${style.bordure}`,
-                  color: style.texte,
-                  flex: 1,
-                }}
-                aria-label={`${t('niveau_priorite')} ESI ${esi} : ${esiLibelle}`}
+            {/* Cercle ESI géant */}
+            {esi && style && (
+              <div style={{
+                width: 140, height: 140, borderRadius: '50%',
+                background: style.fond, border: `5px solid ${style.bordure}`,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              }}
+                aria-label={`${t('niveau_priorite')} ESI ${esi}`}
               >
-                <span className="resultat-esi-numero">{esi}</span>
-                <div className="resultat-esi-infos">
-                  <span className="resultat-esi-libelle">{esiLibelle}</span>
-                  <span className="resultat-esi-sous">{t('niveau_priorite')}</span>
-                </div>
-              </div>
-              {supporte && texteResultat && (
-                <button
-                  className={`tts-btn${estEnTrainDeParler ? ' tts-btn--actif' : ''}`}
-                  onClick={() => parler(texteResultat, langue)}
-                  aria-label={t('tts_ecouter')}
-                  title={t('tts_ecouter')}
-                  style={{ fontSize: '1.4rem', padding: '6px 10px' }}
-                >🔊</button>
-              )}
-            </div>
-          )}
-
-          {/* Ligne de statut (niveau_urgence du backend) */}
-          {res.niveau_urgence && (
-            <p className="resultat-statut">{res.niveau_urgence}</p>
-          )}
-
-          {/* Explications ESI */}
-          {explications.length > 0 && (
-            <div className="resultat-explications">
-              <p className="resultat-expl-titre">{t('facteurs_influence')}</p>
-              <ul className="resultat-expl-liste">
-                {explications.map((e, i) => (
-                  <li key={i} className="resultat-expl-item">
-                    <span className="resultat-expl-check">✓</span> {e}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Méta-informations : file / attente / médecin */}
-          <div className="resultat-meta">
-            <div className="resultat-meta-item">
-              <span className="resultat-meta-label">{t('position_file')}</span>
-              <span className="resultat-meta-valeur">{positionFile}</span>
-            </div>
-            <div className="resultat-meta-item">
-              <span className="resultat-meta-label">{t('temps_attente')}</span>
-              <span className="resultat-meta-valeur">{attente}</span>
-            </div>
-            {medecin && (
-              <div className="resultat-meta-item">
-                <span className="resultat-meta-label">{t('medecin_assigne')}</span>
-                <span className="resultat-meta-valeur">{medecin}</span>
+                <span style={{ fontSize: '4rem', fontWeight: 900, color: style.texte, lineHeight: 1 }}>{esi}</span>
+                <span style={{ fontSize: '0.85rem', color: style.texte, fontWeight: 600 }}>{esiLibelle}</span>
               </div>
             )}
-            {confiance != null && (
-              <div className="resultat-meta-item">
-                <span className="resultat-meta-label">{t('fiabilite_ia')}</span>
-                <span className="resultat-meta-valeur">{confiance} %</span>
-              </div>
-            )}
-          </div>
 
-          {/* Message de guidage */}
-          <div className="resultat-instruction">{t('instruction_att')}</div>
+            {/* Message attente */}
+            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f8fafc', lineHeight: 1.4 }}>
+              {t('instruction_att')}
+            </div>
 
-          {/* Bouton nouvelle consultation */}
-          <div className="kiosk-actions">
-            <button
-              className="kiosk-btn kiosk-btn--secondary"
-              onClick={nouvelleConsultation}
-            >
+            <button className="kiosk-btn kiosk-btn--secondary" onClick={nouvelleConsultation}>
               {t('nvlle_consult')}
             </button>
           </div>
-
         </div>
-      </div>
+      ) : (
+        /* ── Vue normale ─────────────────────────────────────────── */
+        <div className="kiosk-center">
+          <div className="resultat-carte kiosk-card">
+
+            <div className="resultat-ticket-wrapper">
+              <span className="eyebrow">{t('votre_ticket')}</span>
+              <span className="resultat-ticket">{numeroTicket}</span>
+            </div>
+
+            {esi && style && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  className="resultat-esi-badge"
+                  style={{ background: style.fond, border: `2px solid ${style.bordure}`, color: style.texte, flex: 1 }}
+                  aria-label={`${t('niveau_priorite')} ESI ${esi} : ${esiLibelle}`}
+                >
+                  <span className="resultat-esi-numero">{esi}</span>
+                  <div className="resultat-esi-infos">
+                    <span className="resultat-esi-libelle">{esiLibelle}</span>
+                    <span className="resultat-esi-sous">{t('niveau_priorite')}</span>
+                  </div>
+                </div>
+                {supporte && texteResultat && (
+                  <button
+                    className={`tts-btn${estEnTrainDeParler ? ' tts-btn--actif' : ''}`}
+                    onClick={() => parler(texteResultat, langue)}
+                    aria-label={t('tts_ecouter')} title={t('tts_ecouter')}
+                    style={{ fontSize: '1.4rem', padding: '6px 10px' }}
+                  >🔊</button>
+                )}
+              </div>
+            )}
+
+            {res.niveau_urgence && <p className="resultat-statut">{res.niveau_urgence}</p>}
+
+            {explications.length > 0 && (
+              <div className="resultat-explications">
+                <p className="resultat-expl-titre">{t('facteurs_influence')}</p>
+                <ul className="resultat-expl-liste">
+                  {explications.map((e, i) => (
+                    <li key={i} className="resultat-expl-item"><span className="resultat-expl-check">✓</span> {e}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="resultat-meta">
+              <div className="resultat-meta-item">
+                <span className="resultat-meta-label">{t('position_file')}</span>
+                <span className="resultat-meta-valeur">{positionFile}</span>
+              </div>
+              <div className="resultat-meta-item">
+                <span className="resultat-meta-label">{t('temps_attente')}</span>
+                <span className="resultat-meta-valeur">{attente}</span>
+              </div>
+              {medecin && (
+                <div className="resultat-meta-item">
+                  <span className="resultat-meta-label">{t('medecin_assigne')}</span>
+                  <span className="resultat-meta-valeur">{medecin}</span>
+                </div>
+              )}
+              {confiance != null && (
+                <div className="resultat-meta-item">
+                  <span className="resultat-meta-label">{t('fiabilite_ia')}</span>
+                  <span className="resultat-meta-valeur">{confiance} %</span>
+                </div>
+              )}
+            </div>
+
+            <div className="resultat-instruction">{t('instruction_att')}</div>
+            <div className="kiosk-actions">
+              <button className="kiosk-btn kiosk-btn--secondary" onClick={nouvelleConsultation}>
+                {t('nvlle_consult')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

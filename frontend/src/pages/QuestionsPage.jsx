@@ -427,36 +427,45 @@ function VueQuestion({
 
         {/* Réponses — type choix */}
         {question.type === 'choix' && Array.isArray(question.choix) && (
-          <div>
-            <div
-              className="q-choix-grille"
-              style={{ gridTemplateColumns: question.choix.length <= 2 ? '1fr 1fr' : '1fr' }}
-            >
-              {question.choix.map((option, i) => (
-                <button key={i} className="kiosk-btn q-btn-choix" onClick={() => onRepondre(option)}>
-                  {option}
-                </button>
-              ))}
-            </div>
-            {voixQ.supporte && (
-              <div style={{ textAlign: 'center', marginTop: 8 }}>
-                <button
-                  type="button"
-                  className={`voice-btn${voixQ.ecoute ? ' voice-btn--actif' : ''}`}
-                  onClick={voixQ.ecoute ? voixQ.arreter : voixQ.demarrer}
-                  aria-label={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
-                  title={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
-                >
-                  {voixQ.ecoute ? '⏹' : '🎤'}
-                </button>
-                {voixQ.ecoute && (
-                  <span style={{ fontSize: '0.85rem', color: '#94a3b8', marginLeft: 8 }}>
-                    {t('voice_ecoute')}
-                  </span>
-                )}
+          modeIllettré ? (
+            <ModeIlletréChoix
+              langue={langue}
+              choix={question.choix}
+              question={question.question}
+              onRepondre={onRepondre}
+            />
+          ) : (
+            <div>
+              <div
+                className="q-choix-grille"
+                style={{ gridTemplateColumns: question.choix.length <= 2 ? '1fr 1fr' : '1fr' }}
+              >
+                {question.choix.map((option, i) => (
+                  <button key={i} className="kiosk-btn q-btn-choix" onClick={() => onRepondre(option)}>
+                    {option}
+                  </button>
+                ))}
               </div>
-            )}
-          </div>
+              {voixQ.supporte && (
+                <div style={{ textAlign: 'center', marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className={`voice-btn${voixQ.ecoute ? ' voice-btn--actif' : ''}`}
+                    onClick={voixQ.ecoute ? voixQ.arreter : voixQ.demarrer}
+                    aria-label={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
+                    title={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
+                  >
+                    {voixQ.ecoute ? '⏹' : '🎤'}
+                  </button>
+                  {voixQ.ecoute && (
+                    <span style={{ fontSize: '0.85rem', color: '#94a3b8', marginLeft: 8 }}>
+                      {t('voice_ecoute')}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )
         )}
 
         {/* Réponses — type texte_libre */}
@@ -571,6 +580,59 @@ function ModeIlletréOuiNon({ langue, question, onRepondre }) {
       >
         👎<span style={{ fontSize: '0.9rem' }}>NON</span>
       </button>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Choix multiple géant avec voix auto — mode illettré
+// ─────────────────────────────────────────────────────────────────────────────
+function ModeIlletréChoix({ langue, choix, question, onRepondre }) {
+  const { t }      = useTranslation()
+  const { parler } = useTextToSpeech()
+  const relireTimerRef = useRef(null)
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+
+  const voix = useVoiceInput({
+    langue,
+    timeout: 15000,
+    onResult: (transcript) => {
+      const tn = norm(transcript)
+      const match = choix.find(opt => opt && tn.includes(norm(opt)))
+      if (match) { clearTimeout(relireTimerRef.current); onRepondre(match) }
+    },
+    onEnd: () => {
+      relireTimerRef.current = setTimeout(() => {
+        parler(`${t('illettré_relecture')} ${question}`, langue)
+        setTimeout(() => voix.demarrer(), 2000)
+      }, 500)
+    },
+  })
+
+  useEffect(() => {
+    const timer = setTimeout(() => voix.demarrer(), 1000)
+    return () => { clearTimeout(timer); clearTimeout(relireTimerRef.current); voix.arreter() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
+      {choix.map((option, i) => (
+        <button
+          key={i}
+          onClick={() => { clearTimeout(relireTimerRef.current); voix.arreter(); onRepondre(option) }}
+          style={{
+            padding: '20px 24px', borderRadius: 14,
+            border: '2px solid rgba(0,212,255,0.25)',
+            background: 'rgba(0,212,255,0.08)', color: '#f8fafc',
+            fontSize: '1.15rem', fontWeight: 600, cursor: 'pointer',
+            textAlign: 'center', lineHeight: 1.3,
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          {option}
+        </button>
+      ))}
     </div>
   )
 }
