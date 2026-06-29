@@ -29,6 +29,7 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import BoutonAudio from '../components/BoutonAudio'
 import ClavierNumerique from '../components/ClavierNumerique'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 import '../styles/kiosk.css'
 
 const PRIORITE_COULEUR = { rouge: 5, orange: 4, jaune: 3, vert: 2, gris: 1 }
@@ -96,7 +97,7 @@ const ETAT  = { PRET: 'pret', COMPTE: 'compte', ATTENTE: 'attente', COMPLET: 'co
 // ═════════════════════════════════════════════════════════════════════════════
 export default function ConstantesPage() {
   const navigate = useNavigate()
-  const { patient, setConstantes, reinitialiser } = usePatient()
+  const { patient, setConstantes, reinitialiser, modeIllettré } = usePatient()
   const { t, langue } = useTranslation()
   const handleExpiration = useCallback(async () => {
     if (patient.session_id) await abandonnerSession(patient.session_id)
@@ -330,6 +331,18 @@ export default function ConstantesPage() {
       <SelecteurLangue />
       <BoutonAudio />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
+
+      {/* Badge Mode Assisté */}
+      {modeIllettré && (
+        <div style={{
+          position: 'fixed', top: 8, right: 8, zIndex: 2000,
+          background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)',
+          borderRadius: 20, padding: '4px 12px', fontSize: '0.78rem', color: '#00d4ff',
+        }}>
+          🤝 {t('illettré_mode_badge')}
+        </div>
+      )}
+
       <GuideEtape
         etape={3}
         sousEtape={
@@ -407,7 +420,7 @@ function VueMesure({
 }) {
   const { t, langue }  = useTranslation()
   const { parler, arreter, estEnTrainDeParler, supporte } = useTextToSpeech()
-  const { audioActif } = usePatient()
+  const { audioActif, modeIllettré } = usePatient()
   const estSimulee      = !!etape.simulee
   const estManuelle     = !!etape.manuelle
   const estSimulerLocal = !!etape.simulerLocal
@@ -499,6 +512,8 @@ function VueMesure({
               instruction={t(etape.instruction ?? 'const_kf65r_guide')}
               onValider={onValiderManuel}
               t={t}
+              modeIllettré={modeIllettré}
+              langue={langue}
             />
           </>
         )}
@@ -692,11 +707,44 @@ function evaluerCouleurKF65R(type, v) {
   return 'vert'
 }
 
-function SaisieKF65R({ instruction, onValider, t }) {
+function SaisieKF65R({ instruction, onValider, t, modeIllettré = false, langue = 'fr' }) {
   const [sys, setSys] = useState('')
   const [dia, setDia] = useState('')
   const [pul, setPul] = useState('')
   const [focusChamp, setFocusChamp] = useState(null) // 'sys' | 'dia' | 'pul' | null
+  const [champVocal, setChampVocal] = useState(null) // champ actif pour la reco vocale illettré
+
+  // Reconnaissance vocale — SYS
+  const voixSys = useVoiceInput({
+    langue,
+    onResult: (transcript) => {
+      const val = transcript.replace(/\D/g, '').slice(0, 3)
+      if (val) { setSys(val); setChampVocal('dia') }
+    },
+  })
+  // Reconnaissance vocale — DIA
+  const voixDia = useVoiceInput({
+    langue,
+    onResult: (transcript) => {
+      const val = transcript.replace(/\D/g, '').slice(0, 3)
+      if (val) { setDia(val); setChampVocal('pul') }
+    },
+  })
+  // Reconnaissance vocale — PUL
+  const voixPul = useVoiceInput({
+    langue,
+    onResult: (transcript) => {
+      const val = transcript.replace(/\D/g, '').slice(0, 3)
+      if (val) { setPul(val); setChampVocal(null) }
+    },
+  })
+
+  // En mode illettré, lecture TTS de l'instruction SYS au montage
+  useEffect(() => {
+    if (!modeIllettré) return
+    setChampVocal('sys')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const sysN = Number(sys)
   const diaN = Number(dia)
@@ -737,6 +785,20 @@ function SaisieKF65R({ instruction, onValider, t }) {
               {t(couleurSys === 'vert' ? 'bio_normal' : couleurSys === 'orange' ? 'bio_attention' : 'bio_critique')}
             </div>
           )}
+          {/* Bouton vocal SYS — mode illettré */}
+          {modeIllettré && voixSys.supporte && (
+            <button
+              onClick={() => { setChampVocal('sys'); voixSys.ecoute ? voixSys.arreter() : voixSys.demarrer() }}
+              style={{
+                marginTop: 4, padding: '8px 16px', borderRadius: 8,
+                border: '1px solid rgba(0,212,255,0.3)',
+                background: champVocal === 'sys' && voixSys.ecoute ? 'rgba(0,212,255,0.25)' : 'rgba(0,212,255,0.1)',
+                color: '#00d4ff', fontSize: '0.9rem', cursor: 'pointer',
+              }}
+            >
+              {voixSys.ecoute ? '⏹ Stop' : `🎤 ${t('illettré_tension_sys')}`}
+            </button>
+          )}
         </div>
 
         <div className="tension-input-groupe">
@@ -761,6 +823,20 @@ function SaisieKF65R({ instruction, onValider, t }) {
               {t(couleurDia === 'vert' ? 'bio_normal' : couleurDia === 'orange' ? 'bio_attention' : 'bio_critique')}
             </div>
           )}
+          {/* Bouton vocal DIA — mode illettré */}
+          {modeIllettré && voixDia.supporte && (
+            <button
+              onClick={() => { setChampVocal('dia'); voixDia.ecoute ? voixDia.arreter() : voixDia.demarrer() }}
+              style={{
+                marginTop: 4, padding: '8px 16px', borderRadius: 8,
+                border: '1px solid rgba(0,212,255,0.3)',
+                background: champVocal === 'dia' && voixDia.ecoute ? 'rgba(0,212,255,0.25)' : 'rgba(0,212,255,0.1)',
+                color: '#00d4ff', fontSize: '0.9rem', cursor: 'pointer',
+              }}
+            >
+              {voixDia.ecoute ? '⏹ Stop' : `🎤 ${t('illettré_tension_dia')}`}
+            </button>
+          )}
         </div>
 
         <div className="tension-input-groupe">
@@ -779,6 +855,20 @@ function SaisieKF65R({ instruction, onValider, t }) {
             onFocus={() => setFocusChamp('pul')}
             onClick={() => setFocusChamp('pul')}
           />
+          {/* Bouton vocal PUL — mode illettré */}
+          {modeIllettré && voixPul.supporte && (
+            <button
+              onClick={() => { setChampVocal('pul'); voixPul.ecoute ? voixPul.arreter() : voixPul.demarrer() }}
+              style={{
+                marginTop: 4, padding: '8px 16px', borderRadius: 8,
+                border: '1px solid rgba(0,212,255,0.3)',
+                background: champVocal === 'pul' && voixPul.ecoute ? 'rgba(0,212,255,0.25)' : 'rgba(0,212,255,0.1)',
+                color: '#00d4ff', fontSize: '0.9rem', cursor: 'pointer',
+              }}
+            >
+              {voixPul.ecoute ? '⏹ Stop' : `🎤 ${t('illettré_tension_pul')}`}
+            </button>
+          )}
         </div>
       </div>
 

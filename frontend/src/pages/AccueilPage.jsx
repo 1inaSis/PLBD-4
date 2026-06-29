@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import { scannerCIN, saisirManuel, abandonnerSession } from '../services/api'
@@ -11,6 +11,7 @@ import ModalInactivite from '../components/ModalInactivite'
 import BoutonPleinEcran from '../components/BoutonPleinEcran'
 import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 import { useInactivite } from '../hooks/useInactivite'
 import { useFullscreen } from '../hooks/useFullscreen'
 import ClavierNumerique from '../components/ClavierNumerique'
@@ -27,7 +28,7 @@ const VUE = {
 
 export default function AccueilPage() {
   const navigate = useNavigate()
-  const { setIdentite, connecterBorne, reinitialiser, patient, audioActif, setAudioActif } = usePatient()
+  const { setIdentite, connecterBorne, reinitialiser, patient, audioActif, setAudioActif, modeIllettré, setModeIllettré } = usePatient()
   const { t, langue } = useTranslation()
   const { parler, arreter, activer } = useTextToSpeech()
 
@@ -45,6 +46,11 @@ export default function AccueilPage() {
   }, [patient.session_id, reinitialiser, navigate])
   const { avertissement, compte, reset } = useInactivite({ onExpiration: handleExpiration })
   const { enterFullscreen } = useFullscreen()
+
+  // ── Mode illettré ─────────────────────────────────────────────────────────
+  const timerIllettréRef = useRef(null)
+  const [prenomCapté, setPrenomCapté] = useState('')
+  const [phaseIllettré, setPhaseIllettré] = useState('attente') // 'attente'|'prénom'|'confirmé'
 
   const [sessionManuelId, setSessionManuelId] = useState(null)
   const [formulaire, setFormulaire] = useState({ nom: '', prenom: '', date_naissance: '' })
@@ -99,6 +105,63 @@ export default function AccueilPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ── Timer 6s → activation mode illettré ─────────────────────────────────
+  useEffect(() => {
+    timerIllettréRef.current = setTimeout(() => {
+      setModeIllettré(true)
+      if (!audioActif) {
+        activer()
+        setAudioActif(true)
+      }
+      setTimeout(() => parler(t('illettré_bienvenue'), langue), 500)
+      setPhaseIllettré('prénom')
+    }, 6000)
+    return () => clearTimeout(timerIllettréRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const annulerTimer = () => clearTimeout(timerIllettréRef.current)
+
+  // ── Reconnaissance vocale du prénom (mode illettré) ───────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const voixPrénom = useVoiceInput({
+    langue,
+    onResult: (transcript) => {
+      const prenom = transcript.trim().split(' ')[0]
+      setPrenomCapté(prenom)
+      setFormulaire(prev => ({ ...prev, prenom }))
+      setTimeout(() => parler(`${t('illettré_prenom_recu')} ${prenom}`, langue), 300)
+      setPhaseIllettré('confirmé')
+      // Créer session et naviguer
+      setTimeout(async () => {
+        try {
+          const data = await saisirManuel(null, 'Patient', prenom, '')
+          setIdentite({
+            session_id: data.session_id,
+            nom:        data.nom,
+            prenom:     data.prenom,
+            age:        data.age,
+            sexe:       data.sexe ?? -1,
+            numero_cin: '',
+          })
+          setPrenomBienvenue(data.prenom)
+          setVue(VUE.BIENVENUE)
+        } catch {
+          navigate('/questionnaire')
+        }
+      }, 2000)
+    },
+  })
+
+  // Lance la reco vocale quand phaseIllettré === 'prénom'
+  useEffect(() => {
+    if (phaseIllettré === 'prénom' && voixPrénom.supporte) {
+      const timer = setTimeout(() => voixPrénom.demarrer(), 1500)
+      return () => clearTimeout(timer)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phaseIllettré])
 
   // ── Activer / désactiver le guidage vocal ────────────────────────────────
   const toggleAudio = () => {
@@ -228,6 +291,37 @@ export default function AccueilPage() {
       <BoutonPleinEcran />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
 
+      {/* Badge Mode Assisté */}
+      {modeIllettré && (
+        <div style={{
+          position: 'fixed', top: 8, right: 8, zIndex: 2000,
+          background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)',
+          borderRadius: 20, padding: '4px 12px', fontSize: '0.78rem', color: '#00d4ff',
+        }}>
+          🤝 {t('illettré_mode_badge')}
+        </div>
+      )}
+
+      {/* Indicateur écoute prénom (mode illettré) */}
+      {phaseIllettré === 'prénom' && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 1999, background: 'rgba(0,0,0,0.75)', borderRadius: 12,
+          padding: '10px 20px', color: '#00d4ff', fontSize: '1rem',
+        }}>
+          🎙 {t('illettré_bienvenue')}
+        </div>
+      )}
+      {phaseIllettré === 'confirmé' && prenomCapté && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 1999, background: 'rgba(0,0,0,0.75)', borderRadius: 12,
+          padding: '10px 20px', color: '#34d399', fontSize: '1rem',
+        }}>
+          ✓ {t('illettré_prenom_recu')} {prenomCapté}
+        </div>
+      )}
+
       <div className={`ws-badge ${wsConnecte ? 'ws-badge--ok' : 'ws-badge--off'}`}>
         {wsConnecte ? '● Connecté' : '○ Hors ligne'}
       </div>
@@ -263,7 +357,7 @@ export default function AccueilPage() {
               <div className="kiosk-alerte" role="alert">{erreur}</div>
             )}
 
-            <button className="kiosk-btn kiosk-btn--primary" onClick={lancerScan}>
+            <button className="kiosk-btn kiosk-btn--primary" onClick={() => { annulerTimer(); lancerScan() }}>
               <svg className="kiosk-btn-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="2" y="5" width="20" height="14" rx="2" />
                 <path d="M2 10h20" />
@@ -273,7 +367,7 @@ export default function AccueilPage() {
 
             <button
               className="kiosk-btn kiosk-btn--secondary"
-              onClick={() => { setFormulaire({ nom: '', prenom: '', date_naissance: '' }); setSessionManuelId(null); setVue(VUE.FORMULAIRE) }}
+              onClick={() => { annulerTimer(); setFormulaire({ nom: '', prenom: '', date_naissance: '' }); setSessionManuelId(null); setVue(VUE.FORMULAIRE) }}
             >
               {t('saisie_manuelle')}
             </button>

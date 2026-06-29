@@ -82,6 +82,9 @@ export function PatientProvider({ children }) {
   // Guidage vocal — activé/désactivé par le patient
   const [audioActif, setAudioActif] = useState(false)
 
+  // Mode patient illettré — activé automatiquement après 6s d'inactivité
+  const [modeIllettré, setModeIllettré] = useState(false)
+
   // Référence WebSocket — useRef évite les re-renders inutiles
   const wsRef = useRef(null)
 
@@ -139,6 +142,7 @@ export function PatientProvider({ children }) {
     deconnecterBorne()
     dispatch({ type: 'REINITIALISER' })
     setAudioActif(false)
+    setModeIllettré(false)
   }
 
   return (
@@ -158,6 +162,8 @@ export function PatientProvider({ children }) {
       setLangue,
       audioActif,
       setAudioActif,
+      modeIllettré,
+      setModeIllettré,
     }}>
       {children}
     </PatientContext.Provider>

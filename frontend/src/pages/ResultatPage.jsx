@@ -33,7 +33,7 @@ const COULEURS_ESI = {
 
 export default function ResultatPage() {
   const navigate  = useNavigate()
-  const { patient, reinitialiser, audioActif } = usePatient()
+  const { patient, reinitialiser, audioActif, modeIllettré } = usePatient()
   const { t, langue } = useTranslation()
   const { parler, estEnTrainDeParler, supporte } = useTextToSpeech()
   const [sortie, setSortie] = useState(false)
@@ -76,6 +76,14 @@ export default function ResultatPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioActif])
 
+  // Mode illettré : lecture automatique + message de fin
+  useEffect(() => {
+    if (!modeIllettré || !texteResultat) return
+    const timerMerci = setTimeout(() => parler(t('illettré_merci'), langue), 6000)
+    return () => clearTimeout(timerMerci)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   if (!res) return null
 
   // ── Raccourcis pour l'affichage ───────────────────────────────────────────
@@ -98,6 +106,17 @@ export default function ResultatPage() {
       <BoutonAudio />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
       <GuideEtape etape={5} />
+
+      {/* Badge Mode Assisté */}
+      {modeIllettré && (
+        <div style={{
+          position: 'fixed', top: 8, right: 8, zIndex: 2000,
+          background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)',
+          borderRadius: 20, padding: '4px 12px', fontSize: '0.78rem', color: '#00d4ff',
+        }}>
+          🤝 {t('illettré_mode_badge')}
+        </div>
+      )}
 
       <div className="kiosk-center">
         <div className="resultat-carte kiosk-card">

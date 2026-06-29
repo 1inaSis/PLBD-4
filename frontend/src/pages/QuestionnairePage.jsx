@@ -3,7 +3,7 @@
 // et décrit librement ses symptômes. POST /api/symptomes envoie
 // le texte + les zones ; le NLP extrait les features côté serveur.
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePatient } from '../context/PatientContext'
 import { soumettreSymptomes, abandonnerSession } from '../services/api'
@@ -17,11 +17,12 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useInactivite } from '../hooks/useInactivite'
 import BoutonAudio from '../components/BoutonAudio'
 import ZoneSaisieMixte from '../components/ZoneSaisieMixte'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 import '../styles/kiosk.css'
 
 export default function QuestionnairePage() {
   const navigate = useNavigate()
-  const { patient, setSymptomes, reinitialiser, audioActif } = usePatient()
+  const { patient, setSymptomes, reinitialiser, audioActif, modeIllettré } = usePatient()
   const { t, langue } = useTranslation()
   const { parler, arreter } = useTextToSpeech()
   const handleExpiration = useCallback(async () => {
@@ -74,13 +75,16 @@ export default function QuestionnairePage() {
   const retirer = (id) => setZonesSelectionnees(prev => prev.filter(z => z !== id))
 
   const continuer = async () => {
-    if (!peutContinuer || enChargement) return
+    if (enChargement) return
+    // En mode illettré, on continue même sans texte minimum
+    if (!modeIllettré && !peutContinuer) return
     setEnChargement(true)
     setErreur(null)
 
     // Si texte vide, on génère automatiquement depuis les zones sélectionnées
     const texteEnvoye = texteSymptome.trim() ||
-      zonesSelectionnees.map(id => ZONES_MAP[id]).join(', ')
+      zonesSelectionnees.map(id => ZONES_MAP[id]).join(', ') ||
+      (modeIllettré ? 'Symptômes non décrits verbalement' : '')
 
     try {
       const res = await soumettreSymptomes(
@@ -112,6 +116,17 @@ export default function QuestionnairePage() {
       <BoutonAudio />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
       <GuideEtape etape={2} />
+
+      {/* Badge Mode Assisté */}
+      {modeIllettré && (
+        <div style={{
+          position: 'fixed', top: 8, right: 8, zIndex: 2000,
+          background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)',
+          borderRadius: 20, padding: '4px 12px', fontSize: '0.78rem', color: '#00d4ff',
+        }}>
+          🤝 {t('illettré_mode_badge')}
+        </div>
+      )}
 
       <div className="questionnaire-layout">
 
@@ -160,13 +175,21 @@ export default function QuestionnairePage() {
               <label className="symptome-label">
                 {t('symptomes_label')} <span className="symptome-optionnel">{t('symptomes_opt')}</span>
               </label>
-              <ZoneSaisieMixte
-                value={texteSymptome}
-                onChange={setTexteSymptome}
-                langue={langue}
-                placeholder={t('saisie_placeholder')}
-              />
-              <span className="symptome-compteur">{texteSymptome.length} / 500</span>
+              {modeIllettré ? (
+                <ModeIlletréSymptomes
+                  langue={langue}
+                  onTexte={(texte) => setTexteSymptome(texte)}
+                  onFin={() => continuer()}
+                />
+              ) : (
+                <ZoneSaisieMixte
+                  value={texteSymptome}
+                  onChange={setTexteSymptome}
+                  langue={langue}
+                  placeholder={t('saisie_placeholder')}
+                />
+              )}
+              {!modeIllettré && <span className="symptome-compteur">{texteSymptome.length} / 500</span>}
             </div>
 
             {/* Alerte urgence détectée par le NLP */}
@@ -200,6 +223,78 @@ export default function QuestionnairePage() {
         </section>
 
       </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sous-composant : saisie vocale des symptômes pour mode illettré
+// ─────────────────────────────────────────────────────────────────────────────
+function ModeIlletréSymptomes({ langue, onTexte, onFin }) {
+  const { t } = useTranslation()
+  const { parler } = useTextToSpeech()
+  const [texte, setTexte] = useState('')
+  const silenceTimerRef = useRef(null)
+
+  const voix = useVoiceInput({
+    langue,
+    onResult: (transcript) => {
+      const nouveau = texte ? texte + ' ' + transcript : transcript
+      setTexte(nouveau)
+      onTexte(nouveau)
+      // Silence 5s → arrêt et passage à l'étape suivante
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = setTimeout(() => {
+        voix.arreter()
+        setTimeout(onFin, 500)
+      }, 5000)
+    },
+  })
+
+  // TTS + lancement automatique de l'écoute
+  useEffect(() => {
+    const t1 = setTimeout(() => parler(t('illettré_symptomes'), langue), 300)
+    const t2 = setTimeout(() => voix.demarrer(), 1800)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(silenceTimerRef.current)
+      voix.arreter()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+      {/* Texte transcrit en grands caractères */}
+      <div style={{
+        minHeight: 80, width: '100%', padding: '14px 16px',
+        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 12, fontSize: '1.3rem', color: '#f8fafc', lineHeight: 1.6,
+        direction: langue === 'ar' ? 'rtl' : 'ltr',
+      }}>
+        {texte || (
+          <span style={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
+            {t('saisie_ecoute')}
+          </span>
+        )}
+      </div>
+      {/* Indicateur écoute */}
+      {voix.ecoute && (
+        <div style={{ color: '#00d4ff', fontSize: '0.9rem' }}>
+          🎙 {t('illettré_symptomes')}
+        </div>
+      )}
+      {/* Bouton stop manuel */}
+      <button
+        onClick={() => { clearTimeout(silenceTimerRef.current); voix.arreter(); setTimeout(onFin, 300) }}
+        style={{
+          padding: '12px 28px', borderRadius: 10, border: '1px solid rgba(0,212,255,0.3)',
+          background: 'rgba(0,212,255,0.15)', color: '#00d4ff', fontSize: '1rem', cursor: 'pointer',
+        }}
+      >
+        ⏹ {t('saisie_stop')}
+      </button>
     </div>
   )
 }

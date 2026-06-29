@@ -36,7 +36,7 @@ const PHASE = {
 // ═════════════════════════════════════════════════════════════════════════════
 export default function QuestionsPage() {
   const navigate = useNavigate()
-  const { patient, setResultatTriage, reinitialiser } = usePatient()
+  const { patient, setResultatTriage, reinitialiser, modeIllettré } = usePatient()
   const { t, langue } = useTranslation()
   const handleExpiration = useCallback(async () => {
     if (patient.session_id) await abandonnerSession(patient.session_id)
@@ -200,6 +200,17 @@ export default function QuestionsPage() {
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
       <GuideEtape etape={4} />
 
+      {/* Badge Mode Assisté */}
+      {modeIllettré && (
+        <div style={{
+          position: 'fixed', top: 8, right: 8, zIndex: 2000,
+          background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)',
+          borderRadius: 20, padding: '4px 12px', fontSize: '0.78rem', color: '#00d4ff',
+        }}>
+          🤝 {t('illettré_mode_badge')}
+        </div>
+      )}
+
       {phase === PHASE.CHARGEMENT && (
         <VueChargement numQuestion={numQuestion} />
       )}
@@ -304,7 +315,7 @@ function VueQuestion({
   passerVisible, onRepondre, onPasser, onRetour,
 }) {
   const { t, langue }  = useTranslation()
-  const { audioActif } = usePatient()
+  const { audioActif, modeIllettré } = usePatient()
   const { parler, arreter, estEnTrainDeParler, supporte } = useTextToSpeech()
   const pctProgression = Math.round(((numQuestion - 1) / maxQuestions) * 100)
 
@@ -376,34 +387,42 @@ function VueQuestion({
 
         {/* Réponses — type oui_non */}
         {question.type === 'oui_non' && (
-          <div>
-            <div className="q-oui-non">
-              <button className="kiosk-btn q-btn-oui" onClick={() => onRepondre('oui')}>
-                <span className="q-btn-icone">✓</span> OUI
-              </button>
-              <button className="kiosk-btn q-btn-non" onClick={() => onRepondre('non')}>
-                <span className="q-btn-icone">✗</span> NON
-              </button>
-            </div>
-            {voixQ.supporte && (
-              <div style={{ textAlign: 'center', marginTop: 8 }}>
-                <button
-                  type="button"
-                  className={`voice-btn${voixQ.ecoute ? ' voice-btn--actif' : ''}`}
-                  onClick={voixQ.ecoute ? voixQ.arreter : voixQ.demarrer}
-                  aria-label={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
-                  title={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
-                >
-                  {voixQ.ecoute ? '⏹' : '🎤'}
+          modeIllettré ? (
+            <ModeIlletréOuiNon
+              langue={langue}
+              question={question.question}
+              onRepondre={onRepondre}
+            />
+          ) : (
+            <div>
+              <div className="q-oui-non">
+                <button className="kiosk-btn q-btn-oui" onClick={() => onRepondre('oui')}>
+                  <span className="q-btn-icone">✓</span> OUI
                 </button>
-                {voixQ.ecoute && (
-                  <span style={{ fontSize: '0.85rem', color: '#94a3b8', marginLeft: 8 }}>
-                    {t('voice_ecoute')}
-                  </span>
-                )}
+                <button className="kiosk-btn q-btn-non" onClick={() => onRepondre('non')}>
+                  <span className="q-btn-icone">✗</span> NON
+                </button>
               </div>
-            )}
-          </div>
+              {voixQ.supporte && (
+                <div style={{ textAlign: 'center', marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className={`voice-btn${voixQ.ecoute ? ' voice-btn--actif' : ''}`}
+                    onClick={voixQ.ecoute ? voixQ.arreter : voixQ.demarrer}
+                    aria-label={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
+                    title={voixQ.ecoute ? t('voice_arreter') : t('voice_demarrer')}
+                  >
+                    {voixQ.ecoute ? '⏹' : '🎤'}
+                  </button>
+                  {voixQ.ecoute && (
+                    <span style={{ fontSize: '0.85rem', color: '#94a3b8', marginLeft: 8 }}>
+                      {t('voice_ecoute')}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )
         )}
 
         {/* Réponses — type choix */}
@@ -442,23 +461,30 @@ function VueQuestion({
 
         {/* Réponses — type texte_libre */}
         {question.type === 'texte_libre' && (
-          <div className="q-texte-libre-wrapper">
-            <ZoneSaisieMixte
-              value={texteLibre}
-              onChange={onTexteChange}
+          modeIllettré ? (
+            <ModeIlletréTexteLibre
               langue={langue}
-              placeholder={t('decrivez_mots')}
-              rows={3}
+              onFin={(texte) => onRepondre(texte || '')}
             />
-            <button
-              className="kiosk-btn kiosk-btn--primary"
-              onClick={() => onRepondre(texteLibre || '')}
-              disabled={!texteLibre.trim()}
-              style={{ marginTop: 8 }}
-            >
-              {t('valider_reponse')}
-            </button>
-          </div>
+          ) : (
+            <div className="q-texte-libre-wrapper">
+              <ZoneSaisieMixte
+                value={texteLibre}
+                onChange={onTexteChange}
+                langue={langue}
+                placeholder={t('decrivez_mots')}
+                rows={3}
+              />
+              <button
+                className="kiosk-btn kiosk-btn--primary"
+                onClick={() => onRepondre(texteLibre || '')}
+                disabled={!texteLibre.trim()}
+                style={{ marginTop: 8 }}
+              >
+                {t('valider_reponse')}
+              </button>
+            </div>
+          )
         )}
 
         {passerVisible && (
@@ -474,6 +500,151 @@ function VueQuestion({
         )}
 
       </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Boutons OUI/NON géants avec reconnaissance vocale — mode illettré
+// ─────────────────────────────────────────────────────────────────────────────
+function ModeIlletréOuiNon({ langue, question, onRepondre }) {
+  const { t }      = useTranslation()
+  const { parler } = useTextToSpeech()
+  const relireTimerRef = useRef(null)
+
+  const MOTS_OUI = ['oui', 'yes', 'نعم', "d'accord", 'ok', 'ouais']
+  const MOTS_NON = ['non', 'no', 'لا', 'pas', 'jamais', 'nope']
+
+  const voix = useVoiceInput({
+    langue,
+    timeout: 15000,
+    onResult: (transcript) => {
+      const txt = transcript.toLowerCase()
+      if (MOTS_OUI.some(m => txt.includes(m))) {
+        clearTimeout(relireTimerRef.current)
+        onRepondre('oui')
+      } else if (MOTS_NON.some(m => txt.includes(m))) {
+        clearTimeout(relireTimerRef.current)
+        onRepondre('non')
+      }
+    },
+    onEnd: () => {
+      // Timeout sans réponse reconnue → relire la question et relancer
+      relireTimerRef.current = setTimeout(() => {
+        parler(`${t('illettré_relecture')} ${question}`, langue)
+        setTimeout(() => voix.demarrer(), 2000)
+      }, 500)
+    },
+  })
+
+  useEffect(() => {
+    const timer = setTimeout(() => voix.demarrer(), 500)
+    return () => {
+      clearTimeout(timer)
+      clearTimeout(relireTimerRef.current)
+      voix.arreter()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
+      <button
+        onClick={() => { clearTimeout(relireTimerRef.current); voix.arreter(); onRepondre('oui') }}
+        style={{
+          width: 120, height: 120, borderRadius: 16, border: 'none',
+          background: 'rgba(16,185,129,0.3)', color: '#10b981',
+          fontSize: '3rem', cursor: 'pointer', display: 'flex',
+          flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+        }}
+      >
+        👍<span style={{ fontSize: '0.9rem' }}>OUI</span>
+      </button>
+      <button
+        onClick={() => { clearTimeout(relireTimerRef.current); voix.arreter(); onRepondre('non') }}
+        style={{
+          width: 120, height: 120, borderRadius: 16, border: 'none',
+          background: 'rgba(239,68,68,0.3)', color: '#ef4444',
+          fontSize: '3rem', cursor: 'pointer', display: 'flex',
+          flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+        }}
+      >
+        👎<span style={{ fontSize: '0.9rem' }}>NON</span>
+      </button>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Saisie vocale texte libre — mode illettré (questions adaptatives)
+// ─────────────────────────────────────────────────────────────────────────────
+function ModeIlletréTexteLibre({ langue, onFin }) {
+  const { t }      = useTranslation()
+  const { parler } = useTextToSpeech()
+  const [texte, setTexte]  = useState('')
+  const silenceTimerRef    = useRef(null)
+  const texteAccumuléRef   = useRef('')
+
+  const voix = useVoiceInput({
+    langue,
+    onResult: (transcript) => {
+      const nouveau = texteAccumuléRef.current
+        ? texteAccumuléRef.current + ' ' + transcript
+        : transcript
+      texteAccumuléRef.current = nouveau
+      setTexte(nouveau)
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = setTimeout(() => {
+        voix.arreter()
+        setTimeout(() => onFin(texteAccumuléRef.current), 500)
+      }, 5000)
+    },
+  })
+
+  useEffect(() => {
+    const t1 = setTimeout(() => parler(t('illettré_symptomes'), langue), 300)
+    const t2 = setTimeout(() => voix.demarrer(), 1800)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(silenceTimerRef.current)
+      voix.arreter()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+      <div style={{
+        minHeight: 80, width: '100%', padding: '14px 16px',
+        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 12, fontSize: '1.3rem', color: '#f8fafc', lineHeight: 1.6,
+        direction: langue === 'ar' ? 'rtl' : 'ltr',
+      }}>
+        {texte || (
+          <span style={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
+            {t('saisie_ecoute')}
+          </span>
+        )}
+      </div>
+      {voix.ecoute && (
+        <div style={{ color: '#00d4ff', fontSize: '0.9rem' }}>
+          🎙 {t('illettré_symptomes')}
+        </div>
+      )}
+      <button
+        onClick={() => {
+          clearTimeout(silenceTimerRef.current)
+          voix.arreter()
+          setTimeout(() => onFin(texteAccumuléRef.current), 300)
+        }}
+        style={{
+          padding: '12px 28px', borderRadius: 10, border: '1px solid rgba(0,212,255,0.3)',
+          background: 'rgba(0,212,255,0.15)', color: '#00d4ff', fontSize: '1rem', cursor: 'pointer',
+        }}
+      >
+        ⏹ {t('saisie_stop')}
+      </button>
     </div>
   )
 }
