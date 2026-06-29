@@ -48,7 +48,8 @@ export default function AccueilPage() {
   const { enterFullscreen } = useFullscreen()
 
   // ── Mode illettré ─────────────────────────────────────────────────────────
-  const timerIllettréRef = useRef(null)
+  const [modeChoixLecture, setModeChoixLecture] = useState(true)
+  const relireTimerRef = useRef(null)
   const [prenomCapté, setPrenomCapté] = useState('')
   const [phaseIllettré, setPhaseIllettré] = useState('attente') // 'attente'|'prénom'|'confirmé'
 
@@ -106,22 +107,41 @@ export default function AccueilPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Timer 6s → activation mode illettré ─────────────────────────────────
+  // ── Modal question de lecture — TTS auto + relecture toutes les 10s ──────
   useEffect(() => {
-    timerIllettréRef.current = setTimeout(() => {
-      setModeIllettré(true)
-      if (!audioActif) {
-        activer()
-        setAudioActif(true)
-      }
-      setTimeout(() => parler(t('illettré_bienvenue'), langue), 500)
-      setPhaseIllettré('prénom')
-    }, 6000)
-    return () => clearTimeout(timerIllettréRef.current)
+    if (!modeChoixLecture) { clearTimeout(relireTimerRef.current); return }
+    const jouer = () => {
+      if (!('speechSynthesis' in window)) return
+      window.speechSynthesis.cancel()
+      const u = new SpeechSynthesisUtterance(t('illettré_tts_question'))
+      u.lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
+      u.rate = 0.9
+      window.speechSynthesis.speak(u)
+      relireTimerRef.current = setTimeout(jouer, 10000)
+    }
+    const init = setTimeout(jouer, 800)
+    return () => { clearTimeout(init); clearTimeout(relireTimerRef.current); window.speechSynthesis?.cancel() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [modeChoixLecture])
 
-  const annulerTimer = () => clearTimeout(timerIllettréRef.current)
+  const choisirLecture = () => {
+    clearTimeout(relireTimerRef.current)
+    window.speechSynthesis?.cancel()
+    activer()
+    setModeIllettré(false)
+    setModeChoixLecture(false)
+  }
+
+  const choisirIllettré = () => {
+    clearTimeout(relireTimerRef.current)
+    window.speechSynthesis?.cancel()
+    activer()
+    setAudioActif(true)
+    setModeIllettré(true)
+    setModeChoixLecture(false)
+    setTimeout(() => parler(t('illettré_bienvenue'), langue), 600)
+    setPhaseIllettré('prénom')
+  }
 
   // ── Reconnaissance vocale du prénom (mode illettré) ───────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -291,6 +311,64 @@ export default function AccueilPage() {
       <BoutonPleinEcran />
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
 
+      {/* ── Modal — Question de lecture (premier choix à chaque session) ── */}
+      {modeChoixLecture && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 3000,
+          background: 'rgba(6,11,20,0.97)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 32, padding: 24,
+        }}>
+          <div style={{ fontSize: '2.5rem' }}>🏥</div>
+          <h2 style={{
+            color: '#f8fafc', fontSize: '1.4rem', fontWeight: 700,
+            textAlign: 'center', margin: 0, lineHeight: 1.5,
+            maxWidth: 480,
+          }}>
+            {t('illettré_question')}
+          </h2>
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {/* 📖 Je sais lire → mode normal */}
+            <button
+              onClick={choisirLecture}
+              style={{
+                width: 148, height: 148, borderRadius: 20,
+                background: 'rgba(255,255,255,0.08)',
+                border: '2px solid rgba(255,255,255,0.25)',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                gap: 10, cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>📖</span>
+              <span style={{ color: '#f8fafc', fontSize: '0.92rem', fontWeight: 600, textAlign: 'center' }}>
+                {t('illettré_oui_lecture')}
+              </span>
+            </button>
+            {/* 🎤 Je ne sais pas lire → mode assisté */}
+            <button
+              onClick={choisirIllettré}
+              style={{
+                width: 148, height: 148, borderRadius: 20,
+                background: 'rgba(0,212,255,0.12)',
+                border: '2px solid rgba(0,212,255,0.4)',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                gap: 10, cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>🎤</span>
+              <span style={{ color: '#00d4ff', fontSize: '0.92rem', fontWeight: 600, textAlign: 'center' }}>
+                {t('illettré_non_lecture')}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Badge Mode Assisté */}
       {modeIllettré && (
         <div style={{
@@ -357,7 +435,7 @@ export default function AccueilPage() {
               <div className="kiosk-alerte" role="alert">{erreur}</div>
             )}
 
-            <button className="kiosk-btn kiosk-btn--primary" onClick={() => { annulerTimer(); lancerScan() }}>
+            <button className="kiosk-btn kiosk-btn--primary" onClick={lancerScan}>
               <svg className="kiosk-btn-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="2" y="5" width="20" height="14" rx="2" />
                 <path d="M2 10h20" />
@@ -367,7 +445,7 @@ export default function AccueilPage() {
 
             <button
               className="kiosk-btn kiosk-btn--secondary"
-              onClick={() => { annulerTimer(); setFormulaire({ nom: '', prenom: '', date_naissance: '' }); setSessionManuelId(null); setVue(VUE.FORMULAIRE) }}
+              onClick={() => { setFormulaire({ nom: '', prenom: '', date_naissance: '' }); setSessionManuelId(null); setVue(VUE.FORMULAIRE) }}
             >
               {t('saisie_manuelle')}
             </button>
