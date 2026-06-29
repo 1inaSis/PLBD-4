@@ -20,6 +20,36 @@ import ZoneSaisieMixte from '../components/ZoneSaisieMixte'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import '../styles/kiosk.css'
 
+const SR_API_QR = typeof window !== 'undefined'
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+  : null
+
+function parlerQR(texte, langue) {
+  if (!texte || typeof window === 'undefined' || !window.speechSynthesis) return 2000
+  const lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
+  const mots = texte.split(/\s+/)
+  const morceaux = []
+  let courant = ''
+  for (const m of mots) {
+    const test = courant ? courant + ' ' + m : m
+    if (test.length <= 50) { courant = test }
+    else { if (courant) morceaux.push(courant); courant = m }
+  }
+  if (courant) morceaux.push(courant)
+  const durée = morceaux.reduce((acc, m) => acc + Math.max(700, m.length * 75), 0) + 500
+  window.speechSynthesis.cancel()
+  let i = 0
+  function next() {
+    if (i >= morceaux.length) return
+    const utt = new SpeechSynthesisUtterance(morceaux[i++])
+    utt.lang = lang; utt.rate = 0.9; utt.volume = 1.0
+    utt.onend = next; utt.onerror = () => setTimeout(next, 100)
+    window.speechSynthesis.speak(utt)
+  }
+  setTimeout(next, 50)
+  return durée
+}
+
 export default function QuestionnairePage() {
   const navigate = useNavigate()
   const { patient, setSymptomes, reinitialiser, audioActif, modeIllettré } = usePatient()
@@ -52,6 +82,16 @@ export default function QuestionnairePage() {
   }, [audioActif])
 
   const [zonesSelectionnees, setZonesSelectionnees] = useState([])
+
+  // Mode illettré : répète "Touchez là où vous avez mal" toutes les 10s si aucune zone
+  useEffect(() => {
+    if (!modeIllettré) return
+    const id = setInterval(() => {
+      if (zonesSelectionnees.length === 0) parlerQR(t('ill_symptomes_zones'), langue)
+    }, 10000)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modeIllettré, zonesSelectionnees.length])
   const [texteSymptome, setTexteSymptome] = useState('')
   const [enChargement, setEnChargement]   = useState(false)
   const [erreur, setErreur]               = useState(null)
@@ -160,13 +200,20 @@ export default function QuestionnairePage() {
           )}
           {erreur && <div className="kiosk-alerte" role="alert">{erreur}</div>}
 
+          {/* Bouton continuer géant — mode illettré */}
           <button
-            className="kiosk-btn kiosk-btn--primary"
             onClick={continuer}
             disabled={zonesSelectionnees.length === 0 || enChargement}
-            style={{ fontSize: '1.4rem', padding: '18px 52px', marginTop: 8 }}
+            style={{
+              width: 160, height: 100, borderRadius: 20, border: 'none',
+              background: zonesSelectionnees.length === 0 ? 'rgba(255,255,255,0.07)' : 'rgba(16,185,129,0.25)',
+              color: zonesSelectionnees.length === 0 ? 'rgba(255,255,255,0.25)' : '#10b981',
+              fontSize: '3rem', fontWeight: 900, cursor: zonesSelectionnees.length === 0 ? 'default' : 'pointer',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+              marginTop: 8, WebkitTapHighlightColor: 'transparent',
+            }}
           >
-            {enChargement ? '…' : '→'}
+            {enChargement ? <div className="kiosk-spinner" style={{ width: 32, height: 32 }} /> : <>✓<span style={{ fontSize: '0.85rem', fontWeight: 700 }}>OK</span></>}
           </button>
         </div>
       ) : (
@@ -238,73 +285,83 @@ export default function QuestionnairePage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sous-composant : saisie vocale des symptômes pour mode illettré
+// Saisie vocale symptômes — raw SR (évite cancel TTS) — mode illettré
 // ─────────────────────────────────────────────────────────────────────────────
 function ModeIlletréSymptomes({ langue, onTexte, onFin }) {
   const { t } = useTranslation()
-  const { parler } = useTextToSpeech()
   const [texte, setTexte] = useState('')
-  const silenceTimerRef = useRef(null)
+  const [ecoute, setEcoute] = useState(false)
+  const recoRef     = useRef(null)
+  const ecouteRef   = useRef(false)
+  const silenceRef  = useRef(null)
+  const timers      = useRef([])
+  const accRef      = useRef('')
+  const lancerRef   = useRef(null)
 
-  const voix = useVoiceInput({
-    langue,
-    onResult: (transcript) => {
-      const nouveau = texte ? texte + ' ' + transcript : transcript
-      setTexte(nouveau)
-      onTexte(nouveau)
-      // Silence 5s → arrêt et passage à l'étape suivante
-      clearTimeout(silenceTimerRef.current)
-      silenceTimerRef.current = setTimeout(() => {
-        voix.arreter()
-        setTimeout(onFin, 500)
-      }, 5000)
-    },
-  })
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; clearTimeout(silenceRef.current) }
+  const after    = (ms, fn) => { const id = setTimeout(fn, ms); timers.current.push(id); return id }
+  const stopReco = () => {
+    ecouteRef.current = false; setEcoute(false); clearTimeout(silenceRef.current)
+    if (!recoRef.current) return
+    recoRef.current.onresult = null; recoRef.current.onend = null; recoRef.current.onerror = null
+    try { recoRef.current.stop() } catch { /* ignoré */ }
+    recoRef.current = null
+  }
 
-  // TTS + lancement automatique de l'écoute
-  useEffect(() => {
-    const t1 = setTimeout(() => parler(t('illettré_symptomes'), langue), 300)
-    const t2 = setTimeout(() => voix.demarrer(), 1800)
-    return () => {
-      clearTimeout(t1)
-      clearTimeout(t2)
-      clearTimeout(silenceTimerRef.current)
-      voix.arreter()
+  const lancerReco = () => {
+    if (!SR_API_QR) return
+    stopReco(); window.speechSynthesis?.cancel()
+    const reco = new SR_API_QR()
+    reco.lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
+    reco.continuous = false; reco.interimResults = false; reco.maxAlternatives = 1
+    recoRef.current = reco; ecouteRef.current = true; setEcoute(true)
+
+    reco.onresult = (e) => {
+      const tr = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ').trim()
+      if (tr) {
+        const nouveau = accRef.current ? accRef.current + ' ' + tr : tr
+        accRef.current = nouveau; setTexte(nouveau); onTexte(nouveau)
+      }
+      stopReco()
+      // 5s silence → terminer
+      silenceRef.current = setTimeout(() => onFin(accRef.current), 5000)
+      // relance pour capturer plus
+      after(300, () => lancerRef.current?.())
     }
+    reco.onerror = () => { stopReco(); after(800, () => lancerRef.current?.()) }
+    reco.onend   = () => {
+      if (!ecouteRef.current) return
+      recoRef.current = null; ecouteRef.current = false; setEcoute(false)
+      after(400, () => lancerRef.current?.())
+    }
+    reco.start()
+  }
+  lancerRef.current = lancerReco
+
+  useEffect(() => {
+    const d = parlerQR(t('ill_symptomes_voix'), langue)
+    after(d, () => lancerRef.current?.())
+    return () => { clearAll(); stopReco() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-      {/* Texte transcrit en grands caractères */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', width: '100%' }}>
+      <style>{`@keyframes pulse-qr{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}70%{box-shadow:0 0 0 16px rgba(239,68,68,0)}}`}</style>
+      {ecoute && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#ef4444', animation: 'pulse-qr 1.3s ease-out infinite' }} />
+          <span style={{ color: '#f8fafc', fontSize: '1rem' }}>{t('ill_ecoute')}</span>
+        </div>
+      )}
       <div style={{
-        minHeight: 80, width: '100%', padding: '14px 16px',
+        minHeight: 70, width: '100%', padding: '14px 16px',
         background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
         borderRadius: 12, fontSize: '1.3rem', color: '#f8fafc', lineHeight: 1.6,
         direction: langue === 'ar' ? 'rtl' : 'ltr',
       }}>
-        {texte || (
-          <span style={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
-            {t('saisie_ecoute')}
-          </span>
-        )}
+        {texte || <span style={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>{t('saisie_ecoute')}</span>}
       </div>
-      {/* Indicateur écoute */}
-      {voix.ecoute && (
-        <div style={{ color: '#00d4ff', fontSize: '0.9rem' }}>
-          🎙 {t('illettré_symptomes')}
-        </div>
-      )}
-      {/* Bouton stop manuel */}
-      <button
-        onClick={() => { clearTimeout(silenceTimerRef.current); voix.arreter(); setTimeout(onFin, 300) }}
-        style={{
-          padding: '12px 28px', borderRadius: 10, border: '1px solid rgba(0,212,255,0.3)',
-          background: 'rgba(0,212,255,0.15)', color: '#00d4ff', fontSize: '1rem', cursor: 'pointer',
-        }}
-      >
-        ⏹ {t('saisie_stop')}
-      </button>
     </div>
   )
 }

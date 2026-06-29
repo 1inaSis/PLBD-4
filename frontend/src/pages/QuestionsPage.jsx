@@ -308,6 +308,38 @@ const MOTS_NON  = ['non', 'no', 'لا', 'pas', 'jamais', 'nope']
 const normaliser = s =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
 
+// ── Raw SR pour mode illettré (évite speechSynthesis.cancel de useVoiceInput) ─
+const SR_API_Q = typeof window !== 'undefined'
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+  : null
+
+function parlerEnMorceauxQ(texte, langue) {
+  if (!texte || typeof window === 'undefined' || !window.speechSynthesis) return 2000
+  const lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
+  const mots = texte.split(/\s+/)
+  const morceaux = []
+  let courant = ''
+  for (const m of mots) {
+    const test = courant ? courant + ' ' + m : m
+    if (test.length <= 50) { courant = test }
+    else { if (courant) morceaux.push(courant); courant = m }
+  }
+  if (courant) morceaux.push(courant)
+  const durée = morceaux.reduce((acc, m) => acc + Math.max(700, m.length * 75), 0) + 500
+  window.speechSynthesis.cancel()
+  let i = 0
+  function lireChunk() {
+    if (i >= morceaux.length) return
+    const utt = new SpeechSynthesisUtterance(morceaux[i++])
+    utt.lang = lang; utt.rate = 0.9; utt.volume = 1.0
+    utt.onend = lireChunk
+    utt.onerror = () => setTimeout(lireChunk, 100)
+    window.speechSynthesis.speak(utt)
+  }
+  setTimeout(lireChunk, 50)
+  return durée
+}
+
 // ── Vue principale : une seule question ──────────────────────────────────────
 function VueQuestion({
   question, numQuestion, maxQuestions,
@@ -353,6 +385,27 @@ function VueQuestion({
     parler(question.question, langue)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioActif])
+
+  // Mode illettré : layout épuré — question géante + boutons géants seuls
+  if (modeIllettré) {
+    return (
+      <div className="kiosk-center" style={{ flexDirection: 'column', gap: 28, padding: '24px 16px' }}>
+        <style>{`@keyframes pulse-q{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}70%{box-shadow:0 0 0 18px rgba(239,68,68,0)}}`}</style>
+        <p style={{ fontSize: '2rem', fontWeight: 700, color: '#f8fafc', textAlign: 'center', lineHeight: 1.4, margin: 0, maxWidth: 460 }}>
+          {question.question}
+        </p>
+        {question.type === 'oui_non' && (
+          <ModeIlletréOuiNon langue={langue} question={question.question} onRepondre={onRepondre} />
+        )}
+        {question.type === 'choix' && Array.isArray(question.choix) && (
+          <ModeIlletréChoix langue={langue} choix={question.choix} question={question.question} onRepondre={onRepondre} />
+        )}
+        {question.type === 'texte_libre' && (
+          <ModeIlletréTexteLibre langue={langue} onFin={(texte) => onRepondre(texte || '')} />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="kiosk-center">
@@ -514,122 +567,183 @@ function VueQuestion({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Boutons OUI/NON géants avec reconnaissance vocale — mode illettré
+// OUI/NON géants — raw SR (pas useVoiceInput → pas de cancel TTS) — mode illettré
 // ─────────────────────────────────────────────────────────────────────────────
 function ModeIlletréOuiNon({ langue, question, onRepondre }) {
-  const { t }      = useTranslation()
-  const { parler } = useTextToSpeech()
-  const relireTimerRef = useRef(null)
+  const { t }       = useTranslation()
+  const [ecoute, setEcoute] = useState(false)
+  const recoRef   = useRef(null)
+  const noResRef  = useRef(null)
+  const timers    = useRef([])
+  const lancerRef = useRef(null)
+  const ecouteRef = useRef(false)
 
-  const MOTS_OUI = ['oui', 'yes', 'نعم', "d'accord", 'ok', 'ouais']
-  const MOTS_NON = ['non', 'no', 'لا', 'pas', 'jamais', 'nope']
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; clearTimeout(noResRef.current) }
+  const after    = (ms, fn) => { const id = setTimeout(fn, ms); timers.current.push(id); return id }
+  const stopReco = () => {
+    clearTimeout(noResRef.current); ecouteRef.current = false; setEcoute(false)
+    if (!recoRef.current) return
+    recoRef.current.onresult = null; recoRef.current.onend = null; recoRef.current.onerror = null
+    try { recoRef.current.stop() } catch { /* ignoré */ }
+    recoRef.current = null
+  }
 
-  const voix = useVoiceInput({
-    langue,
-    timeout: 15000,
-    onResult: (transcript) => {
-      const txt = transcript.toLowerCase()
-      if (MOTS_OUI.some(m => txt.includes(m))) {
-        clearTimeout(relireTimerRef.current)
-        onRepondre('oui')
-      } else if (MOTS_NON.some(m => txt.includes(m))) {
-        clearTimeout(relireTimerRef.current)
-        onRepondre('non')
-      }
-    },
-    onEnd: () => {
-      // Timeout sans réponse reconnue → relire la question et relancer
-      relireTimerRef.current = setTimeout(() => {
-        parler(`${t('illettré_relecture')} ${question}`, langue)
-        setTimeout(() => voix.demarrer(), 2000)
-      }, 500)
-    },
-  })
+  const lancerReco = () => {
+    if (!SR_API_Q) return
+    stopReco(); window.speechSynthesis?.cancel()
+    const reco = new SR_API_Q()
+    reco.lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
+    reco.continuous = false; reco.interimResults = false; reco.maxAlternatives = 3
+    recoRef.current = reco; ecouteRef.current = true; setEcoute(true)
 
-  useEffect(() => {
-    const timer = setTimeout(() => voix.demarrer(), 500)
-    return () => {
-      clearTimeout(timer)
-      clearTimeout(relireTimerRef.current)
-      voix.arreter()
+    // 15s sans réponse → relecture question
+    noResRef.current = setTimeout(() => {
+      stopReco()
+      const d = parlerEnMorceauxQ(question, langue)
+      after(d, () => lancerRef.current?.())
+    }, 15000)
+
+    reco.onresult = (e) => {
+      clearTimeout(noResRef.current)
+      const txt = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ').toLowerCase().trim()
+      stopReco()
+      if (MOTS_OUI.some(m => txt.includes(m))) { clearAll(); onRepondre('oui') }
+      else if (MOTS_NON.some(m => txt.includes(m))) { clearAll(); onRepondre('non') }
+      else { after(600, () => lancerRef.current?.()) } // non reconnu → relance
     }
+    reco.onerror = () => { clearTimeout(noResRef.current); stopReco(); after(800, () => lancerRef.current?.()) }
+    reco.onend   = () => {
+      clearTimeout(noResRef.current)
+      if (!ecouteRef.current) return
+      recoRef.current = null; ecouteRef.current = false; setEcoute(false)
+      after(500, () => lancerRef.current?.())
+    }
+    reco.start()
+  }
+  lancerRef.current = lancerReco
+
+  // TTS question → lancer reco (la TTS est déjà lancée par VueQuestion useEffect)
+  useEffect(() => {
+    const d = parlerEnMorceauxQ(question, langue)
+    after(d, () => lancerRef.current?.())
+    return () => { clearAll(); stopReco() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [question])
+
+  const repondreAvec = (rep) => { clearAll(); stopReco(); onRepondre(rep) }
 
   return (
-    <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
-      <button
-        onClick={() => { clearTimeout(relireTimerRef.current); voix.arreter(); onRepondre('oui') }}
-        style={{
-          width: 120, height: 120, borderRadius: 16, border: 'none',
-          background: 'rgba(16,185,129,0.3)', color: '#10b981',
-          fontSize: '3rem', cursor: 'pointer', display: 'flex',
-          flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-        }}
-      >
-        👍<span style={{ fontSize: '0.9rem' }}>OUI</span>
+    <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 8, position: 'relative' }}>
+      {ecoute && (
+        <div style={{ position: 'absolute', top: -52, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#ef4444', animation: 'pulse-q 1.3s ease-out infinite' }} />
+          <span style={{ color: '#f8fafc', fontSize: '1rem' }}>{t('ill_ecoute')}</span>
+        </div>
+      )}
+      <button onClick={() => repondreAvec('oui')} style={{
+        width: 160, height: 130, borderRadius: 20, border: 'none',
+        background: 'rgba(16,185,129,0.25)', color: '#10b981',
+        fontSize: '4rem', cursor: 'pointer', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 4,
+        WebkitTapHighlightColor: 'transparent',
+      }}>
+        👍<span style={{ fontSize: '1rem', fontWeight: 700 }}>OUI</span>
       </button>
-      <button
-        onClick={() => { clearTimeout(relireTimerRef.current); voix.arreter(); onRepondre('non') }}
-        style={{
-          width: 120, height: 120, borderRadius: 16, border: 'none',
-          background: 'rgba(239,68,68,0.3)', color: '#ef4444',
-          fontSize: '3rem', cursor: 'pointer', display: 'flex',
-          flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-        }}
-      >
-        👎<span style={{ fontSize: '0.9rem' }}>NON</span>
+      <button onClick={() => repondreAvec('non')} style={{
+        width: 160, height: 130, borderRadius: 20, border: 'none',
+        background: 'rgba(239,68,68,0.25)', color: '#ef4444',
+        fontSize: '4rem', cursor: 'pointer', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 4,
+        WebkitTapHighlightColor: 'transparent',
+      }}>
+        👎<span style={{ fontSize: '1rem', fontWeight: 700 }}>NON</span>
       </button>
     </div>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Choix multiple géant avec voix auto — mode illettré
+// Choix multiple géant — raw SR — mode illettré
 // ─────────────────────────────────────────────────────────────────────────────
 function ModeIlletréChoix({ langue, choix, question, onRepondre }) {
-  const { t }      = useTranslation()
-  const { parler } = useTextToSpeech()
-  const relireTimerRef = useRef(null)
+  const { t }       = useTranslation()
+  const [ecoute, setEcoute] = useState(false)
+  const recoRef   = useRef(null)
+  const noResRef  = useRef(null)
+  const timers    = useRef([])
+  const lancerRef = useRef(null)
+  const ecouteRef = useRef(false)
   const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
 
-  const voix = useVoiceInput({
-    langue,
-    timeout: 15000,
-    onResult: (transcript) => {
-      const tn = norm(transcript)
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; clearTimeout(noResRef.current) }
+  const after    = (ms, fn) => { const id = setTimeout(fn, ms); timers.current.push(id); return id }
+  const stopReco = () => {
+    clearTimeout(noResRef.current); ecouteRef.current = false; setEcoute(false)
+    if (!recoRef.current) return
+    recoRef.current.onresult = null; recoRef.current.onend = null; recoRef.current.onerror = null
+    try { recoRef.current.stop() } catch { /* ignoré */ }
+    recoRef.current = null
+  }
+
+  const lancerReco = () => {
+    if (!SR_API_Q) return
+    stopReco(); window.speechSynthesis?.cancel()
+    const reco = new SR_API_Q()
+    reco.lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
+    reco.continuous = false; reco.interimResults = false; reco.maxAlternatives = 3
+    recoRef.current = reco; ecouteRef.current = true; setEcoute(true)
+
+    noResRef.current = setTimeout(() => {
+      stopReco()
+      const d = parlerEnMorceauxQ(question, langue)
+      after(d, () => lancerRef.current?.())
+    }, 15000)
+
+    reco.onresult = (e) => {
+      clearTimeout(noResRef.current)
+      const tn = norm(Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' '))
+      stopReco()
       const match = choix.find(opt => opt && tn.includes(norm(opt)))
-      if (match) { clearTimeout(relireTimerRef.current); onRepondre(match) }
-    },
-    onEnd: () => {
-      relireTimerRef.current = setTimeout(() => {
-        parler(`${t('illettré_relecture')} ${question}`, langue)
-        setTimeout(() => voix.demarrer(), 2000)
-      }, 500)
-    },
-  })
+      if (match) { clearAll(); onRepondre(match) }
+      else { after(600, () => lancerRef.current?.()) }
+    }
+    reco.onerror = () => { clearTimeout(noResRef.current); stopReco(); after(800, () => lancerRef.current?.()) }
+    reco.onend   = () => {
+      clearTimeout(noResRef.current)
+      if (!ecouteRef.current) return
+      recoRef.current = null; ecouteRef.current = false; setEcoute(false)
+      after(500, () => lancerRef.current?.())
+    }
+    reco.start()
+  }
+  lancerRef.current = lancerReco
 
   useEffect(() => {
-    const timer = setTimeout(() => voix.demarrer(), 1000)
-    return () => { clearTimeout(timer); clearTimeout(relireTimerRef.current); voix.arreter() }
+    const d = parlerEnMorceauxQ(question, langue)
+    after(d, () => lancerRef.current?.())
+    return () => { clearAll(); stopReco() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [question])
+
+  const choisir = (option) => { clearAll(); stopReco(); onRepondre(option) }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%', maxWidth: 440, alignItems: 'center', position: 'relative' }}>
+      {ecoute && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#ef4444', animation: 'pulse-q 1.3s ease-out infinite' }} />
+          <span style={{ color: '#f8fafc', fontSize: '1rem' }}>{t('ill_ecoute')}</span>
+        </div>
+      )}
       {choix.map((option, i) => (
-        <button
-          key={i}
-          onClick={() => { clearTimeout(relireTimerRef.current); voix.arreter(); onRepondre(option) }}
-          style={{
-            padding: '20px 24px', borderRadius: 14,
-            border: '2px solid rgba(0,212,255,0.25)',
-            background: 'rgba(0,212,255,0.08)', color: '#f8fafc',
-            fontSize: '1.15rem', fontWeight: 600, cursor: 'pointer',
-            textAlign: 'center', lineHeight: 1.3,
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        >
+        <button key={i} onClick={() => choisir(option)} style={{
+          width: '100%', padding: '22px 24px', borderRadius: 16,
+          border: '2px solid rgba(0,212,255,0.3)',
+          background: 'rgba(0,212,255,0.1)', color: '#f8fafc',
+          fontSize: '1.3rem', fontWeight: 700, cursor: 'pointer',
+          textAlign: 'center', lineHeight: 1.3,
+          WebkitTapHighlightColor: 'transparent',
+        }}>
           {option}
         </button>
       ))}
@@ -638,75 +752,99 @@ function ModeIlletréChoix({ langue, choix, question, onRepondre }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Saisie vocale texte libre — mode illettré (questions adaptatives)
+// Texte libre — raw SR — mode illettré
 // ─────────────────────────────────────────────────────────────────────────────
 function ModeIlletréTexteLibre({ langue, onFin }) {
-  const { t }      = useTranslation()
-  const { parler } = useTextToSpeech()
-  const [texte, setTexte]  = useState('')
-  const silenceTimerRef    = useRef(null)
-  const texteAccumuléRef   = useRef('')
+  const { t }    = useTranslation()
+  const [texte, setTexte] = useState('')
+  const [ecoute, setEcoute] = useState(false)
+  const recoRef      = useRef(null)
+  const ecouteRef    = useRef(false)
+  const silenceRef   = useRef(null)
+  const timers       = useRef([])
+  const accumuléRef  = useRef('')
+  const lancerRef    = useRef(null)
 
-  const voix = useVoiceInput({
-    langue,
-    onResult: (transcript) => {
-      const nouveau = texteAccumuléRef.current
-        ? texteAccumuléRef.current + ' ' + transcript
-        : transcript
-      texteAccumuléRef.current = nouveau
-      setTexte(nouveau)
-      clearTimeout(silenceTimerRef.current)
-      silenceTimerRef.current = setTimeout(() => {
-        voix.arreter()
-        setTimeout(() => onFin(texteAccumuléRef.current), 500)
-      }, 5000)
-    },
-  })
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; clearTimeout(silenceRef.current) }
+  const after    = (ms, fn) => { const id = setTimeout(fn, ms); timers.current.push(id); return id }
+  const stopReco = () => {
+    ecouteRef.current = false; setEcoute(false); clearTimeout(silenceRef.current)
+    if (!recoRef.current) return
+    recoRef.current.onresult = null; recoRef.current.onend = null; recoRef.current.onerror = null
+    try { recoRef.current.stop() } catch { /* ignoré */ }
+    recoRef.current = null
+  }
+
+  const lancerReco = () => {
+    if (!SR_API_Q) return
+    stopReco(); window.speechSynthesis?.cancel()
+    const reco = new SR_API_Q()
+    reco.lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
+    reco.continuous = false; reco.interimResults = false; reco.maxAlternatives = 1
+    recoRef.current = reco; ecouteRef.current = true; setEcoute(true)
+
+    reco.onresult = (e) => {
+      const tr = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ').trim()
+      if (tr) {
+        const nouveau = accumuléRef.current ? accumuléRef.current + ' ' + tr : tr
+        accumuléRef.current = nouveau; setTexte(nouveau)
+      }
+      stopReco()
+      // 3s silence → valider automatiquement
+      silenceRef.current = setTimeout(() => onFin(accumuléRef.current), 3000)
+      // Ou relancer la reco pour accumuler plus
+      after(200, () => lancerRef.current?.())
+    }
+    reco.onerror = () => { stopReco(); after(800, () => lancerRef.current?.()) }
+    reco.onend   = () => {
+      if (!ecouteRef.current) return
+      recoRef.current = null; ecouteRef.current = false; setEcoute(false)
+      after(400, () => lancerRef.current?.())
+    }
+    reco.start()
+  }
+  lancerRef.current = lancerReco
 
   useEffect(() => {
-    const t1 = setTimeout(() => parler(t('illettré_symptomes'), langue), 300)
-    const t2 = setTimeout(() => voix.demarrer(), 1800)
-    return () => {
-      clearTimeout(t1)
-      clearTimeout(t2)
-      clearTimeout(silenceTimerRef.current)
-      voix.arreter()
-    }
+    const d = parlerEnMorceauxQ(t('ill_symptomes_voix'), langue)
+    after(d, () => lancerRef.current?.())
+    return () => { clearAll(); stopReco() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const valider = () => { clearAll(); stopReco(); onFin(accumuléRef.current) }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-      <div style={{
-        minHeight: 80, width: '100%', padding: '14px 16px',
-        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 12, fontSize: '1.3rem', color: '#f8fafc', lineHeight: 1.6,
-        direction: langue === 'ar' ? 'rtl' : 'ltr',
-      }}>
-        {texte || (
-          <span style={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
-            {t('saisie_ecoute')}
-          </span>
-        )}
-      </div>
-      {voix.ecoute && (
-        <div style={{ color: '#00d4ff', fontSize: '0.9rem' }}>
-          🎙 {t('illettré_symptomes')}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', width: '100%', maxWidth: 440 }}>
+      {/* Indicateur écoute */}
+      {ecoute && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#ef4444', animation: 'pulse-q 1.3s ease-out infinite' }} />
+          <span style={{ color: '#f8fafc', fontSize: '1.1rem' }}>{t('ill_ecoute')}</span>
         </div>
       )}
-      <button
-        onClick={() => {
-          clearTimeout(silenceTimerRef.current)
-          voix.arreter()
-          setTimeout(() => onFin(texteAccumuléRef.current), 300)
-        }}
-        style={{
-          padding: '12px 28px', borderRadius: 10, border: '1px solid rgba(0,212,255,0.3)',
-          background: 'rgba(0,212,255,0.15)', color: '#00d4ff', fontSize: '1rem', cursor: 'pointer',
-        }}
-      >
-        ⏹ {t('saisie_stop')}
-      </button>
+      {/* Transcription */}
+      <div style={{
+        minHeight: 80, width: '100%', padding: '16px',
+        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 14, fontSize: '1.4rem', color: '#f8fafc', lineHeight: 1.6,
+        direction: langue === 'ar' ? 'rtl' : 'ltr',
+      }}>
+        {texte || <span style={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>{t('saisie_ecoute')}</span>}
+      </div>
+      {/* Bouton valider géant */}
+      {texte && (
+        <button onClick={valider} style={{
+          width: 160, height: 90, borderRadius: 20, border: 'none',
+          background: 'rgba(16,185,129,0.25)', color: '#10b981',
+          fontSize: '2.5rem', fontWeight: 900, cursor: 'pointer',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+          WebkitTapHighlightColor: 'transparent',
+        }}>
+          <span>✓</span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>OK</span>
+        </button>
+      )}
     </div>
   )
 }

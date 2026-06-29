@@ -202,14 +202,14 @@ export default function AccueilPage() {
           <button
             onClick={choisirLecture}
             style={{
-              width: 148, height: 148, borderRadius: 20,
+              width: 180, height: 180, borderRadius: 24,
               background: 'rgba(255,255,255,0.08)', border: '2px solid rgba(255,255,255,0.25)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 10, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              gap: 12, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
             }}
           >
-            <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>📖</span>
-            <span style={{ color: '#f8fafc', fontSize: '0.92rem', fontWeight: 600, textAlign: 'center' }}>
+            <span style={{ fontSize: '4.5rem', lineHeight: 1 }}>📖</span>
+            <span style={{ color: '#f8fafc', fontSize: '1rem', fontWeight: 700, textAlign: 'center' }}>
               {t('illettré_oui_lecture')}
             </span>
           </button>
@@ -217,14 +217,14 @@ export default function AccueilPage() {
           <button
             onClick={choisirIllettré}
             style={{
-              width: 148, height: 148, borderRadius: 20,
+              width: 180, height: 180, borderRadius: 24,
               background: 'rgba(0,212,255,0.12)', border: '2px solid rgba(0,212,255,0.4)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 10, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              gap: 12, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
             }}
           >
-            <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>🎤</span>
-            <span style={{ color: '#00d4ff', fontSize: '0.92rem', fontWeight: 600, textAlign: 'center' }}>
+            <span style={{ fontSize: '4.5rem', lineHeight: 1 }}>🎤</span>
+            <span style={{ color: '#00d4ff', fontSize: '1rem', fontWeight: 700, textAlign: 'center' }}>
               {t('illettré_non_lecture')}
             </span>
           </button>
@@ -692,19 +692,29 @@ function VueIdentificationIllettré({ langue, onTerminé }) {
             </div>
           )}
 
-          {/* Confirmation 👍 / 👎 */}
+          {/* Confirmation ✓ / ↺ */}
           {phase === 'confirmation' && (
-            <div style={{ display: 'flex', gap: 20 }}>
+            <div style={{ display: 'flex', gap: 24 }}>
               <button onClick={confirmer} style={{
-                width: 120, height: 120, borderRadius: 16, border: 'none',
-                background: 'rgba(16,185,129,0.25)', color: '#10b981',
-                fontSize: '3.5rem', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-              }}>👍</button>
+                width: 180, height: 110, borderRadius: 20, border: 'none',
+                background: 'rgba(16,185,129,0.22)', color: '#10b981',
+                fontSize: '3rem', fontWeight: 900, cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+                <span>✓</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>OK</span>
+              </button>
               <button onClick={recommencer} style={{
-                width: 120, height: 120, borderRadius: 16, border: 'none',
-                background: 'rgba(239,68,68,0.25)', color: '#ef4444',
-                fontSize: '3.5rem', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-              }}>👎</button>
+                width: 180, height: 110, borderRadius: 20, border: 'none',
+                background: 'rgba(249,115,22,0.22)', color: '#f97316',
+                fontSize: '2.5rem', fontWeight: 900, cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+                <span>↺</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Recommencer</span>
+              </button>
             </div>
           )}
         </>
@@ -712,24 +722,24 @@ function VueIdentificationIllettré({ langue, onTerminé }) {
 
       {/* Étape 4 : sexe */}
       {etape === 'sexe' && (
-        <div style={{ display: 'flex', gap: 24 }}>
+        <div style={{ display: 'flex', gap: 28 }}>
           <button onClick={() => choisirSexe(0)} style={{
-            width: 148, height: 148, borderRadius: 20,
+            width: 180, height: 180, borderRadius: 24,
             background: 'rgba(56,189,248,0.15)', border: '2px solid rgba(56,189,248,0.4)',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 8, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            gap: 10, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
           }}>
-            <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>👨</span>
-            <span style={{ color: '#38bdf8', fontWeight: 600, fontSize: '0.92rem' }}>{t('ill_homme')}</span>
+            <span style={{ fontSize: '4.5rem', lineHeight: 1 }}>👨</span>
+            <span style={{ color: '#38bdf8', fontWeight: 700, fontSize: '1rem' }}>{t('ill_homme')}</span>
           </button>
           <button onClick={() => choisirSexe(1)} style={{
-            width: 148, height: 148, borderRadius: 20,
+            width: 180, height: 180, borderRadius: 24,
             background: 'rgba(244,114,182,0.15)', border: '2px solid rgba(244,114,182,0.4)',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 8, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            gap: 10, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
           }}>
-            <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>👩</span>
-            <span style={{ color: '#f472b4', fontWeight: 600, fontSize: '0.92rem' }}>{t('ill_femme')}</span>
+            <span style={{ fontSize: '4.5rem', lineHeight: 1 }}>👩</span>
+            <span style={{ color: '#f472b4', fontWeight: 700, fontSize: '1rem' }}>{t('ill_femme')}</span>
           </button>
         </div>
       )}

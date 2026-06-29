@@ -549,7 +549,7 @@ function VueMesure({
           <h2 className="kiosk-titre-sm">{t(etape.label)}</h2>
         </div>
 
-        {/* PRET : illustration + instruction + bouton Mesurer (température / SpO₂) */}
+        {/* PRET : illustration + bouton Mesurer */}
         {etat === ETAT.PRET && !estSimulee && !estManuelle && (
           <>
             {Illustration && (
@@ -557,20 +557,36 @@ function VueMesure({
                 <Illustration />
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <p className="kiosk-soustitre" style={{ margin: 0 }}>{t(etape.instruction)}</p>
-              {supporte && texteInstruction && (
-                <button
-                  className={`tts-btn${estEnTrainDeParler ? ' tts-btn--actif' : ''}`}
-                  onClick={relireInstruction}
-                  aria-label={t('tts_ecouter')}
-                  title={t('tts_ecouter')}
-                >🔊</button>
-              )}
-            </div>
-            <button className="kiosk-btn kiosk-btn--primary" onClick={onLancerMesure}>
-              {t('const_mesurer')}
-            </button>
+            {modeIllettré ? (
+              /* Mode illettré : un seul grand bouton tactile (TTS guide, pas de texte) */
+              <button onClick={onLancerMesure} style={{
+                width: 160, height: 160, borderRadius: 24, border: 'none',
+                background: 'rgba(0,212,255,0.15)', color: '#00d4ff',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 10, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              }}>
+                <span style={{ fontSize: '4rem', lineHeight: 1 }}>{etape.icone}</span>
+                <span style={{ fontSize: '1rem', fontWeight: 700 }}>{t('const_mesurer')}</span>
+              </button>
+            ) : (
+              /* Mode normal : instruction + bouton standard */
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <p className="kiosk-soustitre" style={{ margin: 0 }}>{t(etape.instruction)}</p>
+                  {supporte && texteInstruction && (
+                    <button
+                      className={`tts-btn${estEnTrainDeParler ? ' tts-btn--actif' : ''}`}
+                      onClick={relireInstruction}
+                      aria-label={t('tts_ecouter')}
+                      title={t('tts_ecouter')}
+                    >🔊</button>
+                  )}
+                </div>
+                <button className="kiosk-btn kiosk-btn--primary" onClick={onLancerMesure}>
+                  {t('const_mesurer')}
+                </button>
+              </>
+            )}
           </>
         )}
 
@@ -663,14 +679,27 @@ function VueMesure({
               {t(LIBELLES_COULEUR[couleurBadge])}
             </div>
 
-            {/* Mesure réussie (réelle ou locale) : confirmation + bouton */}
+            {/* Mesure réussie : confirmation + bouton (géant en mode illettré) */}
             {!estSimulee && messageCapture !== 'timeout' && (
-              <>
-                <div className="seq-ok" role="status">{t('const_mesure_ok')}</div>
-                <button className="kiosk-btn kiosk-btn--primary" onClick={onEtapeSuivante}>
-                  {estDerniere ? t('const_voir_bilan') : t('const_suivante')}
+              modeIllettré ? (
+                <button onClick={onEtapeSuivante} style={{
+                  width: 160, height: 100, borderRadius: 20, border: 'none',
+                  background: 'rgba(16,185,129,0.25)', color: '#10b981',
+                  fontSize: '3rem', fontWeight: 900, cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  WebkitTapHighlightColor: 'transparent',
+                }}>
+                  <span>✓</span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>OK</span>
                 </button>
-              </>
+              ) : (
+                <>
+                  <div className="seq-ok" role="status">{t('const_mesure_ok')}</div>
+                  <button className="kiosk-btn kiosk-btn--primary" onClick={onEtapeSuivante}>
+                    {estDerniere ? t('const_voir_bilan') : t('const_suivante')}
+                  </button>
+                </>
+              )
             )}
 
             {/* Auto-avance (étape simulée ou timeout) */}
@@ -792,8 +821,9 @@ function SaisieKF65R({ instruction, onValider, t, modeIllettré = false, langue 
   const [dia, setDia] = useState('')
   const [pul, setPul] = useState('')
   const [focusChamp, setFocusChamp] = useState(null)
-  const [champVocal, setChampVocal] = useState(null) // label visuel champ actif
+  const [champVocal, setChampVocal] = useState(null) // label visuel champ actif en écoute
   const [ecouteIll, setEcouteIll]   = useState(false)
+  const [champConf, setChampConf]   = useState(null) // 'sys'|'dia'|'pul' en attente de ✓/↺
 
   // Refs pour mode illettré — raw SR (évite cancel TTS de useVoiceInput)
   const recoRef    = useRef(null)
@@ -803,6 +833,7 @@ function SaisieKF65R({ instruction, onValider, t, modeIllettré = false, langue 
   const ecouteRef  = useRef(false)
   const sysIllRef  = useRef('')   // valeur sys sans closure stale
   const diaIllRef  = useRef('')   // valeur dia sans closure stale
+  const pulIllRef  = useRef('')   // valeur pul sans closure stale
 
   const clearAllIll = () => { timersIll.current.forEach(clearTimeout); timersIll.current = []; clearTimeout(noResRef.current) }
   const afterIll = (ms, fn) => { const id = setTimeout(fn, ms); timersIll.current.push(id); return id }
@@ -858,23 +889,12 @@ function SaisieKF65R({ instruction, onValider, t, modeIllettré = false, langue 
         afterIll(d, () => lancerRef.current?.(champ))
         return
       }
-      if (champ === 'sys') {
-        sysIllRef.current = val; setSys(val)
-        const d = parlerEnMorceaux(t('ill_tension_dia'), langue)
-        afterIll(d, () => lancerRef.current?.('dia'))
-      } else if (champ === 'dia') {
-        diaIllRef.current = val; setDia(val)
-        const d = parlerEnMorceaux(t('ill_tension_pul'), langue)
-        afterIll(d, () => lancerRef.current?.('pul'))
-      } else if (champ === 'pul') {
-        setPul(val); setChampVocal(null)
-        console.log('[ILL-KF] Auto-submit SYS/DIA/PUL')
-        afterIll(400, () => onValider({
-          bp_systolic:  Number(sysIllRef.current),
-          bp_diastolic: Number(diaIllRef.current),
-          heart_rate:   Number(val),
-        }))
-      }
+      // Valeur capturée → afficher + attendre confirmation ✓/↺
+      if (champ === 'sys') { sysIllRef.current = val; setSys(val) }
+      else if (champ === 'dia') { diaIllRef.current = val; setDia(val) }
+      else if (champ === 'pul') { pulIllRef.current = val; setPul(val) }
+      setChampVocal(null)
+      setChampConf(champ)
     }
 
     reco.onerror = (e) => {
@@ -927,12 +947,44 @@ function SaisieKF65R({ instruction, onValider, t, modeIllettré = false, langue 
 
       <p className="kiosk-soustitre">{instruction}</p>
 
-      {/* Indicateur écoute mode illettré */}
+      {/* Mode illettré : en cours d'écoute */}
       {modeIllettré && ecouteIll && champVocal && (
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, marginBottom:12 }}>
           <div style={{ width:60, height:60, borderRadius:'50%', background:'#ef4444', animation:'pulse-kf 1.3s ease-out infinite' }} />
           <div style={{ fontSize:'1.2rem', color:'#f8fafc', fontWeight:700 }}>
             {t('ill_ecoute')} — {champVocal === 'sys' ? t('tension_sys') : champVocal === 'dia' ? t('tension_dia') : t('tension_pul')}
+          </div>
+        </div>
+      )}
+
+      {/* Mode illettré : confirmation ✓/↺ après capture d'une valeur */}
+      {modeIllettré && champConf && (
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, marginBottom:16 }}>
+          <div style={{ fontSize:'3.5rem', fontWeight:900, color:'#f8fafc', lineHeight:1 }}>
+            {champConf === 'sys' ? sys : champConf === 'dia' ? dia : pul}
+          </div>
+          <div style={{ display:'flex', gap:20 }}>
+            <button onClick={() => {
+              const c = champConf; setChampConf(null)
+              if (c === 'sys') {
+                const d = parlerEnMorceaux(t('ill_tension_dia'), langue); afterIll(d, () => lancerRef.current?.('dia'))
+              } else if (c === 'dia') {
+                const d = parlerEnMorceaux(t('ill_tension_pul'), langue); afterIll(d, () => lancerRef.current?.('pul'))
+              } else {
+                afterIll(200, () => onValider({ bp_systolic: Number(sysIllRef.current), bp_diastolic: Number(diaIllRef.current), heart_rate: Number(pulIllRef.current) }))
+              }
+            }} style={{ width:150, height:90, borderRadius:18, border:'none', background:'rgba(16,185,129,0.25)', color:'#10b981', fontSize:'2.5rem', fontWeight:900, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+              ✓
+            </button>
+            <button onClick={() => {
+              const c = champConf; setChampConf(null)
+              if (c === 'sys') { sysIllRef.current = ''; setSys('') }
+              else if (c === 'dia') { diaIllRef.current = ''; setDia('') }
+              else { pulIllRef.current = ''; setPul('') }
+              lancerRef.current?.(c)
+            }} style={{ width:150, height:90, borderRadius:18, border:'none', background:'rgba(249,115,22,0.25)', color:'#f97316', fontSize:'2rem', fontWeight:900, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+              ↺
+            </button>
           </div>
         </div>
       )}
