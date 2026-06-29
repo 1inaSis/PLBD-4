@@ -32,6 +32,38 @@ import ClavierNumerique from '../components/ClavierNumerique'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import '../styles/kiosk.css'
 
+// TTS chunké pour mode illettré (≤50 chars/morceau, chaîne via onend)
+const SR_API_C = typeof window !== 'undefined'
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null
+const LANG_BCP_C = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
+
+function parlerEnMorceaux(texte, langue) {
+  if (!texte || typeof window === 'undefined' || !window.speechSynthesis) return 2000
+  const lang = LANG_BCP_C[langue] ?? 'fr-FR'
+  const mots = texte.split(/\s+/)
+  const morceaux = []
+  let courant = ''
+  for (const m of mots) {
+    const test = courant ? courant + ' ' + m : m
+    if (test.length <= 50) { courant = test }
+    else { if (courant) morceaux.push(courant); courant = m }
+  }
+  if (courant) morceaux.push(courant)
+  const durée = morceaux.reduce((acc, m) => acc + Math.max(700, m.length * 75), 0) + 500
+  window.speechSynthesis.cancel()
+  let i = 0
+  function lireChunk() {
+    if (i >= morceaux.length) return
+    const utt = new SpeechSynthesisUtterance(morceaux[i++])
+    utt.lang = lang; utt.rate = 0.9; utt.volume = 1.0
+    utt.onend = lireChunk
+    utt.onerror = () => setTimeout(lireChunk, 100)
+    window.speechSynthesis.speak(utt)
+  }
+  setTimeout(lireChunk, 50)
+  return durée
+}
+
 const PRIORITE_COULEUR = { rouge: 5, orange: 4, jaune: 3, vert: 2, gris: 1 }
 
 function pireCouleur(...couleurs) {
@@ -426,10 +458,23 @@ function VueMesure({
   const estSimulerLocal = !!etape.simulerLocal
 
   const texteInstruction = etape.instructionTTS ? t(etape.instructionTTS) : null
+  const autoMesureRef    = useRef(null)
 
   // Lecture auto 300ms après le passage à l'état PRET (nouvelle étape ou retour)
   useEffect(() => {
     if (etat !== ETAT.PRET || !texteInstruction) return
+    clearTimeout(autoMesureRef.current)
+
+    if (modeIllettré && !estManuelle && !estSimulee) {
+      // Mode illettré : TTS chunké puis auto-lancer la mesure
+      const t1 = setTimeout(() => {
+        const délai = parlerEnMorceaux(texteInstruction, langue)
+        console.log('[ILL] Auto-lancer mesure dans', délai, 'ms — étape:', etape.cle)
+        autoMesureRef.current = setTimeout(onLancerMesure, délai)
+      }, 300)
+      return () => { clearTimeout(t1); clearTimeout(autoMesureRef.current); arreter() }
+    }
+
     const timer = setTimeout(() => parler(texteInstruction, langue), 300)
     return () => { clearTimeout(timer); arreter() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -746,66 +791,122 @@ function SaisieKF65R({ instruction, onValider, t, modeIllettré = false, langue 
   const [sys, setSys] = useState('')
   const [dia, setDia] = useState('')
   const [pul, setPul] = useState('')
-  const [focusChamp, setFocusChamp] = useState(null) // 'sys' | 'dia' | 'pul' | null
-  const [champVocal, setChampVocal] = useState(null) // champ actif pour la reco vocale illettré
+  const [focusChamp, setFocusChamp] = useState(null)
+  const [champVocal, setChampVocal] = useState(null) // label visuel champ actif
+  const [ecouteIll, setEcouteIll]   = useState(false)
 
-  // Reconnaissance vocale — SYS
-  const voixSys = useVoiceInput({
-    langue,
-    onResult: (transcript) => {
-      const val = transcript.replace(/\D/g, '').slice(0, 3)
-      if (val) { setSys(val); setChampVocal('dia') }
-    },
-  })
-  // Reconnaissance vocale — DIA
-  const voixDia = useVoiceInput({
-    langue,
-    onResult: (transcript) => {
-      const val = transcript.replace(/\D/g, '').slice(0, 3)
-      if (val) { setDia(val); setChampVocal('pul') }
-    },
-  })
-  // Reconnaissance vocale — PUL
-  const voixPul = useVoiceInput({
-    langue,
-    onResult: (transcript) => {
-      const val = transcript.replace(/\D/g, '').slice(0, 3)
-      if (val) { setPul(val); setChampVocal(null) }
-    },
-  })
+  // Refs pour mode illettré — raw SR (évite cancel TTS de useVoiceInput)
+  const recoRef    = useRef(null)
+  const noResRef   = useRef(null)
+  const timersIll  = useRef([])
+  const lancerRef  = useRef(null)
+  const ecouteRef  = useRef(false)
+  const sysIllRef  = useRef('')   // valeur sys sans closure stale
+  const diaIllRef  = useRef('')   // valeur dia sans closure stale
 
-  // Mode illettré : TTS + lancement auto SYS au montage
+  const clearAllIll = () => { timersIll.current.forEach(clearTimeout); timersIll.current = []; clearTimeout(noResRef.current) }
+  const afterIll = (ms, fn) => { const id = setTimeout(fn, ms); timersIll.current.push(id); return id }
+  const stopRecoIll = () => {
+    clearTimeout(noResRef.current)
+    ecouteRef.current = false
+    setEcouteIll(false)
+    if (!recoRef.current) return
+    recoRef.current.onresult = null
+    recoRef.current.onend    = null
+    recoRef.current.onerror  = null
+    try { recoRef.current.stop() } catch { /* ignoré */ }
+    recoRef.current = null
+  }
+
+  // Hooks useVoiceInput — conservés pour les boutons manuels en mode normal
+  const voixSys = useVoiceInput({ langue, onResult: (tr) => { const v = tr.replace(/\D/g,'').slice(0,3); if (v) setSys(v) } })
+  const voixDia = useVoiceInput({ langue, onResult: (tr) => { const v = tr.replace(/\D/g,'').slice(0,3); if (v) setDia(v) } })
+  const voixPul = useVoiceInput({ langue, onResult: (tr) => { const v = tr.replace(/\D/g,'').slice(0,3); if (v) setPul(v) } })
+
+  // Mode illettré — lance la reco brute sur un champ (SYS/DIA/PUL)
+  const lancerRecoChamp = (champ) => {
+    if (!SR_API_C) return
+    stopRecoIll()
+    window.speechSynthesis?.cancel()
+    const reco = new SR_API_C()
+    reco.lang            = LANG_BCP_C[langue] ?? 'fr-FR'
+    reco.continuous      = false
+    reco.interimResults  = false
+    reco.maxAlternatives = 1
+    recoRef.current      = reco
+    ecouteRef.current    = true
+    setEcouteIll(true)
+    setChampVocal(champ)
+    console.log('[ILL-KF] Reco lancée —', champ)
+
+    // 8s sans résultat → "pas entendu" + relance
+    noResRef.current = setTimeout(() => {
+      stopRecoIll()
+      console.log('[ILL-KF] Timeout 8s —', champ)
+      const d = parlerEnMorceaux(t('ill_pas_entendu'), langue)
+      afterIll(d, () => lancerRef.current?.(champ))
+    }, 8000)
+
+    reco.onresult = (e) => {
+      clearTimeout(noResRef.current)
+      const transcript = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ').trim()
+      console.log('[ILL-KF] Résultat', champ, ':', transcript)
+      stopRecoIll()
+      const val = transcript.replace(/\D/g, '').slice(0, 3)
+      if (!val) {
+        const d = parlerEnMorceaux(t('ill_pas_entendu'), langue)
+        afterIll(d, () => lancerRef.current?.(champ))
+        return
+      }
+      if (champ === 'sys') {
+        sysIllRef.current = val; setSys(val)
+        const d = parlerEnMorceaux(t('ill_tension_dia'), langue)
+        afterIll(d, () => lancerRef.current?.('dia'))
+      } else if (champ === 'dia') {
+        diaIllRef.current = val; setDia(val)
+        const d = parlerEnMorceaux(t('ill_tension_pul'), langue)
+        afterIll(d, () => lancerRef.current?.('pul'))
+      } else if (champ === 'pul') {
+        setPul(val); setChampVocal(null)
+        console.log('[ILL-KF] Auto-submit SYS/DIA/PUL')
+        afterIll(400, () => onValider({
+          bp_systolic:  Number(sysIllRef.current),
+          bp_diastolic: Number(diaIllRef.current),
+          heart_rate:   Number(val),
+        }))
+      }
+    }
+
+    reco.onerror = (e) => {
+      clearTimeout(noResRef.current)
+      console.log('[ILL-KF] Erreur', champ, ':', e.error)
+      stopRecoIll()
+      afterIll(600, () => lancerRef.current?.(champ))
+    }
+
+    reco.onend = () => {
+      clearTimeout(noResRef.current)
+      if (!ecouteRef.current) return // annulé par stopRecoIll
+      console.log('[ILL-KF] onend sans résultat —', champ)
+      recoRef.current = null; ecouteRef.current = false; setEcouteIll(false)
+      const d = parlerEnMorceaux(t('ill_pas_entendu'), langue)
+      afterIll(d, () => lancerRef.current?.(champ))
+    }
+
+    reco.start()
+  }
+  lancerRef.current = lancerRecoChamp
+
+  // Mode illettré : TTS "premier chiffre" → lancer SYS au montage
   useEffect(() => {
     if (!modeIllettré) return
-    const t1 = setTimeout(() => parler(t('ill_tension_sys'), langue), 400)
-    const t2 = setTimeout(() => { setChampVocal('sys'); voixSys.demarrer() }, 2000)
-    return () => { clearTimeout(t1); clearTimeout(t2) }
+    const d = parlerEnMorceaux(t('ill_tension_sys'), langue)
+    afterIll(d, () => lancerRef.current?.('sys'))
+    return () => { clearAllIll(); stopRecoIll() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Mode illettré : TTS + lancement auto DIA / PUL quand champVocal avance
-  useEffect(() => {
-    if (!modeIllettré) return
-    if (champVocal === 'dia' && sys) {
-      const t1 = setTimeout(() => parler(t('ill_tension_dia'), langue), 300)
-      const t2 = setTimeout(() => voixDia.demarrer(), 1800)
-      return () => { clearTimeout(t1); clearTimeout(t2) }
-    }
-    if (champVocal === 'pul' && dia) {
-      const t1 = setTimeout(() => parler(t('ill_tension_pul'), langue), 300)
-      const t2 = setTimeout(() => voixPul.demarrer(), 1800)
-      return () => { clearTimeout(t1); clearTimeout(t2) }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [champVocal])
-
-  // Mode illettré : auto-submit quand SYS + DIA + PUL sont valides
-  useEffect(() => {
-    if (!modeIllettré || !peutValider) return
-    const timer = setTimeout(() => onValider({ bp_systolic: sysN, bp_diastolic: diaN, heart_rate: pulN }), 600)
-    return () => clearTimeout(timer)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [peutValider])
+  useEffect(() => () => { if (modeIllettré) { clearAllIll(); stopRecoIll() } }, [])
 
   const sysN = Number(sys)
   const diaN = Number(dia)
@@ -821,113 +922,92 @@ function SaisieKF65R({ instruction, onValider, t, modeIllettré = false, langue 
 
   return (
     <div className="tension-manuelle">
+      {/* Keyframe pulse rouge */}
+      <style>{`@keyframes pulse-kf{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}70%{box-shadow:0 0 0 20px rgba(239,68,68,0)}}`}</style>
+
       <p className="kiosk-soustitre">{instruction}</p>
+
+      {/* Indicateur écoute mode illettré */}
+      {modeIllettré && ecouteIll && champVocal && (
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, marginBottom:12 }}>
+          <div style={{ width:60, height:60, borderRadius:'50%', background:'#ef4444', animation:'pulse-kf 1.3s ease-out infinite' }} />
+          <div style={{ fontSize:'1.2rem', color:'#f8fafc', fontWeight:700 }}>
+            {t('ill_ecoute')} — {champVocal === 'sys' ? t('tension_sys') : champVocal === 'dia' ? t('tension_dia') : t('tension_pul')}
+          </div>
+        </div>
+      )}
 
       <div className="tension-inputs">
         <div className="tension-input-groupe">
-          <label className="tension-input-label" htmlFor="kf65r-sys">
-            {t('tension_sys')}
-          </label>
+          <label className="tension-input-label" htmlFor="kf65r-sys">{t('tension_sys')}</label>
           <input
-            id="kf65r-sys"
-            type="number"
+            id="kf65r-sys" type="number"
             className={`tension-input${couleurSys ? ` tension-input--${couleurSys}` : ''}`}
-            placeholder="120"
-            value={sys}
-            onChange={e => setSys(e.target.value)}
-            min={70} max={200}
-            inputMode="none"
-            onFocus={() => setFocusChamp('sys')}
-            onClick={() => setFocusChamp('sys')}
+            placeholder="120" value={sys} onChange={e => setSys(e.target.value)}
+            min={70} max={200} inputMode="none"
+            onFocus={() => setFocusChamp('sys')} onClick={() => setFocusChamp('sys')}
           />
           {couleurSys && (
-            <div className={`bio-badge bio-badge--${couleurSys}`} style={{ alignSelf: 'center', marginTop: 4 }}>
+            <div className={`bio-badge bio-badge--${couleurSys}`} style={{ alignSelf:'center', marginTop:4 }}>
               <span className="bio-badge-dot" />
               {t(couleurSys === 'vert' ? 'bio_normal' : couleurSys === 'orange' ? 'bio_attention' : 'bio_critique')}
             </div>
           )}
-          {/* Bouton vocal SYS — mode illettré */}
-          {modeIllettré && voixSys.supporte && (
-            <button
-              onClick={() => { setChampVocal('sys'); voixSys.ecoute ? voixSys.arreter() : voixSys.demarrer() }}
-              style={{
-                marginTop: 4, padding: '8px 16px', borderRadius: 8,
-                border: '1px solid rgba(0,212,255,0.3)',
-                background: champVocal === 'sys' && voixSys.ecoute ? 'rgba(0,212,255,0.25)' : 'rgba(0,212,255,0.1)',
-                color: '#00d4ff', fontSize: '0.9rem', cursor: 'pointer',
-              }}
-            >
-              {voixSys.ecoute ? '⏹ Stop' : `🎤 ${t('illettré_tension_sys')}`}
+          {modeIllettré && SR_API_C && (
+            <button onClick={() => lancerRef.current?.('sys')} style={{
+              marginTop:4, padding:'8px 16px', borderRadius:8,
+              border:'1px solid rgba(0,212,255,0.3)',
+              background: champVocal === 'sys' && ecouteIll ? 'rgba(0,212,255,0.25)' : 'rgba(0,212,255,0.1)',
+              color:'#00d4ff', fontSize:'0.9rem', cursor:'pointer',
+            }}>
+              {champVocal === 'sys' && ecouteIll ? '⏹ Stop' : '🎤 SYS'}
             </button>
           )}
         </div>
 
         <div className="tension-input-groupe">
-          <label className="tension-input-label" htmlFor="kf65r-dia">
-            {t('tension_dia')}
-          </label>
+          <label className="tension-input-label" htmlFor="kf65r-dia">{t('tension_dia')}</label>
           <input
-            id="kf65r-dia"
-            type="number"
+            id="kf65r-dia" type="number"
             className={`tension-input${couleurDia ? ` tension-input--${couleurDia}` : ''}`}
-            placeholder="80"
-            value={dia}
-            onChange={e => setDia(e.target.value)}
-            min={40} max={130}
-            inputMode="none"
-            onFocus={() => setFocusChamp('dia')}
-            onClick={() => setFocusChamp('dia')}
+            placeholder="80" value={dia} onChange={e => setDia(e.target.value)}
+            min={40} max={130} inputMode="none"
+            onFocus={() => setFocusChamp('dia')} onClick={() => setFocusChamp('dia')}
           />
           {couleurDia && (
-            <div className={`bio-badge bio-badge--${couleurDia}`} style={{ alignSelf: 'center', marginTop: 4 }}>
+            <div className={`bio-badge bio-badge--${couleurDia}`} style={{ alignSelf:'center', marginTop:4 }}>
               <span className="bio-badge-dot" />
               {t(couleurDia === 'vert' ? 'bio_normal' : couleurDia === 'orange' ? 'bio_attention' : 'bio_critique')}
             </div>
           )}
-          {/* Bouton vocal DIA — mode illettré */}
-          {modeIllettré && voixDia.supporte && (
-            <button
-              onClick={() => { setChampVocal('dia'); voixDia.ecoute ? voixDia.arreter() : voixDia.demarrer() }}
-              style={{
-                marginTop: 4, padding: '8px 16px', borderRadius: 8,
-                border: '1px solid rgba(0,212,255,0.3)',
-                background: champVocal === 'dia' && voixDia.ecoute ? 'rgba(0,212,255,0.25)' : 'rgba(0,212,255,0.1)',
-                color: '#00d4ff', fontSize: '0.9rem', cursor: 'pointer',
-              }}
-            >
-              {voixDia.ecoute ? '⏹ Stop' : `🎤 ${t('illettré_tension_dia')}`}
+          {modeIllettré && SR_API_C && (
+            <button onClick={() => lancerRef.current?.('dia')} style={{
+              marginTop:4, padding:'8px 16px', borderRadius:8,
+              border:'1px solid rgba(0,212,255,0.3)',
+              background: champVocal === 'dia' && ecouteIll ? 'rgba(0,212,255,0.25)' : 'rgba(0,212,255,0.1)',
+              color:'#00d4ff', fontSize:'0.9rem', cursor:'pointer',
+            }}>
+              {champVocal === 'dia' && ecouteIll ? '⏹ Stop' : '🎤 DIA'}
             </button>
           )}
         </div>
 
         <div className="tension-input-groupe">
-          <label className="tension-input-label" htmlFor="kf65r-pul">
-            {t('tension_pul')}
-          </label>
+          <label className="tension-input-label" htmlFor="kf65r-pul">{t('tension_pul')}</label>
           <input
-            id="kf65r-pul"
-            type="number"
-            className="tension-input"
-            placeholder="72"
-            value={pul}
-            onChange={e => setPul(e.target.value)}
-            min={40} max={180}
-            inputMode="none"
-            onFocus={() => setFocusChamp('pul')}
-            onClick={() => setFocusChamp('pul')}
+            id="kf65r-pul" type="number" className="tension-input"
+            placeholder="72" value={pul} onChange={e => setPul(e.target.value)}
+            min={40} max={180} inputMode="none"
+            onFocus={() => setFocusChamp('pul')} onClick={() => setFocusChamp('pul')}
           />
-          {/* Bouton vocal PUL — mode illettré */}
-          {modeIllettré && voixPul.supporte && (
-            <button
-              onClick={() => { setChampVocal('pul'); voixPul.ecoute ? voixPul.arreter() : voixPul.demarrer() }}
-              style={{
-                marginTop: 4, padding: '8px 16px', borderRadius: 8,
-                border: '1px solid rgba(0,212,255,0.3)',
-                background: champVocal === 'pul' && voixPul.ecoute ? 'rgba(0,212,255,0.25)' : 'rgba(0,212,255,0.1)',
-                color: '#00d4ff', fontSize: '0.9rem', cursor: 'pointer',
-              }}
-            >
-              {voixPul.ecoute ? '⏹ Stop' : `🎤 ${t('illettré_tension_pul')}`}
+          {modeIllettré && SR_API_C && (
+            <button onClick={() => lancerRef.current?.('pul')} style={{
+              marginTop:4, padding:'8px 16px', borderRadius:8,
+              border:'1px solid rgba(0,212,255,0.3)',
+              background: champVocal === 'pul' && ecouteIll ? 'rgba(0,212,255,0.25)' : 'rgba(0,212,255,0.1)',
+              color:'#00d4ff', fontSize:'0.9rem', cursor:'pointer',
+            }}>
+              {champVocal === 'pul' && ecouteIll ? '⏹ Stop' : '🎤 PUL'}
             </button>
           )}
         </div>
