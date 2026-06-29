@@ -313,31 +313,44 @@ const SR_API_Q = typeof window !== 'undefined'
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
   : null
 
-function parlerEnMorceauxQ(texte, langue) {
-  if (!texte || typeof window === 'undefined' || !window.speechSynthesis) return 2000
+// TTS chunké (≤40 chars) + callback onFin garanti après le dernier chunk.
+// Fallback setTimeout si onend ne déclenche pas (Safari iOS).
+function parlerIllettré(texte, langue, onFin) {
+  if (!texte || typeof window === 'undefined' || !window.speechSynthesis) {
+    setTimeout(onFin, Math.max(1000, texte ? texte.length * 80 + 500 : 1000))
+    return
+  }
   const lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
   const mots = texte.split(/\s+/)
   const morceaux = []
   let courant = ''
   for (const m of mots) {
     const test = courant ? courant + ' ' + m : m
-    if (test.length <= 50) { courant = test }
+    if (test.length <= 40) { courant = test }
     else { if (courant) morceaux.push(courant); courant = m }
   }
   if (courant) morceaux.push(courant)
-  const durée = morceaux.reduce((acc, m) => acc + Math.max(700, m.length * 75), 0) + 500
+  if (!morceaux.length) { setTimeout(onFin, 500); return }
+
+  const total = morceaux.reduce((acc, m) => acc + Math.max(600, m.length * 80), 0) + 700
   window.speechSynthesis.cancel()
+
+  let done = false
+  const fallback = setTimeout(() => { if (!done) { done = true; onFin() } }, total)
+
   let i = 0
   function lireChunk() {
-    if (i >= morceaux.length) return
+    if (i >= morceaux.length) {
+      if (!done) { done = true; clearTimeout(fallback); onFin() }
+      return
+    }
     const utt = new SpeechSynthesisUtterance(morceaux[i++])
-    utt.lang = lang; utt.rate = 0.9; utt.volume = 1.0
+    utt.lang = lang; utt.rate = 0.85; utt.volume = 1.0
     utt.onend = lireChunk
-    utt.onerror = () => setTimeout(lireChunk, 100)
+    utt.onerror = () => { if (!done) setTimeout(lireChunk, 200) }
     window.speechSynthesis.speak(utt)
   }
-  setTimeout(lireChunk, 50)
-  return durée
+  setTimeout(lireChunk, 100)
 }
 
 // ── Vue principale : une seule question ──────────────────────────────────────
@@ -596,11 +609,10 @@ function ModeIlletréOuiNon({ langue, question, onRepondre }) {
     reco.continuous = false; reco.interimResults = false; reco.maxAlternatives = 3
     recoRef.current = reco; ecouteRef.current = true; setEcoute(true)
 
-    // 15s sans réponse → relecture question
+    // 15s sans réponse → relecture complète de la question puis relance
     noResRef.current = setTimeout(() => {
       stopReco()
-      const d = parlerEnMorceauxQ(question, langue)
-      after(d, () => lancerRef.current?.())
+      parlerIllettré(question, langue, () => lancerRef.current?.())
     }, 15000)
 
     reco.onresult = (e) => {
@@ -609,7 +621,7 @@ function ModeIlletréOuiNon({ langue, question, onRepondre }) {
       stopReco()
       if (MOTS_OUI.some(m => txt.includes(m))) { clearAll(); onRepondre('oui') }
       else if (MOTS_NON.some(m => txt.includes(m))) { clearAll(); onRepondre('non') }
-      else { after(600, () => lancerRef.current?.()) } // non reconnu → relance
+      else { after(600, () => lancerRef.current?.()) }
     }
     reco.onerror = () => { clearTimeout(noResRef.current); stopReco(); after(800, () => lancerRef.current?.()) }
     reco.onend   = () => {
@@ -622,11 +634,10 @@ function ModeIlletréOuiNon({ langue, question, onRepondre }) {
   }
   lancerRef.current = lancerReco
 
-  // TTS question → lancer reco (la TTS est déjà lancée par VueQuestion useEffect)
+  // TTS complet de la question → PUIS lancer reco (garantit que TTS est terminé)
   useEffect(() => {
-    const d = parlerEnMorceauxQ(question, langue)
-    after(d, () => lancerRef.current?.())
-    return () => { clearAll(); stopReco() }
+    parlerIllettré(question, langue, () => lancerRef.current?.())
+    return () => { clearAll(); stopReco(); window.speechSynthesis?.cancel() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question])
 
@@ -695,8 +706,7 @@ function ModeIlletréChoix({ langue, choix, question, onRepondre }) {
 
     noResRef.current = setTimeout(() => {
       stopReco()
-      const d = parlerEnMorceauxQ(question, langue)
-      after(d, () => lancerRef.current?.())
+      parlerIllettré(question, langue, () => lancerRef.current?.())
     }, 15000)
 
     reco.onresult = (e) => {
@@ -719,9 +729,8 @@ function ModeIlletréChoix({ langue, choix, question, onRepondre }) {
   lancerRef.current = lancerReco
 
   useEffect(() => {
-    const d = parlerEnMorceauxQ(question, langue)
-    after(d, () => lancerRef.current?.())
-    return () => { clearAll(); stopReco() }
+    parlerIllettré(question, langue, () => lancerRef.current?.())
+    return () => { clearAll(); stopReco(); window.speechSynthesis?.cancel() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question])
 
@@ -806,9 +815,8 @@ function ModeIlletréTexteLibre({ langue, onFin }) {
   lancerRef.current = lancerReco
 
   useEffect(() => {
-    const d = parlerEnMorceauxQ(t('ill_symptomes_voix'), langue)
-    after(d, () => lancerRef.current?.())
-    return () => { clearAll(); stopReco() }
+    parlerIllettré(t('ill_symptomes_voix'), langue, () => lancerRef.current?.())
+    return () => { clearAll(); stopReco(); window.speechSynthesis?.cancel() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

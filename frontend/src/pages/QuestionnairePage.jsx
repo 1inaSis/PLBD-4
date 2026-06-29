@@ -24,30 +24,41 @@ const SR_API_QR = typeof window !== 'undefined'
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
   : null
 
-function parlerQR(texte, langue) {
-  if (!texte || typeof window === 'undefined' || !window.speechSynthesis) return 2000
+// TTS chunké (≤40 chars) avec callback onFin après le dernier chunk
+function parlerQR(texte, langue, onFin) {
+  const fin = onFin || (() => {})
+  if (!texte || typeof window === 'undefined' || !window.speechSynthesis) {
+    setTimeout(fin, Math.max(1000, texte ? texte.length * 80 + 500 : 1000))
+    return
+  }
   const lang = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }[langue] ?? 'fr-FR'
   const mots = texte.split(/\s+/)
   const morceaux = []
   let courant = ''
   for (const m of mots) {
     const test = courant ? courant + ' ' + m : m
-    if (test.length <= 50) { courant = test }
+    if (test.length <= 40) { courant = test }
     else { if (courant) morceaux.push(courant); courant = m }
   }
   if (courant) morceaux.push(courant)
-  const durée = morceaux.reduce((acc, m) => acc + Math.max(700, m.length * 75), 0) + 500
+  if (!morceaux.length) { setTimeout(fin, 500); return }
+  const total = morceaux.reduce((acc, m) => acc + Math.max(600, m.length * 80), 0) + 700
   window.speechSynthesis.cancel()
+  let done = false
+  const fallback = setTimeout(() => { if (!done) { done = true; fin() } }, total)
   let i = 0
   function next() {
-    if (i >= morceaux.length) return
+    if (i >= morceaux.length) {
+      if (!done) { done = true; clearTimeout(fallback); fin() }
+      return
+    }
     const utt = new SpeechSynthesisUtterance(morceaux[i++])
-    utt.lang = lang; utt.rate = 0.9; utt.volume = 1.0
-    utt.onend = next; utt.onerror = () => setTimeout(next, 100)
+    utt.lang = lang; utt.rate = 0.85; utt.volume = 1.0
+    utt.onend = next
+    utt.onerror = () => { if (!done) setTimeout(next, 200) }
     window.speechSynthesis.speak(utt)
   }
-  setTimeout(next, 50)
-  return durée
+  setTimeout(next, 100)
 }
 
 export default function QuestionnairePage() {
@@ -158,28 +169,43 @@ export default function QuestionnairePage() {
       <ModalInactivite avertissement={avertissement} compte={compte} onContinuer={reset} />
       <GuideEtape etape={2} />
 
-      {/* Badge Mode Assisté */}
+      {/* ── Mode illettré : overlay plein écran fond sombre ── */}
       {modeIllettré && (
         <div style={{
-          position: 'fixed', top: 8, right: 8, zIndex: 2000,
-          background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)',
-          borderRadius: 20, padding: '4px 12px', fontSize: '0.78rem', color: '#00d4ff',
+          position: 'fixed', inset: 0, zIndex: 1500,
+          background: '#060b14',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'flex-start',
+          gap: 16, padding: '56px 16px 24px', overflowY: 'auto',
         }}>
-          🤝 {t('illettré_mode_badge')}
-        </div>
-      )}
+          <style>{`@keyframes pulse-ill-qr{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}70%{box-shadow:0 0 0 20px rgba(239,68,68,0)}}`}</style>
 
-      {/* ── Mode illettré : corps seul + voix après zone touchée ── */}
-      {modeIllettré ? (
-        <div className="kiosk-center" style={{ flexDirection: 'column', gap: 16, padding: 12 }}>
-          <CorpsHumain zonesSelectionnees={zonesSelectionnees} onToggleZone={toggleZone} />
+          {/* Badge Mode Assisté */}
+          <div style={{
+            position: 'absolute', top: 8, right: 8,
+            background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)',
+            borderRadius: 20, padding: '4px 12px', fontSize: '0.78rem', color: '#00d4ff',
+          }}>
+            🤝 {t('illettré_mode_badge')}
+          </div>
 
+          {/* Instruction texte */}
+          <p style={{ fontSize: '1.6rem', fontWeight: 700, color: '#f8fafc', textAlign: 'center', margin: 0 }}>
+            {t('ill_symptomes_zones')}
+          </p>
+
+          {/* Corps humain centré et grand */}
+          <div style={{ transform: 'scale(1.05)', transformOrigin: 'center top', width: '100%', maxWidth: 400 }}>
+            <CorpsHumain zonesSelectionnees={zonesSelectionnees} onToggleZone={toggleZone} />
+          </div>
+
+          {/* Zones sélectionnées (tags) */}
           {zonesSelectionnees.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
               {zonesSelectionnees.map(id => (
                 <span key={id} style={{
                   background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.3)',
-                  color: '#00d4ff', borderRadius: 20, padding: '4px 12px', fontSize: '0.88rem',
+                  color: '#00d4ff', borderRadius: 20, padding: '6px 14px', fontSize: '1rem', fontWeight: 600,
                 }}>
                   {ZONES_MAP[id]}
                 </span>
@@ -187,6 +213,7 @@ export default function QuestionnairePage() {
             </div>
           )}
 
+          {/* Saisie vocale symptômes (micro géant) */}
           {zonesSelectionnees.length > 0 && (
             <ModeIlletréSymptomes
               langue={langue}
@@ -200,7 +227,7 @@ export default function QuestionnairePage() {
           )}
           {erreur && <div className="kiosk-alerte" role="alert">{erreur}</div>}
 
-          {/* Bouton continuer géant — mode illettré */}
+          {/* Bouton ✓ géant 160px */}
           <button
             onClick={continuer}
             disabled={zonesSelectionnees.length === 0 || enChargement}
@@ -210,13 +237,19 @@ export default function QuestionnairePage() {
               color: zonesSelectionnees.length === 0 ? 'rgba(255,255,255,0.25)' : '#10b981',
               fontSize: '3rem', fontWeight: 900, cursor: zonesSelectionnees.length === 0 ? 'default' : 'pointer',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-              marginTop: 8, WebkitTapHighlightColor: 'transparent',
+              WebkitTapHighlightColor: 'transparent', flexShrink: 0,
             }}
           >
-            {enChargement ? <div className="kiosk-spinner" style={{ width: 32, height: 32 }} /> : <>✓<span style={{ fontSize: '0.85rem', fontWeight: 700 }}>OK</span></>}
+            {enChargement
+              ? <div className="kiosk-spinner" style={{ width: 32, height: 32 }} />
+              : <><span>✓</span><span style={{ fontSize: '0.85rem', fontWeight: 700 }}>OK</span></>
+            }
           </button>
         </div>
-      ) : (
+      )}
+
+      {/* ── Mode normal ── */}
+      {!modeIllettré && (
         <div className="questionnaire-layout">
 
           {/* ── Colonne gauche : Pictogramme ──────────────────────────── */}
@@ -285,7 +318,7 @@ export default function QuestionnairePage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Saisie vocale symptômes — raw SR (évite cancel TTS) — mode illettré
+// Saisie vocale symptômes — micro géant 160px + raw SR — mode illettré
 // ─────────────────────────────────────────────────────────────────────────────
 function ModeIlletréSymptomes({ langue, onTexte, onFin }) {
   const { t } = useTranslation()
@@ -339,29 +372,43 @@ function ModeIlletréSymptomes({ langue, onTexte, onFin }) {
   lancerRef.current = lancerReco
 
   useEffect(() => {
-    const d = parlerQR(t('ill_symptomes_voix'), langue)
-    after(d, () => lancerRef.current?.())
-    return () => { clearAll(); stopReco() }
+    parlerQR(t('ill_symptomes_voix'), langue, () => lancerRef.current?.())
+    return () => { clearAll(); stopReco(); window.speechSynthesis?.cancel() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', width: '100%' }}>
-      <style>{`@keyframes pulse-qr{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}70%{box-shadow:0 0 0 16px rgba(239,68,68,0)}}`}</style>
-      {ecoute && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#ef4444', animation: 'pulse-qr 1.3s ease-out infinite' }} />
-          <span style={{ color: '#f8fafc', fontSize: '1rem' }}>{t('ill_ecoute')}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', width: '100%' }}>
+      {/* Bouton micro géant 160px */}
+      <button
+        onClick={() => { if (!ecoute) lancerRef.current?.() }}
+        style={{
+          width: 160, height: 160, borderRadius: '50%', border: 'none',
+          background: ecoute ? 'rgba(239,68,68,0.25)' : 'rgba(0,212,255,0.12)',
+          color: ecoute ? '#ef4444' : '#00d4ff',
+          fontSize: '5rem', cursor: 'pointer',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+          animation: ecoute ? 'pulse-ill-qr 1.3s ease-out infinite' : 'none',
+          WebkitTapHighlightColor: 'transparent', flexShrink: 0,
+        }}
+      >
+        🎤
+        <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+          {ecoute ? t('ill_ecoute') : t('illettré_symptomes')}
+        </span>
+      </button>
+
+      {/* Texte accumulé */}
+      {texte ? (
+        <div style={{
+          width: '100%', padding: '14px 16px',
+          background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: 12, fontSize: '1.2rem', color: '#f8fafc', lineHeight: 1.6,
+          direction: langue === 'ar' ? 'rtl' : 'ltr',
+        }}>
+          {texte}
         </div>
-      )}
-      <div style={{
-        minHeight: 70, width: '100%', padding: '14px 16px',
-        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 12, fontSize: '1.3rem', color: '#f8fafc', lineHeight: 1.6,
-        direction: langue === 'ar' ? 'rtl' : 'ltr',
-      }}>
-        {texte || <span style={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>{t('saisie_ecoute')}</span>}
-      </div>
+      ) : null}
     </div>
   )
 }

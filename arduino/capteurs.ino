@@ -107,7 +107,7 @@ void mesurerTemperature() {
 // ── SpO2 + FC simulés (MAX30102 non fiable) ──────────────────────────────────
 void mesurerOxymetrie() {
   delay(3000);
-  int spo2 = random(90, 100);  // 90–99 %
+  int spo2 = random(94, 100);  // 94–99 % (spec ESI : alerte si < 94)
   int fc   = random(65, 86);   // 65–85 bpm
   Serial.print(F("{\"spo2\": "));
   Serial.print(spo2);
