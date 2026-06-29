@@ -11,7 +11,7 @@ import ModalInactivite from '../components/ModalInactivite'
 import BoutonPleinEcran from '../components/BoutonPleinEcran'
 import { useTranslation } from '../hooks/useTranslation'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
-import { useVoiceInput } from '../hooks/useVoiceInput'
+
 import { useInactivite } from '../hooks/useInactivite'
 import { useFullscreen } from '../hooks/useFullscreen'
 import ClavierNumerique from '../components/ClavierNumerique'
@@ -421,75 +421,181 @@ function convertirAge(transcript) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ÉCRAN 2 — Identification guidée mode illettré : prénom → nom → age → sexe
+// Timing basé sur setTimeout fixe (pas onend — non fiable Safari iOS)
 // ─────────────────────────────────────────────────────────────────────────────
+const SR_API = typeof window !== 'undefined'
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+  : null
+const LANG_BCP = { fr: 'fr-FR', en: 'en-US', ar: 'ar-SA' }
+
+function duréeTTS(texte) { return Math.max(2000, texte.length * 70) }
+
 function VueIdentificationIllettré({ langue, parler, onTerminé }) {
   const { t } = useTranslation()
-  const [etape, setEtape]           = useState('prénom')  // 'prénom'|'nom'|'age'|'sexe'
-  const [valAffichee, setValAff]    = useState('')
-  const [enConfirmation, setEnConf] = useState(false)
-  const [tentative, setTentative]   = useState(0)
 
-  const etapeRef = useRef('prénom')
+  // étape : 'prénom' | 'nom' | 'age' | 'sexe'
+  // phase : 'intro' | 'ecoute' | 'conf_tts' | 'confirmation'
+  const [etape, setEtape]       = useState('prénom')
+  const [phase, setPhase]       = useState('intro')
+  const [valAffichee, setValAff] = useState('')
+  const [tentative, setTentative] = useState(0)
+  const [ecoute, setEcoute]     = useState(false)
+
+  const etapeRef   = useRef('prénom')
   etapeRef.current = etape
+  const phaseRef   = useRef('intro')
+  phaseRef.current = phase
+
   const prenomRef = useRef('')
   const nomRef    = useRef('')
   const ageRef    = useRef(null)
+  const timersRef = useRef([])   // tous les setTimeout actifs
+  const recoRef   = useRef(null) // instance SpeechRecognition brute
 
-  const voix = useVoiceInput({
-    langue,
-    onResult: (transcript) => {
+  // Nettoie tous les timers en cours
+  const clearAll = () => {
+    timersRef.current.forEach(clearTimeout)
+    timersRef.current = []
+  }
+
+  // Arrête la reconnaissance vocale proprement
+  const stopReco = () => {
+    if (!recoRef.current) return
+    recoRef.current.onresult = null
+    recoRef.current.onend    = null
+    recoRef.current.onerror  = null
+    try { recoRef.current.stop() } catch { /* ignoré */ }
+    recoRef.current = null
+    setEcoute(false)
+  }
+
+  const after = (ms, fn) => {
+    const id = setTimeout(fn, ms)
+    timersRef.current.push(id)
+    return id
+  }
+
+  // Lance la reconnaissance — continuous=false, interimResults=false (Safari iOS)
+  const lancerReco = () => {
+    if (!SR_API) return
+    stopReco()
+    window.speechSynthesis?.cancel() // s'assure que le TTS est fini avant le micro
+    const reco = new SR_API()
+    reco.lang            = LANG_BCP[langue] ?? 'fr-FR'
+    reco.continuous      = false
+    reco.interimResults  = false
+    recoRef.current      = reco
+
+    console.log('[ILL] Reco lancée')
+    setPhase('ecoute')
+    setEcoute(true)
+
+    reco.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .filter(r => r.isFinal)
+        .map(r => r[0].transcript)
+        .join(' ')
+        .trim()
+      console.log('[ILL] Résultat:', transcript)
+      stopReco()
+
       const cur = etapeRef.current
-      if (cur === 'sexe') return
-
       let affiche = ''
+
       if (cur === 'prénom') {
-        const mot = transcript.trim().split(/\s+/)[0]
+        const mot = transcript.split(/\s+/)[0] || transcript
         affiche = mot.charAt(0).toUpperCase() + mot.slice(1).toLowerCase()
         prenomRef.current = affiche
       } else if (cur === 'nom') {
-        const mot = transcript.trim().split(/\s+/)[0]
+        const mot = transcript.split(/\s+/)[0] || transcript
         affiche = mot.toUpperCase()
         nomRef.current = affiche
       } else if (cur === 'age') {
         const n = convertirAge(transcript)
-        if (!n) { setTimeout(() => voix.demarrer(), 800); return }
+        if (!n) {
+          console.log('[ILL] Âge non reconnu, relance reco dans 600ms')
+          after(600, lancerReco)
+          return
+        }
         affiche = String(n)
         ageRef.current = n
       }
 
       if (!affiche) return
       setValAff(affiche)
-      setEnConf(true)
 
       const CLES_CONF = { prénom: 'ill_confirmer_prenom', nom: 'ill_confirmer_nom', age: 'ill_confirmer_age' }
-      const txt = (t(CLES_CONF[cur]) || '').replace('{val}', cur === 'age' ? `${affiche} ans` : affiche)
-      if (txt) setTimeout(() => parler(txt, langue), 300)
-    },
-  })
+      const txtConf = (t(CLES_CONF[cur]) || '').replace('{val}', cur === 'age' ? `${affiche} ans` : affiche)
+      console.log('[ILL] TTS lancé:', txtConf)
+      setPhase('conf_tts')
+      parler(txtConf, langue)
 
-  // TTS intro + lancement auto de la reconnaissance
+      const délai = duréeTTS(txtConf) + 300
+      console.log('[ILL] Délai avant confirmation:', délai, 'ms')
+      after(délai, () => {
+        console.log('[ILL] Confirmation affichée')
+        setPhase('confirmation')
+      })
+    }
+
+    reco.onerror = (e) => {
+      console.log('[ILL] Reco erreur:', e.error)
+      stopReco()
+      // Réessaie après 800ms en cas d'erreur transitoire
+      after(800, lancerReco)
+    }
+
+    reco.onend = () => {
+      // onend déclenché sans onresult = silence ou interruption
+      if (phaseRef.current === 'ecoute') {
+        console.log('[ILL] Reco terminée sans résultat, relance dans 500ms')
+        recoRef.current = null
+        setEcoute(false)
+        after(500, lancerReco)
+      }
+    }
+
+    reco.start()
+  }
+
+  // Séquence : TTS intro → setTimeout(durée + 300ms) → lancerReco
   useEffect(() => {
-    setEnConf(false)
+    clearAll()
+    stopReco()
+    setPhase('intro')
     setValAff('')
 
     if (etape === 'sexe') {
-      const timer = setTimeout(() => parler(t('ill_sexe'), langue), 300)
-      return () => clearTimeout(timer)
+      const txtSexe = t('ill_sexe')
+      console.log('[ILL] TTS lancé:', txtSexe)
+      after(300, () => parler(txtSexe, langue))
+      return () => { clearAll(); stopReco() }
     }
 
     const CLES = { prénom: 'ill_bienvenue_prenom', nom: 'ill_bienvenue_nom', age: 'ill_bienvenue_age' }
-    const t1 = setTimeout(() => parler(t(CLES[etape] || ''), langue), 300)
-    const t2 = setTimeout(() => voix.demarrer(), 2200)
-    return () => { clearTimeout(t1); clearTimeout(t2); voix.arreter() }
+    const txtIntro = t(CLES[etape] || '')
+    console.log('[ILL] TTS lancé:', txtIntro)
+
+    after(300, () => {
+      parler(txtIntro, langue)
+      const délai = duréeTTS(txtIntro) + 300
+      console.log('[ILL] Durée TTS estimée:', délai, 'ms → reco dans', délai, 'ms')
+      after(délai, lancerReco)
+    })
+
+    return () => { clearAll(); stopReco() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etape, tentative])
+
+  // Nettoyage au démontage
+  useEffect(() => () => { clearAll(); stopReco() }, [])
 
   const confirmer   = () => {
     if (etape === 'prénom') setEtape('nom')
     else if (etape === 'nom') setEtape('age')
     else if (etape === 'age') setEtape('sexe')
   }
-  const recommencer = () => setTentative(n => n + 1)
+  const recommencer = () => { clearAll(); stopReco(); setTentative(n => n + 1) }
   const choisirSexe = (sexe) => onTerminé(prenomRef.current, nomRef.current, ageRef.current, sexe)
 
   const NUM = { prénom: 1, nom: 2, age: 3, sexe: 4 }
@@ -520,10 +626,10 @@ function VueIdentificationIllettré({ langue, parler, onTerminé }) {
       {etape !== 'sexe' && (
         <>
           {/* Micro — animé pendant l'écoute */}
-          {!enConfirmation && (
+          {phase !== 'confirmation' && (
             <div style={{
               fontSize: '5rem', lineHeight: 1,
-              filter: voix.ecoute ? 'drop-shadow(0 0 20px #00d4ff)' : 'none',
+              filter: ecoute ? 'drop-shadow(0 0 20px #00d4ff)' : 'none',
               transition: 'filter 0.3s',
             }}>
               🎤
@@ -543,7 +649,7 @@ function VueIdentificationIllettré({ langue, parler, onTerminé }) {
           )}
 
           {/* Confirmation 👍 / 👎 */}
-          {enConfirmation && (
+          {phase === 'confirmation' && (
             <div style={{ display: 'flex', gap: 20 }}>
               <button onClick={confirmer} style={{
                 width: 120, height: 120, borderRadius: 16, border: 'none',
